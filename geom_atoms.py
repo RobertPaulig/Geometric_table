@@ -777,6 +777,140 @@ class Molecule:
 
         return total
 
+    # -------------------------------
+    # Спектральное перераспределение зарядов в молекуле
+    # -------------------------------
+
+    def _graph_distances(self) -> List[List[float]]:
+        """
+        Топологические расстояния между атомами по self.bonds.
+
+        Возвращает матрицу d[i][j] (целые расстояния по графу, либо +inf).
+        """
+        import math
+        from collections import deque
+
+        n = len(self.atoms)
+        if n == 0:
+            return []
+
+        adj: List[List[int]] = [[] for _ in range(n)]
+        for i, j in self.bonds:
+            adj[i].append(j)
+            adj[j].append(i)
+
+        dists: List[List[float]] = [[math.inf] * n for _ in range(n)]
+
+        for s in range(n):
+            dists[s][s] = 0.0
+            q = deque([s])
+            while q:
+                u = q.popleft()
+                for v in adj[u]:
+                    if dists[s][v] is math.inf:
+                        dists[s][v] = dists[s][u] + 1.0
+                        q.append(v)
+
+        return dists
+
+    def spectral_charges(
+        self,
+        total_charge: float = 0.0,
+        a: float = 0.5,
+        b: float = 1.0,
+        c: float = 1.5,
+        alpha: float = ALPHA_CALIBRATED,
+        eps_neutral: float = EPS_NEUTRAL,
+        gamma_donor: float = GAMMA_DONOR_CALIBRATED,
+        k_center: float = KCENTER_CALIBRATED,
+        hardness_offset: float = 0.5,
+        hardness_scale: float = 1.0,
+        interaction_scale: float = 1.0,
+        interaction_power: float = 1.0,
+        interaction_floor: float = 0.5,
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, float]:
+        """
+        QEq-подобное уравнивание зарядов на основе χ_spec и E_port.
+
+        Возвращает кортеж:
+            q   — массив частичных зарядов (q_i > 0 ⇒ дефицит электронов),
+            chi — вектор χ_spec для атомов,
+            eta — диагональные "жёсткости" J_ii,
+            mu  — общий химический потенциал λ.
+
+        total_charge задаёт суммарный заряд молекулы (обычно 0.0).
+        """
+        import math
+
+        n = len(self.atoms)
+        if n == 0:
+            return (
+                np.zeros(0, dtype=float),
+                np.zeros(0, dtype=float),
+                np.zeros(0, dtype=float),
+                0.0,
+            )
+
+        chi = np.zeros(n, dtype=float)
+        eta = np.zeros(n, dtype=float)
+
+        for i, atom in enumerate(self.atoms):
+            chi_i = atom.chi_geom_signed_spec(
+                a=a,
+                b=b,
+                c=c,
+                alpha=alpha,
+                eps_neutral=eps_neutral,
+                gamma_donor=gamma_donor,
+                k_center=k_center,
+            )
+            if chi_i is None:
+                chi_i = 0.0
+            chi[i] = float(chi_i)
+
+            e_port = atom.per_port_energy(a=a, b=b, c=c)
+            if e_port is None:
+                e_port = 0.0
+            eta[i] = float(hardness_offset + hardness_scale * max(e_port, 0.0))
+
+        dists = self._graph_distances()
+        J = np.zeros((n, n), dtype=float)
+
+        for i in range(n):
+            J[i, i] = eta[i]
+            for j in range(i + 1, n):
+                d = dists[i][j]
+                if math.isinf(d):
+                    val = 0.0
+                else:
+                    val = interaction_scale / (
+                        (d + interaction_floor) ** interaction_power
+                    )
+                J[i, j] = val
+                J[j, i] = val
+
+        # Система Лагранжа:
+        # [ J   -1 ] [ q ] = [ -chi ]
+        # [ 1^T  0 ] [ λ ]   [ Q_tot ]
+        M = np.zeros((n + 1, n + 1), dtype=float)
+        M[:n, :n] = J
+        M[:n, n] = -1.0
+        M[n, :n] = 1.0
+
+        rhs = np.zeros(n + 1, dtype=float)
+        rhs[:n] = -chi
+        rhs[n] = float(total_charge)
+
+        try:
+            sol = np.linalg.solve(M, rhs)
+            q = sol[:n]
+            mu = float(sol[n])
+        except np.linalg.LinAlgError:
+            q = np.zeros(n, dtype=float)
+            mu = 0.0
+
+        return q, chi, eta, mu
+
 
 def make_HF() -> Molecule:
     """
@@ -1083,14 +1217,22 @@ def classify_bond(delta_chi: float) -> str:
     """
     Грубая игрушечная шкала типа связи по |Δchi_spec|.
 
-      |Δχ| < 0.5        → "ковалентная"
-      0.5 ≤ |Δχ| < 2.0  → "полярная"
-      |Δχ| ≥ 2.0        → "почти ионная"
+      |Δχ| < 0.2        → "ковалентная"
+      0.2 ≤ |Δχ| < 3.8  → "полярная"
+      |Δχ| ≥ 3.8        → "почти ионная"
+
+    Пороговые значения подобраны феноменологически так, чтобы:
+      - H–H, C–C, N–N, O–O и очень слабые гетероядерные связи (H–N, H–O)
+        лежали в ковалентной области;
+      - HF/HCl, C–O/Si–O, C–F/B–F читались как полярные (сильные
+        ковалентные связи);
+      - LiF/NaCl, MgF/LiCl и похожие комбинации металл–галоген
+        относились к почти ионным связям.
     """
     x = abs(delta_chi)
-    if x < 0.5:
+    if x < 0.2:
         return "ковалентная"
-    elif x < 2.0:
+    elif x < 3.8:
         return "полярная"
     else:
         return "почти ионная"
@@ -1160,6 +1302,33 @@ def print_bond_polarities_spec(
             f"{name:<8} {label:<7} {dchi:10.3f}   "
             f"{bond_type:<18} {comment}"
         )
+
+
+def get_chi_spec(
+    name: str,
+    a: float = 0.5,
+    b: float = 1.0,
+    c: float = 1.5,
+    alpha: float = ALPHA_CALIBRATED,
+    eps_neutral: float = EPS_NEUTRAL,
+    gamma_donor: float = GAMMA_DONOR_CALIBRATED,
+    k_center: float = KCENTER_CALIBRATED,
+) -> Optional[float]:
+    """
+    Удобный хелпер: вернуть спектральную χ_spec для данного элемента.
+    """
+    atom = get_atom(name)
+    if atom is None:
+        return None
+    return atom.chi_geom_signed_spec(
+        a=a,
+        b=b,
+        c=c,
+        alpha=alpha,
+        eps_neutral=eps_neutral,
+        gamma_donor=gamma_donor,
+        k_center=k_center,
+    )
 
 
 def print_chain_polarities(
@@ -1269,6 +1438,120 @@ def print_chain_polarities_spec(
             print(
                 f"{idx:>4} {ai.name+'-'+aj.name:>7} {dchi:10.3f}   "
                 f"{bond_type:<18} {direction}"
+            )
+
+
+def print_molecule_spectral_charges(
+    mol: Molecule,
+    name: str,
+    total_charge: float = 0.0,
+    a: float = 0.5,
+    b: float = 1.0,
+    c: float = 1.5,
+    alpha: float = ALPHA_CALIBRATED,
+    eps_neutral: float = EPS_NEUTRAL,
+    gamma_donor: float = GAMMA_DONOR_CALIBRATED,
+    k_center: float = KCENTER_CALIBRATED,
+) -> None:
+    """
+    Диагностический вывод спектральных частичных зарядов в молекуле.
+    """
+    q, chi, eta, mu = mol.spectral_charges(
+        total_charge=total_charge,
+        a=a,
+        b=b,
+        c=c,
+        alpha=alpha,
+        eps_neutral=eps_neutral,
+        gamma_donor=gamma_donor,
+        k_center=k_center,
+    )
+
+    print(
+        f"Spectral charge equilibration for {name} "
+        f"(a={a}, b={b}, c={c}, alpha={alpha:.3f}, Q_tot={total_charge:.3f})"
+    )
+    print(f"Chemical potential mu ≈ {mu:.3f}")
+    print("idx  El   chi_spec    eta(J_ii)          q")
+    print("-----------------------------------------------")
+    for i, atom in enumerate(mol.atoms):
+        el = atom.name
+        print(
+            f"{i:3d}  {el:2s}  {chi[i]:8.3f}   {eta[i]:10.3f}   {q[i]:10.3f}"
+        )
+    print()
+
+    print("Bond charge differences (approx dipoles q_j - q_i):")
+    print("bond  i-j    Δq")
+    print("-----------------")
+    for k, (i, j) in enumerate(mol.bonds):
+        dq = q[j] - q[i]
+        print(f"{k:4d}  {i:2d}-{j:2d}  {dq:8.3f}")
+    print()
+
+
+def print_pair_polarity_map(
+    a: float = 0.5,
+    b: float = 1.0,
+    c: float = 1.5,
+    alpha: float = ALPHA_CALIBRATED,
+    eps_neutral: float = EPS_NEUTRAL,
+    gamma_donor: float = GAMMA_DONOR_CALIBRATED,
+    k_center: float = KCENTER_CALIBRATED,
+) -> None:
+    """
+    Диагностика всех пар A–B по χ_spec для элементов H–Cl (FIT_ELEMENTS).
+
+    Для каждой пары (A,B) из FIT_ELEMENTS выводит:
+        chi_spec(A), chi_spec(B), Δchi_spec = chi_B - chi_A и тип связи.
+    """
+    print()
+    print(
+        "Pairwise spectral bond polarity map "
+        f"(a={a}, b={b}, c={c}, alpha={alpha:.3f}, "
+        f"eps_neutral={eps_neutral}, gamma_donor={gamma_donor}, "
+        f"k_center={k_center})"
+    )
+    header = (
+        f"{'A':<3} {'B':<3} "
+        f"{'chi_A':>9} {'chi_B':>9} "
+        f"{'Δchi':>9} {'type':>14}"
+    )
+    print(header)
+    print("-" * len(header))
+
+    for i, A in enumerate(FIT_ELEMENTS):
+        chi_A = get_chi_spec(
+            A,
+            a=a,
+            b=b,
+            c=c,
+            alpha=alpha,
+            eps_neutral=eps_neutral,
+            gamma_donor=gamma_donor,
+            k_center=k_center,
+        )
+        if chi_A is None:
+            continue
+        for B in FIT_ELEMENTS[i + 1 :]:
+            chi_B = get_chi_spec(
+                B,
+                a=a,
+                b=b,
+                c=c,
+                alpha=alpha,
+                eps_neutral=eps_neutral,
+                gamma_donor=gamma_donor,
+                k_center=k_center,
+            )
+            if chi_B is None:
+                continue
+            delta = chi_B - chi_A
+            bond_type = classify_bond(delta)
+            print(
+                f"{A:<3} {B:<3} "
+                f"{chi_A:9.3f} {chi_B:9.3f} "
+                f"{delta:9.3f} {bond_type:>14}"
             )
 
 
@@ -1813,6 +2096,18 @@ if __name__ == "__main__":
         eta=0.1,
         beta=0.5,
     )
+    print()
+    print_pair_polarity_map(
+        a=0.5,
+        b=1.0,
+        c=1.5,
+    )
+    print()
+    print_molecule_spectral_charges(make_H2O(), "H2O")
+    print_molecule_spectral_charges(make_HF(), "HF")
+    print_molecule_spectral_charges(make_HCl(), "HCl")
+    print_molecule_spectral_charges(make_CCOH(), "C-CO-H")
+    print_molecule_spectral_charges(make_SiOSi(), "Si-O-Si")
     print()
     grid_fit_geom_spectral_params(
         a=0.5,
