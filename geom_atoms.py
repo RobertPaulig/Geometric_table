@@ -2121,6 +2121,92 @@ def print_molecule_energies() -> None:
         print(f"{m.name:<8} {E:8.3f}")
 
 
+def print_molecule_energy_breakdown() -> None:
+    """
+    Разложение полной энергии по вкладам:
+    F_geom, F_angle, F_flow, F_total.
+    """
+    mols = [
+        make_CH4(),
+        make_NH3(),
+        make_H2O(),
+        make_HF(),
+        make_HCl(),
+        make_LiF(),
+        make_NaCl(),
+        make_CCOH(),
+        make_SiOSi(),
+    ]
+    print()
+    print("Molecule   F_geom    F_angle    F_flow    F_total")
+    print("-------------------------------------------------")
+    for m in mols:
+        a, b, c = 0.5, 1.0, 1.5
+        F_geom = sum(at.F_geom(a=a, b=b, c=c) for at in m.atoms)
+        F_angle = m.angular_tension_sp3()
+        q, chi, eta, mu, F_flow = m.spectral_charges()
+        F_total = F_geom + F_angle + F_flow
+        print(f"{m.name:<8} {F_geom:8.3f} {F_angle:9.3f} {F_flow:9.3f} {F_total:9.3f}")
+
+
+def reaction_energy(reactants: List[Molecule], products: List[Molecule]) -> float:
+    """
+    Энергия реакции:
+      ΔF = Σ F_mol(products) - Σ F_mol(reactants).
+
+    Отрицательное ΔF означает экзотермическую реакцию (выгодную).
+    """
+    E_react = sum(m.total_molecular_energy() for m in reactants)
+    E_prod = sum(m.total_molecular_energy() for m in products)
+    return E_prod - E_react
+
+
+def make_NaF() -> Molecule:
+    """
+    NaF: Na--F, два атома, одна связь (0-1).
+    """
+    na = get_atom("Na")
+    f = get_atom("F")
+    return Molecule(name="NaF", atoms=[na, f], bonds=[(0, 1)])
+
+
+def make_LiCl() -> Molecule:
+    """
+    LiCl: Li--Cl, два атома, одна связь (0-1).
+    """
+    li = get_atom("Li")
+    cl = get_atom("Cl")
+    return Molecule(name="LiCl", atoms=[li, cl], bonds=[(0, 1)])
+
+
+def print_reaction_examples() -> None:
+    """
+    Примеры расчёта энергий реакций.
+    """
+    print()
+    print("Reaction energy examples (ΔF = products - reactants):")
+    print("------------------------------------------------------")
+
+    # Реакция 1: HF + NaCl → HCl + NaF
+    hf = make_HF()
+    nacl = make_NaCl()
+    hcl = make_HCl()
+    naf = make_NaF()
+    dF1 = reaction_energy([hf, nacl], [hcl, naf])
+    print(f"HF + NaCl → HCl + NaF:  ΔF = {dF1:+.3f}")
+
+    # Реакция 2: LiF + HCl → LiCl + HF
+    lif = make_LiF()
+    licl = make_LiCl()
+    dF2 = reaction_energy([lif, hcl], [licl, hf])
+    print(f"LiF + HCl → LiCl + HF:  ΔF = {dF2:+.3f}")
+
+    # Реакция 3: 2 HF → H2 + F2 (игрушечно, без H2/F2)
+    # Просто показываем, что можно считать
+    print()
+    print("(Note: absolute F values are arbitrary; focus on relative ΔF signs)")
+
+
 if __name__ == "__main__":
     # Пример: базовые веса a=0.5, b=1.0, c=1.5.
     print_table(a=0.5, b=1.0, c=1.5)
@@ -2189,6 +2275,8 @@ if __name__ == "__main__":
     print_molecule_spectral_charges(make_CCOH(), "C-CO-H")
     print_molecule_spectral_charges(make_SiOSi(), "Si-O-Si")
     print_molecule_energies()
+    print_molecule_energy_breakdown()
+    print_reaction_examples()
     print()
     grid_fit_geom_spectral_params(
         a=0.5,
