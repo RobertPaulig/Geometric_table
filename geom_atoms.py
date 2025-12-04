@@ -813,6 +813,58 @@ class Molecule:
 
         return dists
 
+    def total_molecular_energy(
+        self,
+        a: float = 0.5,
+        b: float = 1.0,
+        c: float = 1.5,
+        alpha: float = ALPHA_CALIBRATED,
+        eps_neutral: float = EPS_NEUTRAL,
+        gamma_donor: float = GAMMA_DONOR_CALIBRATED,
+        k_center: float = KCENTER_CALIBRATED,
+        total_charge: float = 0.0,
+        # параметры flow
+        hardness_offset: float = 0.5,
+        hardness_scale: float = 1.0,
+        interaction_scale: float = 1.0,
+        interaction_power: float = 1.0,
+        interaction_floor: float = 0.5,
+        # углы
+        base_angle: float = 109.5,
+        k_angle: float = 0.01,
+    ) -> float:
+        """
+        Полная энергия молекулы:
+        F_mol = F_geom (атомы) + F_angle (углы) + F_flow (потоки зарядов).
+        """
+        # 1. Атомная геометрическая энергия
+        F_geom = sum(atom.F_geom(a=a, b=b, c=c) for atom in self.atoms)
+
+        # 2. Угловое напряжение (sp3)
+        F_angle = self.angular_tension_sp3(
+            base_angle=base_angle,
+            k_angle=k_angle,
+        )
+
+        # 3. Энергия потоков
+        q, chi, eta, mu, F_flow = self.spectral_charges(
+            total_charge=total_charge,
+            a=a,
+            b=b,
+            c=c,
+            alpha=alpha,
+            eps_neutral=eps_neutral,
+            gamma_donor=gamma_donor,
+            k_center=k_center,
+            hardness_offset=hardness_offset,
+            hardness_scale=hardness_scale,
+            interaction_scale=interaction_scale,
+            interaction_power=interaction_power,
+            interaction_floor=interaction_floor,
+        )
+
+        return F_geom + F_angle + F_flow
+
     def spectral_charges(
         self,
         total_charge: float = 0.0,
@@ -828,15 +880,16 @@ class Molecule:
         interaction_scale: float = 1.0,
         interaction_power: float = 1.0,
         interaction_floor: float = 0.5,
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, float]:
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, float, float]:
         """
         QEq-подобное уравнивание зарядов на основе χ_spec и E_port.
 
         Возвращает кортеж:
-            q   — массив частичных зарядов (q_i > 0 ⇒ дефицит электронов),
-            chi — вектор χ_spec для атомов,
-            eta — диагональные "жёсткости" J_ii,
-            mu  — общий химический потенциал λ.
+            q      — массив частичных зарядов (q_i > 0 ⇒ дефицит электронов),
+            chi    — вектор χ_spec для атомов,
+            eta    — диагональные "жёсткости" J_ii,
+            mu     — общий химический потенциал λ,
+            F_flow — энергия перераспределения зарядов.
 
         total_charge задаёт суммарный заряд молекулы (обычно 0.0).
         """
@@ -848,6 +901,7 @@ class Molecule:
                 np.zeros(0, dtype=float),
                 np.zeros(0, dtype=float),
                 np.zeros(0, dtype=float),
+                0.0,
                 0.0,
             )
 
@@ -909,7 +963,10 @@ class Molecule:
             q = np.zeros(n, dtype=float)
             mu = 0.0
 
-        return q, chi, eta, mu
+        # Энергия потока: F_flow = chi·q + 1/2 q^T J q
+        F_flow = float(chi.dot(q) + 0.5 * q.dot(J).dot(q))
+
+        return q, chi, eta, mu, F_flow
 
 
 def make_HF() -> Molecule:
@@ -1456,7 +1513,7 @@ def print_molecule_spectral_charges(
     """
     Диагностический вывод спектральных частичных зарядов в молекуле.
     """
-    q, chi, eta, mu = mol.spectral_charges(
+    q, chi, eta, mu, F_flow = mol.spectral_charges(
         total_charge=total_charge,
         a=a,
         b=b,
@@ -1471,7 +1528,7 @@ def print_molecule_spectral_charges(
         f"Spectral charge equilibration for {name} "
         f"(a={a}, b={b}, c={c}, alpha={alpha:.3f}, Q_tot={total_charge:.3f})"
     )
-    print(f"Chemical potential mu ≈ {mu:.3f}")
+    print(f"Chemical potential mu ≈ {mu:.3f}, F_flow ≈ {F_flow:.3f}")
     print("idx  El   chi_spec    eta(J_ii)          q")
     print("-----------------------------------------------")
     for i, atom in enumerate(mol.atoms):
@@ -2041,6 +2098,29 @@ def grid_fit_geom_spectral_params(
         print("  (no valid combination found)")
 
 
+def print_molecule_energies() -> None:
+    """
+    Вывести полные энергии для набора тестовых молекул.
+    """
+    mols = [
+        make_CH4(),
+        make_NH3(),
+        make_H2O(),
+        make_HF(),
+        make_HCl(),
+        make_LiF(),
+        make_NaCl(),
+        make_CCOH(),
+        make_SiOSi(),
+    ]
+    print()
+    print("Molecule   F_total")
+    print("-------------------")
+    for m in mols:
+        E = m.total_molecular_energy()
+        print(f"{m.name:<8} {E:8.3f}")
+
+
 if __name__ == "__main__":
     # Пример: базовые веса a=0.5, b=1.0, c=1.5.
     print_table(a=0.5, b=1.0, c=1.5)
@@ -2108,6 +2188,7 @@ if __name__ == "__main__":
     print_molecule_spectral_charges(make_HCl(), "HCl")
     print_molecule_spectral_charges(make_CCOH(), "C-CO-H")
     print_molecule_spectral_charges(make_SiOSi(), "Si-O-Si")
+    print_molecule_energies()
     print()
     grid_fit_geom_spectral_params(
         a=0.5,
