@@ -24,11 +24,27 @@ PAULING = {
     "Cl": 3.16,
 }
 
+# Model version identifier
+MODEL_VERSION = "geom-spec v1.0 (Li~Na, F~Cl, QEq-linear)"
+
+# Spectral modes:
+#   "v1"              – baseline (Li~Na, F~Cl)
+#   "v2_period_split" – period-based scaling of port energies
+#   "v3_eps_coupled"  – v2 + weak epsilon→chi coupling
+SPECTRAL_MODE = "v1"
+SPECTRAL_MODE_V3 = "v3_eps_coupled"
+
 # Calibrated spectral parameters (v1.0)
 ALPHA_CALIBRATED = 1.237
 GAMMA_DONOR_CALIBRATED = 3.0
 KCENTER_CALIBRATED = 0.1
 EPS_NEUTRAL = 0.06
+
+# v2 period split parameters (R&D tuning)
+V2_PERIOD_EXPONENT = 0.7  # E_port ~ period^(-k)
+
+# v3 epsilon–chi coupling strength (λ_ε)
+EPS_COUPLING_STRENGTH = 0.4
 
 FIT_ELEMENTS = [
     "H",
@@ -68,6 +84,20 @@ class AtomGraph:
     role: str               # роль в сетях: 'inert', 'hub', 'bridge', 'terminator'
     notes: str = ""         # произвольный комментарий
     epsilon: float = 0.0    # игрушечное положение уровня ε_Z относительно Среды
+
+    @property
+    def period(self) -> int:
+        """Период элемента в таблице Менделеева (приближённо по Z)."""
+        if self.Z <= 2:
+            return 1
+        elif self.Z <= 10:
+            return 2
+        elif self.Z <= 18:
+            return 3
+        elif self.Z <= 36:
+            return 4
+        else:
+            return 5
 
     def cyclomatic_number(self) -> int:
         """
@@ -247,10 +277,19 @@ class AtomGraph:
         Геометрическая "энергия" на один порт.
 
         Если портов нет (инертный газ), возвращается None.
+
+        В режиме v2_period_split энергия масштабируется по периоду:
+            E_port_scaled = E_port_base * period^(-V2_PERIOD_EXPONENT)
         """
         if self.ports <= 0:
             return None
-        return self.F_geom(a=a, b=b, c=c) / self.ports
+        base = self.F_geom(a=a, b=b, c=c) / self.ports
+
+        if SPECTRAL_MODE == "v2_period_split":
+            scale = self.period ** (-V2_PERIOD_EXPONENT)
+            return base * scale
+        else:
+            return base
 
     def preferred_angle(self) -> Optional[float]:
         """
@@ -328,6 +367,7 @@ class AtomGraph:
         eps_neutral: float = EPS_NEUTRAL,
         gamma_donor: float = GAMMA_DONOR_CALIBRATED,
         k_center: float = KCENTER_CALIBRATED,
+        eps_coupling: float = EPS_COUPLING_STRENGTH,
     ) -> Optional[float]:
         """
         Спектральная χ_geom с:
@@ -345,8 +385,19 @@ class AtomGraph:
             return 0.0
 
         mu_env_spec = compute_mu_env_spec()
-        eps = self.epsilon_spec()
-        delta = eps - mu_env_spec
+        eps_spec = self.epsilon_spec()
+
+        # v1/v2: старое поведение (без связи с геометрическим epsilon)
+        if SPECTRAL_MODE != SPECTRAL_MODE_V3:
+            eps_eff = eps_spec
+        else:
+            # v3: добавляем геометрический вклад epsilon (self.epsilon)
+            # epsilon < 0 → более глубокая яма (сильнее акцептор)
+            # epsilon > 0 → донорный сдвиг
+            eps_geom = getattr(self, "epsilon", 0.0)
+            eps_eff = eps_spec + eps_coupling * eps_geom
+
+        delta = eps_eff - mu_env_spec
 
         # Нейтральное окно: отдельная обработка hub-центров
         if abs(delta) <= eps_neutral:
@@ -362,10 +413,14 @@ class AtomGraph:
         # Вне окна: обычные доноры / акцепторы
         if delta > 0.0:
             sign = -1.0
-            s = 1.0 / (1.0 + gamma_donor * eps)
+            s = 1.0 / (1.0 + gamma_donor * eps_eff)
         else:
             sign = 1.0
-            s = 1.0
+            if SPECTRAL_MODE == SPECTRAL_MODE_V3:
+                # v3: более глубокие ямы (delta << 0) усиливают акцепторный характер
+                s = 1.0 + eps_coupling * (-delta)
+            else:
+                s = 1.0
 
         return sign * (s * chi_abs)
 
@@ -624,6 +679,48 @@ def get_atom(name: str) -> AtomGraph:
         if atom.name == name:
             return atom
     raise ValueError(f"Unknown atom name: {name}")
+
+
+# Global periodic table dictionary for R&D experiments
+PERIODIC_TABLE: dict = {atom.name: atom for atom in base_atoms}
+
+
+def get_periodic_table() -> dict:
+    """Return the global periodic table dictionary."""
+    return PERIODIC_TABLE
+
+
+class AtomOverrideContext:
+    """
+    Контекстный менеджер для временного изменения параметров атома
+    (например, epsilon и period) в спектральной таблице.
+    
+    Usage:
+        with AtomOverrideContext(PERIODIC_TABLE, "O", epsilon=-5.0):
+            mol = make_H2O()  # uses modified O
+    """
+    def __init__(self, periodic_table: dict, symbol: str, **overrides):
+        self.pt = periodic_table
+        self.symbol = symbol
+        self.overrides = overrides
+        self._backup: dict = {}
+
+    def __enter__(self):
+        atom = self.pt[self.symbol]
+        # Backup and apply overrides
+        for name, value in self.overrides.items():
+            self._backup[name] = getattr(atom, name)
+            # Use object.__setattr__ for frozen dataclass workaround
+            object.__setattr__(atom, name, value)
+        return atom
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        atom = self.pt[self.symbol]
+        # Restore original values
+        for name, old_value in self._backup.items():
+            object.__setattr__(atom, name, old_value)
+
+
 
 
 def compute_mu_env_spec() -> float:
@@ -2179,6 +2276,49 @@ def make_LiCl() -> Molecule:
     return Molecule(name="LiCl", atoms=[li, cl], bonds=[(0, 1)])
 
 
+def make_CH3F() -> Molecule:
+    """
+    CH3F: тетраэдрический C с тремя H и одним F.
+    Bonds: C(0)-H(1), C(0)-H(2), C(0)-H(3), C(0)-F(4).
+    """
+    c = get_atom("C")
+    h1 = get_atom("H")
+    h2 = get_atom("H")
+    h3 = get_atom("H")
+    f = get_atom("F")
+    atoms = [c, h1, h2, h3, f]
+    bonds = [(0, 1), (0, 2), (0, 3), (0, 4)]
+    return Molecule(name="CH3F", atoms=atoms, bonds=bonds)
+
+
+def make_CH3Cl() -> Molecule:
+    """
+    CH3Cl: тетраэдрический C с тремя H и одним Cl.
+    Bonds: C(0)-H(1), C(0)-H(2), C(0)-H(3), C(0)-Cl(4).
+    """
+    c = get_atom("C")
+    h1 = get_atom("H")
+    h2 = get_atom("H")
+    h3 = get_atom("H")
+    cl = get_atom("Cl")
+    atoms = [c, h1, h2, h3, cl]
+    bonds = [(0, 1), (0, 2), (0, 3), (0, 4)]
+    return Molecule(name="CH3Cl", atoms=atoms, bonds=bonds)
+
+
+def make_H2S() -> Molecule:
+    """
+    H2S: bent, аналог H2O с серой вместо кислорода.
+    Bonds: S(0)-H(1), S(0)-H(2).
+    """
+    s = get_atom("S")
+    h1 = get_atom("H")
+    h2 = get_atom("H")
+    atoms = [s, h1, h2]
+    bonds = [(0, 1), (0, 2)]
+    return Molecule(name="H2S", atoms=atoms, bonds=bonds)
+
+
 def print_reaction_examples() -> None:
     """
     Примеры расчёта энергий реакций.
@@ -2207,80 +2347,715 @@ def print_reaction_examples() -> None:
     print("(Note: absolute F values are arbitrary; focus on relative ΔF signs)")
 
 
+def run_v1_baseline_checks() -> None:
+    """
+    Фиксируем поведение модели v1.0 как baseline.
+    Эти тесты НЕ для исправления, а для документирования текущего состояния.
+    """
+    print()
+    print(f"[BASELINE] {MODEL_VERSION}")
+    print("=" * 60)
+
+    # 1. Близнецы по χ_spec (F~Cl, Li~Na)
+    chi_F = get_chi_spec("F")
+    chi_Cl = get_chi_spec("Cl")
+    chi_Li = get_chi_spec("Li")
+    chi_Na = get_chi_spec("Na")
+
+    print(f"F vs Cl:  χ_spec(F)  = {chi_F:.3f}, χ_spec(Cl) = {chi_Cl:.3f}, Δ = {abs(chi_F - chi_Cl):.6f}")
+    print(f"Li vs Na: χ_spec(Li) = {chi_Li:.3f}, χ_spec(Na) = {chi_Na:.3f}, Δ = {abs(chi_Li - chi_Na):.6f}")
+
+    # 2. Реакция обмена HF + NaCl ↔ HCl + NaF (должна быть ≈ 0)
+    hf = make_HF()
+    hcl = make_HCl()
+    naf = make_NaF()
+    nacl = make_NaCl()
+    dF_exchange = reaction_energy([hf, nacl], [hcl, naf])
+    print(f"HF + NaCl → HCl + NaF: ΔF = {dF_exchange:.6f}")
+
+    # 3. Вода — слабый поток в v1.0
+    h2o = make_H2O()
+    _, _, _, _, F_flow_h2o = h2o.spectral_charges()
+    print(f"H2O: F_flow = {F_flow_h2o:.6f}")
+
+    # 4. HF — заметный поток
+    _, _, _, _, F_flow_hf = hf.spectral_charges()
+    print(f"HF:  F_flow = {F_flow_hf:.6f}")
+
+    print()
+    print("[v1.0 baseline complete]")
+    print()
+
+
+def print_organic_testbench() -> None:
+    """
+    Тест-стенд для органических и полярных молекул.
+    Показывает разложение энергии для быстрой диагностики.
+    """
+    molecules = [
+        ("H2O", make_H2O()),
+        ("H2S", make_H2S()),
+        ("HF", make_HF()),
+        ("HCl", make_HCl()),
+        ("LiF", make_LiF()),
+        ("NaCl", make_NaCl()),
+        ("NaF", make_NaF()),
+        ("LiCl", make_LiCl()),
+        ("CH4", make_CH4()),
+        ("CH3F", make_CH3F()),
+        ("CH3Cl", make_CH3Cl()),
+        ("NH3", make_NH3()),
+        ("C-CO-H", make_CCOH()),
+        ("Si-O-Si", make_SiOSi()),
+    ]
+
+    print()
+    print(f"Organic / polar testbench ({MODEL_VERSION}):")
+    print("Molecule   F_geom    F_angle    F_flow    F_total")
+    print("--------------------------------------------------")
+    for name, mol in molecules:
+        a, b, c = 0.5, 1.0, 1.5
+        F_geom = sum(at.F_geom(a=a, b=b, c=c) for at in mol.atoms)
+        F_angle = mol.angular_tension_sp3()
+        _, _, _, _, F_flow = mol.spectral_charges()
+        F_total = F_geom + F_angle + F_flow
+        print(f"{name:8s} {F_geom:8.3f} {F_angle:9.3f} {F_flow:9.3f} {F_total:9.3f}")
+    print()
+
+
+def run_v2_diagnostics() -> None:
+    """
+    Диагностика v2_period_split режима.
+    Показывает как ломается симметрия Li~Na и F~Cl.
+    """
+    global SPECTRAL_MODE, MODEL_VERSION
+    old_mode = SPECTRAL_MODE
+    old_version = MODEL_VERSION
+
+    SPECTRAL_MODE = "v2_period_split"
+    MODEL_VERSION = "geom-spec v2.0 (period split)"
+
+    print()
+    print(f"[DIAGNOSTICS] {MODEL_VERSION}")
+    print("=" * 60)
+    print(f"V2_PERIOD_EXPONENT = {V2_PERIOD_EXPONENT}")
+    print()
+
+    # Сравнение χ_spec для пар F/Cl, Li/Na
+    chi_F = get_chi_spec("F")
+    chi_Cl = get_chi_spec("Cl")
+    chi_Li = get_chi_spec("Li")
+    chi_Na = get_chi_spec("Na")
+
+    print("Spectral electronegativity comparison (period split):")
+    print(f"  F  (period 2): χ_spec = {chi_F:.3f}")
+    print(f"  Cl (period 3): χ_spec = {chi_Cl:.3f}")
+    print(f"  Δ(F - Cl) = {chi_F - chi_Cl:+.3f}")
+    print()
+    print(f"  Li (period 2): χ_spec = {chi_Li:.3f}")
+    print(f"  Na (period 3): χ_spec = {chi_Na:.3f}")
+    print(f"  Δ(Li - Na) = {chi_Li - chi_Na:+.3f}")
+    print()
+
+    # Реакции обмена (теперь ΔF ≠ 0!)
+    hf = make_HF()
+    hcl = make_HCl()
+    naf = make_NaF()
+    nacl = make_NaCl()
+    lif = make_LiF()
+    licl = make_LiCl()
+
+    dF1 = reaction_energy([hf, nacl], [hcl, naf])
+    dF2 = reaction_energy([lif, hcl], [licl, hf])
+
+    print("Exchange reactions in v2:")
+    print(f"  HF + NaCl → HCl + NaF:  ΔF = {dF1:+.3f}")
+    print(f"  LiF + HCl → LiCl + HF:  ΔF = {dF2:+.3f}")
+    print()
+
+    # Organic testbench в режиме v2
+    molecules = [
+        ("H2O", make_H2O()),
+        ("H2S", make_H2S()),
+        ("HF", make_HF()),
+        ("HCl", make_HCl()),
+        ("LiF", make_LiF()),
+        ("NaCl", make_NaCl()),
+        ("NaF", make_NaF()),
+        ("LiCl", make_LiCl()),
+        ("CH4", make_CH4()),
+        ("CH3F", make_CH3F()),
+        ("CH3Cl", make_CH3Cl()),
+        ("NH3", make_NH3()),
+    ]
+
+    print(f"Organic / polar testbench ({MODEL_VERSION}):")
+    print("Molecule   F_geom    F_angle    F_flow    F_total")
+    print("--------------------------------------------------")
+    for name, mol in molecules:
+        a, b, c = 0.5, 1.0, 1.5
+        F_geom = sum(at.F_geom(a=a, b=b, c=c) for at in mol.atoms)
+        F_angle = mol.angular_tension_sp3()
+        _, _, _, _, F_flow = mol.spectral_charges()
+        F_total = F_geom + F_angle + F_flow
+        print(f"{name:8s} {F_geom:8.3f} {F_angle:9.3f} {F_flow:9.3f} {F_total:9.3f}")
+    print()
+
+    print("[v2.0 diagnostics complete]")
+    print()
+
+    # Восстанавливаем v1 режим
+    SPECTRAL_MODE = old_mode
+    MODEL_VERSION = old_version
+
+
+def scan_period_exponent() -> None:
+    """
+    Сканирование параметра V2_PERIOD_EXPONENT для калибровки v2 модели.
+    Показывает χ_spec для F/Cl/Li/Na и ΔF для обменной реакции.
+    """
+    global V2_PERIOD_EXPONENT, SPECTRAL_MODE
+    old_mode = SPECTRAL_MODE
+    old_k = V2_PERIOD_EXPONENT
+
+    SPECTRAL_MODE = "v2_period_split"
+
+    print()
+    print("Period exponent scan (v2_period_split):")
+    print("k       chi_F   chi_Cl   chi_Li   chi_Na   dF(HF+NaCl)")
+    print("--------------------------------------------------------")
+
+    ks = [0.3, 0.5, 0.7, 0.9, 1.1, 1.3]
+    for k in ks:
+        V2_PERIOD_EXPONENT = k
+
+        chi_F = get_chi_spec("F") or 0.0
+        chi_Cl = get_chi_spec("Cl") or 0.0
+        chi_Li = get_chi_spec("Li") or 0.0
+        chi_Na = get_chi_spec("Na") or 0.0
+
+        dF1 = reaction_energy([make_HF(), make_NaCl()],
+                              [make_HCl(), make_NaF()])
+
+        print(f"{k:4.1f}   {chi_F:7.3f} {chi_Cl:8.3f} {chi_Li:8.3f} {chi_Na:8.3f} {dF1:11.3f}")
+
+    print()
+    print("Interpretation:")
+    print("  - Higher k → bigger F/Cl and Li/Na split")
+    print("  - Look for dF sign matching known chemistry (NaF more stable than NaCl)")
+    print()
+
+    # Восстанавливаем
+    SPECTRAL_MODE = old_mode
+    V2_PERIOD_EXPONENT = old_k
+
+
+# ============================================================
+# R&D EXPERIMENTS
+# ============================================================
+
+def print_single_molecule_breakdown(mol, label: str) -> None:
+    """
+    Печатает разложение энергии для одной молекулы в удобном формате.
+    """
+    a, b, c = 0.5, 1.0, 1.5
+    F_geom = sum(at.F_geom(a=a, b=b, c=c) for at in mol.atoms)
+    F_angle = mol.angular_tension_sp3()
+    _, _, _, _, F_flow = mol.spectral_charges()
+    F_total = F_geom + F_angle + F_flow
+    print(f"  {label:20s}  F_geom={F_geom:7.3f}  F_angle={F_angle:6.3f}  "
+          f"F_flow={F_flow:7.3f}  F_total={F_total:7.3f}")
+
+
+def run_super_O_vs_S_experiment(
+    k_period: float = 0.7,
+    super_eps: float = -5.0,
+) -> None:
+    """
+    R&D-эксперимент: Super-O vs S.
+    
+    1) Сравниваем обычную H2O и H2S
+    2) Вводим 'Super-O' (очень глубокая epsilon) и сравниваем H2O* с H2O/H2S.
+    """
+    global SPECTRAL_MODE, V2_PERIOD_EXPONENT
+    old_mode = SPECTRAL_MODE
+    old_k = V2_PERIOD_EXPONENT
+
+    SPECTRAL_MODE = "v2_period_split"
+    V2_PERIOD_EXPONENT = k_period
+
+    print()
+    print("=" * 60)
+    print("===== R&D EXPERIMENT: SUPER-O vs S =====")
+    print("=" * 60)
+    print(f"[PARAMS] SPECTRAL_MODE=v2_period_split, k_period={k_period:.3f}, "
+          f"super_eps={super_eps:.3f}")
+
+    # Baseline: normal O and S
+    print()
+    print("--- BASELINE (normal O and S) ---")
+    mol_h2o = make_H2O()
+    mol_h2s = make_H2S()
+    print_single_molecule_breakdown(mol_h2o, "H2O (baseline)")
+    print_single_molecule_breakdown(mol_h2s, "H2S (baseline)")
+
+    # Super-O variant: temporarily modify O's epsilon
+    print()
+    print("--- SUPER-O VARIANT ---")
+    print(f"[INFO] Setting O.epsilon = {super_eps} (was {get_atom('O').epsilon})")
+    
+    with AtomOverrideContext(PERIODIC_TABLE, "O", epsilon=super_eps):
+        mol_h2o_super = make_H2O()
+        print_single_molecule_breakdown(mol_h2o_super, "H2O* (Super-O)")
+
+    # Comparison summary
+    print()
+    print("--- COMPARISON ---")
+    _, _, _, _, flow_h2o = mol_h2o.spectral_charges()
+    _, _, _, _, flow_h2s = mol_h2s.spectral_charges()
+    print(f"  F_flow(H2O)  = {flow_h2o:+.4f}")
+    print(f"  F_flow(H2S)  = {flow_h2s:+.4f}")
+    print(f"  Δ(H2O - H2S) = {flow_h2o - flow_h2s:+.4f}")
+
+    # Restore
+    SPECTRAL_MODE = old_mode
+    V2_PERIOD_EXPONENT = old_k
+
+
+def scan_donor_acceptor_decay(
+    k_values: tuple = (0.0, 0.3, 0.5, 0.7, 0.9, 1.1, 1.3),
+) -> None:
+    """
+    Сканируем k_period для пары доноров (Li, Na) и акцепторов (F, Cl).
+    Показывает, как быстро разваливается симметрия по k.
+    """
+    global SPECTRAL_MODE, V2_PERIOD_EXPONENT
+    old_mode = SPECTRAL_MODE
+    old_k = V2_PERIOD_EXPONENT
+
+    SPECTRAL_MODE = "v2_period_split"
+
+    print()
+    print("=" * 75)
+    print("===== R&D EXPERIMENT: DONOR vs ACCEPTOR DECAY =====")
+    print("=" * 75)
+    print(" k_period   chi_Li   chi_Na  Δchi_donor   chi_F   chi_Cl  Δchi_acceptor")
+    print("-" * 75)
+
+    for k in k_values:
+        V2_PERIOD_EXPONENT = k
+
+        chi_Li = get_chi_spec("Li") or 0.0
+        chi_Na = get_chi_spec("Na") or 0.0
+        chi_F = get_chi_spec("F") or 0.0
+        chi_Cl = get_chi_spec("Cl") or 0.0
+
+        delta_d = chi_Li - chi_Na
+        delta_a = chi_F - chi_Cl
+
+        print(f"{k:7.3f}  {chi_Li:8.3f} {chi_Na:8.3f} {delta_d:11.3f}  "
+              f"{chi_F:8.3f} {chi_Cl:8.3f} {delta_a:14.3f}")
+
+    print()
+    print("[INTERPRETATION]")
+    print("  - Δchi_donor  = chi_Li - chi_Na  (positive means Li is 'softer donor')")
+    print("  - Δchi_acceptor = chi_F - chi_Cl (positive means F is 'stronger acceptor')")
+    print()
+
+    # Restore
+    SPECTRAL_MODE = old_mode
+    V2_PERIOD_EXPONENT = old_k
+
+
+def find_zero_chemistry_point_for_Cl_vs_H(
+    k_min: float = 0.0,
+    k_max: float = 2.0,
+    k_step: float = 0.1,
+    threshold: float = 0.05,
+) -> None:
+    """
+    Сканируем k_period так, чтобы найти область, где chi_spec(Cl) ~= chi_spec(H).
+    Отмечаем, где знак delta меняется (примерная 'точка нулевой химии'), и
+    ищем k*, при котором |chi_Cl - chi_H| < threshold.
+    """
+    global SPECTRAL_MODE, V2_PERIOD_EXPONENT
+    old_mode = SPECTRAL_MODE
+    old_k = V2_PERIOD_EXPONENT
+
+    SPECTRAL_MODE = "v2_period_split"
+
+    print()
+    print("=" * 60)
+    print("===== R&D EXPERIMENT: ZERO-CHEMISTRY POINT (Cl ~ H) =====")
+    print("=" * 60)
+    print(" k_period    chi_H      chi_Cl    delta(Cl-H)")
+    print("-" * 50)
+
+    prev_delta = None
+    prev_k = None
+    best_k = None
+    best_delta = None
+    n_steps = int((k_max - k_min) / k_step) + 1
+
+    for i in range(n_steps):
+        k = k_min + i * k_step
+        V2_PERIOD_EXPONENT = k
+
+        chi_H = get_chi_spec("H") or 0.0
+        chi_Cl = get_chi_spec("Cl") or 0.0
+        delta = chi_Cl - chi_H
+
+        print(f"{k:7.3f}  {chi_H:9.3f}  {chi_Cl:9.3f}  {delta:11.3f}")
+
+        if prev_delta is not None and delta * prev_delta < 0:
+            print(f"  >>> SIGN CHANGE between k={prev_k:.3f} and k={k:.3f}")
+
+        if best_delta is None or abs(delta) < abs(best_delta):
+            best_delta = delta
+            best_k = k
+
+        prev_delta = delta
+        prev_k = k
+
+    print()
+    print("[INTERPRETATION]")
+    print("  - When delta(Cl-H) = 0, Cl and H have equal electronegativity")
+    print("  - Sign change marks the 'horizon' where Cl crosses H")
+    if best_k is not None:
+        print(
+            f"  - Closest zero-chemistry point: k* ≈ {best_k:.3f}, "
+            f"delta(Cl-H) = {best_delta:+.3f}"
+        )
+        if abs(best_delta) < threshold:
+            print(f"    (|delta| < {threshold:.3f} → near-equality region)")
+    print()
+
+    # Restore
+    SPECTRAL_MODE = old_mode
+    V2_PERIOD_EXPONENT = old_k
+
+
+# ============================================================
+# R&D MASTER REPORT
+# ============================================================
+
+def collect_element_chi(mode: str) -> dict:
+    """
+    Возвращает {symbol -> chi_spec} для указанного режима (v1 или v2).
+    """
+    global SPECTRAL_MODE
+    old_mode = SPECTRAL_MODE
+    SPECTRAL_MODE = mode if mode == "v1" else "v2_period_split"
+    
+    result = {}
+    for atom in base_atoms:
+        if atom.role == "inert":
+            continue
+        chi = atom.chi_geom_signed_spec()
+        if chi is not None:
+            result[atom.name] = chi
+    
+    SPECTRAL_MODE = old_mode
+    return result
+
+
+def print_compact_spectral_table(mode_label: str) -> None:
+    """Печатает компактную спектральную таблицу."""
+    print(f"\n[{mode_label}] Spectral table (compact):")
+    print("Z  El   role        eps_spec   E_port   chi_spec")
+    print("-" * 55)
+    
+    for atom in base_atoms:
+        if atom.role == "inert":
+            continue
+        eps = atom.epsilon_spec()
+        e_port = atom.per_port_energy() or 0.0
+        chi = atom.chi_geom_signed_spec()
+        chi_str = f"{chi:8.3f}" if chi is not None else "    N/A"
+        print(f"{atom.Z:2d} {atom.name:3s}  {atom.role:10s}  {eps:8.3f}  {e_port:7.3f}  {chi_str}")
+
+
+def print_organic_testbench_with_reactivity(mode_label: str) -> None:
+    """Печатает organic testbench с индексом реактивности R."""
+    molecules = [
+        ("H2O", make_H2O()),
+        ("H2S", make_H2S()),
+        ("HF", make_HF()),
+        ("HCl", make_HCl()),
+        ("LiF", make_LiF()),
+        ("NaCl", make_NaCl()),
+        ("CH4", make_CH4()),
+        ("CH3F", make_CH3F()),
+        ("CH3Cl", make_CH3Cl()),
+        ("NH3", make_NH3()),
+    ]
+
+    print(f"\n[{mode_label}] Organic testbench with reactivity index:")
+    print("Molecule   F_geom   F_angle    F_flow   F_total  R_react")
+    print("-" * 60)
+    
+    for name, mol in molecules:
+        a, b, c = 0.5, 1.0, 1.5
+        F_geom = sum(at.F_geom(a=a, b=b, c=c) for at in mol.atoms)
+        F_angle = mol.angular_tension_sp3()
+        _, _, _, _, F_flow = mol.spectral_charges()
+        F_total = F_geom + F_angle + F_flow
+        denom = max(F_geom + F_angle, 1e-9)
+        R = abs(F_flow) / denom
+        print(f"{name:8s} {F_geom:8.3f} {F_angle:9.3f} {F_flow:9.3f} {F_total:9.3f} {R:7.4f}")
+
+
+def print_reaction_block(mode_label: str) -> None:
+    """Печатает блок реакций с энергиями."""
+    hf   = make_HF()
+    hcl  = make_HCl()
+    naf  = make_NaF()
+    nacl = make_NaCl()
+    lif  = make_LiF()
+    licl = make_LiCl()
+    
+    dF1 = reaction_energy([hf, nacl], [hcl, naf])
+    dF2 = reaction_energy([lif, hcl], [licl, hf])
+    
+    print(f"\n[{mode_label}] Reaction energies:")
+    print(f"  HF + NaCl → HCl + NaF:  ΔF = {dF1:+.4f}")
+    print(f"  LiF + HCl → LiCl + HF:  ΔF = {dF2:+.4f}")
+    if abs(dF1) < 0.001:
+        print("  (twins: ΔF ≈ 0)")
+    else:
+        sign = "exothermic" if dF1 < 0 else "endothermic"
+        print(f"  (non-zero: {sign})")
+
+
+def scan_period_exponent_compact(
+    k_values: tuple = (0.3, 0.5, 0.7, 0.9, 1.1, 1.3)
+) -> None:
+    """Компактный k-scan с chi и ΔF."""
+    global SPECTRAL_MODE, V2_PERIOD_EXPONENT
+    old_mode = SPECTRAL_MODE
+    old_k = V2_PERIOD_EXPONENT
+    SPECTRAL_MODE = "v2_period_split"
+
+    print("\n[K-SCAN] Period exponent scan (χ and ΔF):")
+    print("k      chi_F   chi_Cl  dchi_FCl   chi_Li   chi_Na  dchi_LiNa   dF_exch")
+    print("-" * 75)
+
+    for k in k_values:
+        V2_PERIOD_EXPONENT = k
+        
+        chi_F  = get_chi_spec("F") or 0.0
+        chi_Cl = get_chi_spec("Cl") or 0.0
+        chi_Li = get_chi_spec("Li") or 0.0
+        chi_Na = get_chi_spec("Na") or 0.0
+        
+        dF = reaction_energy([make_HF(), make_NaCl()], [make_HCl(), make_NaF()])
+        
+        dchi_FCl = chi_F - chi_Cl
+        dchi_LiNa = chi_Li - chi_Na
+        
+        print(f"{k:4.2f}  {chi_F:7.3f} {chi_Cl:8.3f} {dchi_FCl:9.3f}  "
+              f"{chi_Li:8.3f} {chi_Na:8.3f} {dchi_LiNa:10.3f} {dF:9.3f}")
+
+    SPECTRAL_MODE = old_mode
+    V2_PERIOD_EXPONENT = old_k
+
+
+def run_super_O_vs_S_enhanced(k_period: float = 0.7, super_eps: float = -5.0) -> None:
+    """Расширенный Super-O эксперимент с chi и q."""
+    global SPECTRAL_MODE, V2_PERIOD_EXPONENT
+    old_mode = SPECTRAL_MODE
+    old_k = V2_PERIOD_EXPONENT
+    SPECTRAL_MODE = "v2_period_split"
+    V2_PERIOD_EXPONENT = k_period
+
+    print(f"\n[SUPER-O] Parameters: k_period={k_period:.3f}, super_eps={super_eps:.3f}")
+    
+    # Baseline O
+    O_atom = get_atom("O")
+    S_atom = get_atom("S")
+    chi_O_base = O_atom.chi_geom_signed_spec() or 0.0
+    chi_S = S_atom.chi_geom_signed_spec() or 0.0
+    
+    mol_h2o = make_H2O()
+    mol_h2s = make_H2S()
+    
+    q_h2o, _, _, _, flow_h2o = mol_h2o.spectral_charges()
+    q_h2s, _, _, _, flow_h2s = mol_h2s.spectral_charges()
+    
+    # q values: index 0 is central atom (O or S), 1,2 are H
+    q_O = q_h2o[0] if len(q_h2o) > 0 else 0.0
+    q_S = q_h2s[0] if len(q_h2s) > 0 else 0.0
+    
+    print(f"\nBaseline O : chi_spec={chi_O_base:+.3f}, eps={O_atom.epsilon:.2f}")
+    print(f"             q_O={q_O:+.4f}, F_flow(H2O)={flow_h2o:+.4f}")
+    
+    print(f"\nSulfur     : chi_spec={chi_S:+.3f}, eps={S_atom.epsilon:.2f}")
+    print(f"             q_S={q_S:+.4f}, F_flow(H2S)={flow_h2s:+.4f}")
+    
+    # Super-O
+    with AtomOverrideContext(PERIODIC_TABLE, "O", epsilon=super_eps):
+        chi_O_super = get_atom("O").chi_geom_signed_spec() or 0.0
+        mol_h2o_super = make_H2O()
+        q_super, _, _, _, flow_super = mol_h2o_super.spectral_charges()
+        q_O_super = q_super[0] if len(q_super) > 0 else 0.0
+        
+        print(f"\nSuper-O    : chi_spec={chi_O_super:+.3f}, eps={super_eps:.2f}")
+        print(f"             q_O={q_O_super:+.4f}, F_flow(H2O*)={flow_super:+.4f}")
+    
+    print(f"\n[COMPARISON]")
+    print(f"  Δ(F_flow): H2O* - H2O = {flow_super - flow_h2o:+.4f}")
+    print(f"  Δ(F_flow): H2O  - H2S = {flow_h2o - flow_h2s:+.4f}")
+    print(f"  Δ(q_central): O* - O = {q_O_super - q_O:+.4f}")
+
+    print()
+    print("[NOTE] Super-O experiment in v2.0: overriding epsilon(O)")
+    print("       does NOT change chi_spec or QEq charges in the current calibration.")
+    print("       This is an intentional NEGATIVE result and a marker for future v3.0 work.")
+
+    SPECTRAL_MODE = old_mode
+    V2_PERIOD_EXPONENT = old_k
+
+
+def run_super_O_vs_S_v3(k_period: float = 0.7, super_eps: float = -5.0) -> None:
+    """Super-O эксперимент в режиме v3_eps_coupled (без принудительного v2-режима)."""
+    global V2_PERIOD_EXPONENT
+    old_k = V2_PERIOD_EXPONENT
+    V2_PERIOD_EXPONENT = k_period
+
+    print(f"\n[SUPER-O v3] Parameters: k_period={k_period:.3f}, super_eps={super_eps:.3f}")
+
+    # Baseline O/S in current (v3) mode
+    O_atom = get_atom("O")
+    S_atom = get_atom("S")
+    chi_O_base = O_atom.chi_geom_signed_spec() or 0.0
+    chi_S = S_atom.chi_geom_signed_spec() or 0.0
+
+    mol_h2o = make_H2O()
+    mol_h2s = make_H2S()
+
+    q_h2o, _, _, _, flow_h2o = mol_h2o.spectral_charges()
+    q_h2s, _, _, _, flow_h2s = mol_h2s.spectral_charges()
+
+    q_O = q_h2o[0] if len(q_h2o) > 0 else 0.0
+    q_S = q_h2s[0] if len(q_h2s) > 0 else 0.0
+
+    print(f"\nBaseline O (v3): chi_spec={chi_O_base:+.3f}, eps={O_atom.epsilon:.2f}")
+    print(f"                 q_O={q_O:+.4f}, F_flow(H2O)={flow_h2o:+.4f}")
+
+    print(f"\nSulfur (v3)    : chi_spec={chi_S:+.3f}, eps={S_atom.epsilon:.2f}")
+    print(f"                 q_S={q_S:+.4f}, F_flow(H2S)={flow_h2s:+.4f}")
+
+    # Super-O in v3
+    with AtomOverrideContext(PERIODIC_TABLE, "O", epsilon=super_eps):
+        chi_O_super = get_atom("O").chi_geom_signed_spec() or 0.0
+        mol_h2o_super = make_H2O()
+        q_super, _, _, _, flow_super = mol_h2o_super.spectral_charges()
+        q_O_super = q_super[0] if len(q_super) > 0 else 0.0
+
+        print(f"\nSuper-O (v3)   : chi_spec={chi_O_super:+.3f}, eps={super_eps:.2f}")
+        print(f"                 q_O={q_O_super:+.4f}, F_flow(H2O*)={flow_super:+.4f}")
+
+    print(f"\n[COMPARISON v3]")
+    print(f"  Δ(F_flow): H2O* - H2O = {flow_super - flow_h2o:+.4f}")
+    print(f"  Δ(F_flow): H2O  - H2S = {flow_h2o - flow_h2s:+.4f}")
+    print(f"  Δ(q_central): O* - O = {q_O_super - q_O:+.4f}")
+
+    V2_PERIOD_EXPONENT = old_k
+
+
+def run_rnd_master_report() -> None:
+    """
+    Большой R&D отчёт:
+      - SECTION 1: v1 baseline (таблица + органика + реакции)
+      - SECTION 2: v2 baseline (сравнение chi, органика с R, реакции)
+      - SECTION 3: k_period scan (доноры/акцепторы + ΔF)
+      - SECTION 4: Super-O vs S
+      - SECTION 5: zero-chemistry point для Cl~H
+    """
+    global SPECTRAL_MODE, V2_PERIOD_EXPONENT, MODEL_VERSION
+    
+    # Save original state
+    orig_mode = SPECTRAL_MODE
+    orig_k = V2_PERIOD_EXPONENT
+    
+    print("===== RND MASTER REPORT =====")
+    print(f"MODEL_VERSION: {MODEL_VERSION}")
+    print(f"SPECTRAL_MODE default: {orig_mode}")
+    print(f"V2_PERIOD_EXPONENT default: {orig_k}")
+    print()
+    
+    # ========== SECTION 1: BASELINE v1.0 ==========
+    print("\n--- SECTION 1: BASELINE v1.0 ---")
+    
+    SPECTRAL_MODE = "v1"
+    
+    print_compact_spectral_table("v1.0")
+    print_organic_testbench_with_reactivity("v1.0")
+    print_reaction_block("v1.0")
+    
+    # ========== SECTION 2: BASELINE v2.0 ==========
+    print("\n--- SECTION 2: BASELINE v2.0 (period split) ---")
+    
+    SPECTRAL_MODE = "v2_period_split"
+    V2_PERIOD_EXPONENT = orig_k
+    
+    # Chi comparison v1 vs v2
+    chi_v1 = collect_element_chi("v1")
+    chi_v2 = collect_element_chi("v2")
+    
+    print(f"\n[CHI COMPARISON] v1 vs v2 (k={orig_k:.2f}):")
+    print("Z  El   role        chi_v1    chi_v2    dchi")
+    print("-" * 55)
+    
+    for atom in base_atoms:
+        if atom.role == "inert":
+            continue
+        name = atom.name
+        c1 = chi_v1.get(name, 0.0)
+        c2 = chi_v2.get(name, 0.0)
+        d = c2 - c1
+        print(f"{atom.Z:2d} {name:3s}  {atom.role:10s}  {c1:8.3f}  {c2:8.3f}  {d:+7.3f}")
+    
+    print_compact_spectral_table("v2.0")
+    print_organic_testbench_with_reactivity("v2.0")
+    print_reaction_block("v2.0")
+    
+    # ========== SECTION 3: PERIOD EXPONENT SCAN ==========
+    print("\n--- SECTION 3: PERIOD EXPONENT SCAN (donor/acceptor decay) ---")
+    
+    scan_period_exponent_compact()
+    
+    # ========== SECTION 4: SUPER-O vs S ==========
+    print("\n--- SECTION 4: SUPER-O vs S EXPERIMENT ---")
+    
+    run_super_O_vs_S_enhanced(k_period=orig_k, super_eps=-5.0)
+    print("\n[SECTION 4 NOTE] In v2.0 this is a NEGATIVE control experiment:")
+    print("                 epsilon-override for O does not affect chi_spec/QEq yet.")
+    
+    # ========== SECTION 5: ZERO-CHEMISTRY POINT ==========
+    print("\n--- SECTION 5: ZERO-CHEMISTRY POINT (Cl ~ H) ---")
+    
+    find_zero_chemistry_point_for_Cl_vs_H(k_min=0.0, k_max=2.0, k_step=0.1)
+
+    # ========== SECTION 6: v3.0 epsilon–chi coupling ==========
+    print("\n--- SECTION 6: v3.0 (epsilon–chi coupling) ---")
+
+    # Switch to v3 mode locally
+    SPECTRAL_MODE = SPECTRAL_MODE_V3
+
+    # v3: ключевые элементы, органика, реакции, Super-O
+    print_compact_spectral_table("v3.0 (eps-coupled)")
+    print_organic_testbench_with_reactivity("v3.0 (eps-coupled)")
+    print_reaction_block("v3.0 (eps-coupled)")
+    run_super_O_vs_S_v3(k_period=orig_k, super_eps=-5.0)
+
+    print("\n===== END OF RND MASTER REPORT =====")
+    
+    # Restore original state
+    SPECTRAL_MODE = orig_mode
+    V2_PERIOD_EXPONENT = orig_k
+
+
 if __name__ == "__main__":
-    # Пример: базовые веса a=0.5, b=1.0, c=1.5.
-    print_table(a=0.5, b=1.0, c=1.5)
-    print_port_energies(a=0.5, b=1.0, c=1.5)
-    print_port_geometries()
-    print()
-    print_chi_comparison(a=0.5, b=1.0, c=1.5)
-    print()
-    print_chi_spectral(a=0.5, b=1.0, c=1.5)
-    print()
-    print_bond_polarities(a=0.5, b=1.0, c=1.5)
-    print()
-    print_bond_polarities_spec(a=0.5, b=1.0, c=1.5)
-    print()
-    print_chain_polarities_spec(a=0.5, b=1.0, c=1.5, eps_neutral=0.06)
-    print()
-    print_sp3_tensions(a=0.5, b=1.0, c=1.5)
-    print()
-    print_spectral_summary(beta=0.5)
-    print()
-    print_spectral_energies(
-        omega_min=0.0, omega_max=6.0, eta=0.1, beta=0.5
-    )
-    print()
-    print_full_diagnostics(
-        a=0.5,
-        b=1.0,
-        c=1.5,
-        eps_neutral=0.06,
-        omega_min=0.0,
-        omega_max=6.0,
-        eta=0.1,
-        beta=0.5,
-    )
-    print()
-    print_role_averages(
-        omega_min=0.0,
-        omega_max=6.0,
-        eta=0.1,
-        beta=0.5,
-        a=0.5,
-        b=1.0,
-        c=1.5,
-        eps_neutral=0.06,
-    )
-    print()
-    print_spectral_periodic_table(
-        a=0.5,
-        b=1.0,
-        c=1.5,
-        omega_min=0.0,
-        omega_max=6.0,
-        eta=0.1,
-        beta=0.5,
-    )
-    print()
-    print_pair_polarity_map(
-        a=0.5,
-        b=1.0,
-        c=1.5,
-    )
-    print()
-    print_molecule_spectral_charges(make_H2O(), "H2O")
-    print_molecule_spectral_charges(make_HF(), "HF")
-    print_molecule_spectral_charges(make_HCl(), "HCl")
-    print_molecule_spectral_charges(make_CCOH(), "C-CO-H")
-    print_molecule_spectral_charges(make_SiOSi(), "Si-O-Si")
-    print_molecule_energies()
-    print_molecule_energy_breakdown()
-    print_reaction_examples()
-    print()
-    grid_fit_geom_spectral_params(
-        a=0.5,
-        b=1.0,
-        c=1.5,
-        eps_neutral=0.06,
-    )
+    # Большой R&D мастер-отчёт (все эксперименты в одном логе)
+    run_rnd_master_report()
