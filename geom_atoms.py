@@ -3155,25 +3155,117 @@ def print_element_indices_table(label: str = "v4.0 indices") -> None:
     print("  A_index = max(χ, 0) / E_port   → higher = stronger acceptor (halogens)")
 
 
+def print_element_quadrants(label: str = "v4.0 classes") -> None:
+    """
+    Классифицирует элементы по D/A индексам:
+      - Metals: D >> 0, A ~ 0
+      - Non-metals (Oxidizers): A >> 0, D ~ 0
+      - Amphoteric/Borderline: D ~ A or both small
+      - Inert: both ~ 0
+    """
+    indices = compute_element_indices()
+    
+    print(f"\n[{label}] Element Classification by D/A Index")
+    print("Z  El   D_index  A_index  Class")
+    print("-" * 45)
+    
+    for item in indices:
+        D = item['D_index']
+        A = item['A_index']
+        
+        # Simple heuristic classification
+        if item['role'] == 'inert':
+            cls = "Inert"
+        elif D > 0.1 and A < 0.05:
+            cls = "Metal (Donor)"
+        elif A > 0.1 and D < 0.05:
+            cls = "Non-metal (Acceptor)"
+        elif D > 0.05 and A > 0.05:
+            cls = "Amphoteric"
+        else:
+            cls = "Borderline / Weak"
+            
+        print(f"{item['Z']:2d} {item['El']:3s}  {D:7.4f}  {A:7.4f}  {cls}")
+
+
+def predict_bond_polarity_and_type(atom1_symbol: str, atom2_symbol: str) -> None:
+    """
+    Предсказывает тип связи между двумя атомами на основе v4-параметров.
+    """
+    global SPECTRAL_MODE
+    old_mode = SPECTRAL_MODE
+    SPECTRAL_MODE = SPECTRAL_MODE_V4
+    
+    try:
+        a1 = get_atom(atom1_symbol)
+        a2 = get_atom(atom2_symbol)
+        
+        chi1 = a1.chi_geom_signed_spec() or 0.0
+        chi2 = a2.chi_geom_signed_spec() or 0.0
+        
+        e1 = a1.per_port_energy() or 0.1
+        e2 = a2.per_port_energy() or 0.1
+        
+        delta_chi = chi2 - chi1
+        abs_delta = abs(delta_chi)
+        
+        print(f"\n[BOND PREDICTION v4.0] {atom1_symbol} -- {atom2_symbol}")
+        print(f"  {atom1_symbol}: chi={chi1:+.3f}, E_port={e1:.3f}")
+        print(f"  {atom2_symbol}: chi={chi2:+.3f}, E_port={e2:.3f}")
+        print(f"  Delta_chi = {delta_chi:+.3f}")
+        
+        # Polarity
+        if abs_delta < 0.1:
+            polarity = "Non-polar / Covalent"
+        elif delta_chi > 0:
+            polarity = f"Polar: {atom1_symbol}(δ+) -> {atom2_symbol}(δ-)"
+        else:
+            polarity = f"Polar: {atom2_symbol}(δ+) -> {atom1_symbol}(δ-)"
+            
+        # Type estimation
+        # Heuristic: Ionic if large delta_chi AND one is strong donor, other strong acceptor
+        # Covalent if small delta_chi OR both are hard/soft similar
+        
+        if abs_delta > 1.5:
+            bond_type = "Ionic (Strong)"
+        elif abs_delta > 0.8:
+            bond_type = "Ionic / Polar Covalent"
+        else:
+            bond_type = "Covalent"
+            
+        print(f"  > Polarity: {polarity}")
+        print(f"  > Est. Type: {bond_type}")
+        
+    except Exception as e:
+        print(f"Error predicting bond: {e}")
+    finally:
+        SPECTRAL_MODE = old_mode
+
+
 # ============================================================
 # ISLAND OF STABILITY SCAN (Virtual Atom X)
 # ============================================================
 
 def make_virtual_molecule(central_symbol: str, ligand_symbol: str, n_ligands: int = 1):
     """Создаёт простую молекулу: центральный атом + лиганды."""
+    # Always get fresh copies to avoid graph pollution
     central = get_atom(central_symbol)
     ligand = get_atom(ligand_symbol)
     
     if central is None or ligand is None:
         return None
     
-    atoms = [central] + [ligand for _ in range(n_ligands)]
+    # Deep copy atoms to ensure they are independent nodes in the new graph
+    import copy
+    atoms = [copy.deepcopy(central)] + [copy.deepcopy(ligand) for _ in range(n_ligands)]
     bonds = [(0, i+1) for i in range(n_ligands)]
     
     try:
-        mol = MolGraph(atoms=atoms, bonds=bonds)
+        mol_name = f"{central_symbol}-{ligand_symbol}_{n_ligands}"
+        mol = Molecule(name=mol_name, atoms=atoms, bonds=bonds)
         return mol
-    except:
+    except Exception as e:
+        print(f"DEBUG: Molecule init failed for {central_symbol}-{ligand_symbol}: {e}")
         return None
 
 
@@ -3228,25 +3320,31 @@ def run_virtual_atom_island_scan(
                     # Try to build molecules
                     F_HX = F_XO = F_XF = float('nan')
                     
+                    # HX (X + 1 H)
                     mol_hx = make_virtual_molecule("X", "H", 1)
                     if mol_hx:
                         try:
-                            F_HX = mol_hx.total_energy(a=0.5, b=1.0, c=1.5)
-                        except:
+                            F_HX = mol_hx.total_molecular_energy(a=0.5, b=1.0, c=1.5)
+                        except Exception as e:
+                            print(f"DEBUG: HX energy failed: {e}")
                             pass
                     
+                    # XO (X + 1 O) - linear
                     mol_xo = make_virtual_molecule("X", "O", 1)
                     if mol_xo:
                         try:
-                            F_XO = mol_xo.total_energy(a=0.5, b=1.0, c=1.5)
-                        except:
+                            F_XO = mol_xo.total_molecular_energy(a=0.5, b=1.0, c=1.5)
+                        except Exception as e:
+                            print(f"DEBUG: XO energy failed: {e}")
                             pass
                     
+                    # XF (X + 1 F) - linear
                     mol_xf = make_virtual_molecule("X", "F", 1)
                     if mol_xf:
                         try:
-                            F_XF = mol_xf.total_energy(a=0.5, b=1.0, c=1.5)
-                        except:
+                            F_XF = mol_xf.total_molecular_energy(a=0.5, b=1.0, c=1.5)
+                        except Exception as e:
+                            print(f"DEBUG: XF energy failed: {e}")
                             pass
                     
                     # Format output
@@ -3384,6 +3482,7 @@ def run_rnd_master_report() -> None:
     
     SPECTRAL_MODE = SPECTRAL_MODE_V4
     print_element_indices_table("v4.0 (period+eps)")
+    print_element_quadrants("v4.0 classes")
 
     # ========== SECTION 8: ISLAND OF STABILITY SCAN ==========
     print("\n" + "=" * 70)
@@ -3445,6 +3544,18 @@ if __name__ == "__main__":
     elif "--export-reactions" in args:
         # CSV реакций v3
         export_reactions_v3_csv()
+    elif "--bond" in args:
+        # Predict bond: python geom_atoms.py --bond H Cl
+        try:
+            idx = args.index("--bond")
+            if idx + 2 < len(args):
+                a1 = args[idx+1]
+                a2 = args[idx+2]
+                predict_bond_polarity_and_type(a1, a2)
+            else:
+                print("Error: --bond requires two element symbols (e.g. --bond H Cl)")
+        except Exception as e:
+            print(f"Error: {e}")
     else:
         # По умолчанию – короткая справка
         print(f"geom_atoms.py :: {MODEL_VERSION}")
