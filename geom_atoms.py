@@ -5,6 +5,85 @@ from typing import List, Optional, Tuple
 from collections import defaultdict
 
 import numpy as np
+from fdm import IFS, FDMIntegrator, make_tensor_grid_ifs
+
+# ============================================================
+# FDM / NUMERICAL ENGINE HELPERS
+# ============================================================
+
+def toy_ldos_radial(r: np.ndarray, beta: float) -> np.ndarray:
+    """
+    Игрушечная 3D-плотность для атома:
+    ρ(r) = exp(-beta * |r|^2).
+
+    r: ndarray, shape (N, 3)
+    beta: float, жёсткость "ямы".
+    Возвращает: ndarray (N,)
+    """
+    # Sum of squares along last axis (x^2 + y^2 + z^2)
+    norm2 = np.sum(r**2, axis=1)
+    return np.exp(-beta * norm2)
+
+
+def cube_to_ball(u: np.ndarray, R: float = 4.0) -> np.ndarray:
+    """
+    Простое отображение из [0,1]^3 в шар радиуса R (или просто масштабирование в ящик [-R, R]).
+    Для FDM интеграла нам главное покрыть область, где функция не исчезает.
+    
+    Пусть будет линейное растяжение в куб [-R, R]^3 пока что, т.к. 
+    гауссиана быстро падает.
+    """
+    # u in [0, 1] -> x in [-R, R]
+    return (u - 0.5) * (2.0 * R)
+
+
+def estimate_atom_energy_fdm(atom_z: int, e_port: float) -> float:
+    """
+    Оценка 'спектральной энергии' атома через FDM-интеграл по 3D-ядру.
+    
+    Параметры скейлинга (beta) зависят от Z (или E_port).
+    
+    Args:
+        atom_z: Z атома
+        e_port: E_port из модели v4
+        
+    Returns:
+        Integral[ exp(-beta * r^2) ] (approx)
+    """
+    # Heuristic: heavier atoms are more compact/stiff or have complex structure?
+    # In toy model: let's say beta grows with Z (stiffer core).
+    # beta = 0.5 + 0.05 * Z
+    
+    # Wait, usually heavier atoms are larger? 
+    # But inner core is tighter. Let's keep simple toy logic.
+    beta = 0.5 + 0.05 * atom_z
+    
+    dim = 3
+    # Use standard tensor grid IFS for covering the space
+    ifs = make_tensor_grid_ifs(dim=dim, base=2)
+    fdm = FDMIntegrator(ifs)
+    
+    # Define closure for integration
+    def integrand(r):
+        return toy_ldos_radial(r, beta)
+    
+    # Depth 4 -> 2^(3*4) = 4096 points
+    val = fdm.integrate(integrand, depth=4, dim=dim, transform=cube_to_ball)
+    
+    # The integral of exp(-b*r^2) in 3D is (pi/b)^(3/2).
+    # Since we integrate numerically over a box [-R, R], if R is large enough,
+    # we should match the analytical result.
+    # But FDM measures 'average', so we multiply by volume?
+    # FDM.integrate returns Mean(f). Volume of box = (2R)^3.
+    # Integral ~ Mean * Volume.
+    
+    R = 4.0
+    volume = (2.0 * R) ** 3
+    total_energy = val * volume
+    
+    return total_energy
+
+
 
 PAULING = {
     "H": 2.20,
@@ -3490,6 +3569,26 @@ def run_rnd_master_report() -> None:
     print("=" * 70)
     
     run_virtual_atom_island_scan()
+
+    # ========== SECTION 9: NUMERICAL ENGINE CHECK (FDM) ==========
+    print("\n" + "=" * 70)
+    print("--- SECTION 9: NUMERICAL ENGINE CHECK (FDM) ---")
+    print("=" * 70)
+    
+    print("[FDM] Estimating 'spectral energy' integral via FDM (3D, depth=4)")
+    print("      Model: rho(r) = exp(-beta * r^2), beta = 0.5 + 0.05*Z")
+    print("Atom  Z   E_port(v4)   E_fdm_integral (approx)")
+    print("-" * 55)
+    
+    test_atoms = ["H", "C", "O", "F", "Si", "S", "Cl"]
+    for sym in test_atoms:
+        a = get_atom(sym)
+        if a:
+            e_port = a.per_port_energy() or 0.0
+            e_fdm = estimate_atom_energy_fdm(a.Z, e_port)
+            print(f"{sym:4s} {a.Z:2d}   {e_port:6.3f}       {e_fdm:8.4f}")
+            
+    print("\n[NOTE] E_fdm reflects total spectral volume; E_port is per-bond Potential.")
 
     # ========== FINAL SUMMARY ==========
     print("\n" + "=" * 70)
