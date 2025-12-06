@@ -25,14 +25,16 @@ PAULING = {
 }
 
 # Model version identifier
-MODEL_VERSION = "geom-spec v1.0 (Li~Na, F~Cl, QEq-linear)"
+MODEL_VERSION = "geom-spec v4.0 (period + eps-coupled full)"
 
 # Spectral modes:
-#   "v1"              – baseline (Li~Na, F~Cl)
-#   "v2_period_split" – period-based scaling of port energies
-#   "v3_eps_coupled"  – v2 + weak epsilon→chi coupling
-SPECTRAL_MODE = "v1"
+#   "v1"              – baseline (Li~Na, F~Cl clones, no period scaling)
+#   "v2_period_split" – period-based scaling of port energies (breaks clones)
+#   "v3_eps_coupled"  – eps→chi coupling at FIXED geometry (Super-O experiment)
+#   "v4_full"         – v2 + v3 combined (period scaling + eps coupling)
+SPECTRAL_MODE = "v4_full"
 SPECTRAL_MODE_V3 = "v3_eps_coupled"
+SPECTRAL_MODE_V4 = "v4_full"
 
 # Calibrated spectral parameters (v1.0)
 ALPHA_CALIBRATED = 1.237
@@ -43,7 +45,7 @@ EPS_NEUTRAL = 0.06
 # v2 period split parameters (R&D tuning)
 V2_PERIOD_EXPONENT = 0.7  # E_port ~ period^(-k)
 
-# v3 epsilon–chi coupling strength (λ_ε)
+# v3/v4 epsilon–chi coupling strength (λ_ε)
 EPS_COUPLING_STRENGTH = 0.4
 
 FIT_ELEMENTS = [
@@ -278,14 +280,14 @@ class AtomGraph:
 
         Если портов нет (инертный газ), возвращается None.
 
-        В режиме v2_period_split энергия масштабируется по периоду:
+        В режимах v2_period_split и v4_full энергия масштабируется по периоду:
             E_port_scaled = E_port_base * period^(-V2_PERIOD_EXPONENT)
         """
         if self.ports <= 0:
             return None
         base = self.F_geom(a=a, b=b, c=c) / self.ports
 
-        if SPECTRAL_MODE == "v2_period_split":
+        if SPECTRAL_MODE in ("v2_period_split", "v4_full"):
             scale = self.period ** (-V2_PERIOD_EXPONENT)
             return base * scale
         else:
@@ -388,14 +390,15 @@ class AtomGraph:
         eps_spec = self.epsilon_spec()
 
         # v1/v2: старое поведение (без связи с геометрическим epsilon)
-        if SPECTRAL_MODE != SPECTRAL_MODE_V3:
-            eps_eff = eps_spec
-        else:
-            # v3: добавляем геометрический вклад epsilon (self.epsilon)
+        # v3/v4: добавляем геометрический вклад epsilon
+        if SPECTRAL_MODE in (SPECTRAL_MODE_V3, SPECTRAL_MODE_V4):
+            # v3/v4: добавляем геометрический вклад epsilon (self.epsilon)
             # epsilon < 0 → более глубокая яма (сильнее акцептор)
             # epsilon > 0 → донорный сдвиг
             eps_geom = getattr(self, "epsilon", 0.0)
             eps_eff = eps_spec + eps_coupling * eps_geom
+        else:
+            eps_eff = eps_spec
 
         delta = eps_eff - mu_env_spec
 
@@ -2963,6 +2966,117 @@ def run_super_O_vs_S_v3(k_period: float = 0.7, super_eps: float = -5.0) -> None:
     V2_PERIOD_EXPONENT = old_k
 
 
+# ============================================================
+# CSV EXPORT FUNCTIONS (for book tables)
+# ============================================================
+
+def export_periodic_table_v3_csv(out=None) -> None:
+    """
+    Печатает компактную v4.0-таблицу в CSV-формате:
+    Z,El,period,role,eps_spec,E_port,chi_spec
+    """
+    import sys
+    if out is None:
+        out = sys.stdout
+    
+    global SPECTRAL_MODE
+    old_mode = SPECTRAL_MODE
+    SPECTRAL_MODE = SPECTRAL_MODE_V4
+    
+    try:
+        print("Z,El,period,role,eps_spec,E_port,chi_spec", file=out)
+        for atom in base_atoms:
+            eps_spec = atom.epsilon_spec()
+            e_port = atom.per_port_energy() or 0.0
+            chi = atom.chi_geom_signed_spec()
+            chi_val = chi if chi is not None else 0.0
+            print(f"{atom.Z},{atom.name},{atom.period},{atom.role},"
+                  f"{eps_spec:.4f},{e_port:.4f},{chi_val:.4f}", file=out)
+    finally:
+        SPECTRAL_MODE = old_mode
+
+
+def export_organic_testbench_v3_csv(out=None) -> None:
+    """
+    Экспортирует органический тестбенч для v3.0:
+    mol,F_geom,F_angle,F_flow,F_total,R_react
+    """
+    import sys
+    if out is None:
+        out = sys.stdout
+    
+    global SPECTRAL_MODE
+    old_mode = SPECTRAL_MODE
+    SPECTRAL_MODE = SPECTRAL_MODE_V4
+    
+    try:
+        mols = [
+            ("CH4", make_CH4()),
+            ("NH3", make_NH3()),
+            ("H2O", make_H2O()),
+            ("H2S", make_H2S()),
+            ("HF", make_HF()),
+            ("HCl", make_HCl()),
+            ("LiF", make_LiF()),
+            ("NaCl", make_NaCl()),
+            ("NaF", make_NaF()),
+            ("LiCl", make_LiCl()),
+            ("CH3F", make_CH3F()),
+            ("CH3Cl", make_CH3Cl()),
+        ]
+        
+        print("mol,F_geom,F_angle,F_flow,F_total,R_react", file=out)
+        for name, mol in mols:
+            a, b, c = 0.5, 1.0, 1.5
+            F_geom = sum(at.F_geom(a=a, b=b, c=c) for at in mol.atoms)
+            F_angle = mol.angular_tension_sp3()
+            _, _, _, _, F_flow = mol.spectral_charges()
+            F_total = F_geom + F_angle + F_flow
+            denom = max(F_geom + F_angle, 1e-9)
+            R = abs(F_flow) / denom
+            print(f"{name},{F_geom:.4f},{F_angle:.4f},{F_flow:.4f},"
+                  f"{F_total:.4f},{R:.4f}", file=out)
+    finally:
+        SPECTRAL_MODE = old_mode
+
+
+def export_reactions_v3_csv(out=None) -> None:
+    """
+    Экспортирует ключевые реакции в v4.0:
+    reaction,DeltaF
+    """
+    import sys
+    if out is None:
+        out = sys.stdout
+    
+    global SPECTRAL_MODE
+    old_mode = SPECTRAL_MODE
+    SPECTRAL_MODE = SPECTRAL_MODE_V4
+    
+    try:
+        reactions = [
+            ("HF + NaCl -> HCl + NaF",
+             [make_HF(), make_NaCl()],
+             [make_HCl(), make_NaF()]),
+            ("LiF + HCl -> LiCl + HF",
+             [make_LiF(), make_HCl()],
+             [make_LiCl(), make_HF()]),
+            ("HF + LiCl -> HCl + LiF",
+             [make_HF(), make_LiCl()],
+             [make_HCl(), make_LiF()]),
+            ("NaF + HCl -> NaCl + HF",
+             [make_NaF(), make_HCl()],
+             [make_NaCl(), make_HF()]),
+        ]
+        
+        print("reaction,DeltaF", file=out)
+        for label, reactants, products in reactions:
+            dF = reaction_energy(reactants, products)
+            print(f'"{label}",{dF:.6f}', file=out)
+    finally:
+        SPECTRAL_MODE = old_mode
+
+
 def run_rnd_master_report() -> None:
     """
     Большой R&D отчёт:
@@ -2978,10 +3092,13 @@ def run_rnd_master_report() -> None:
     orig_mode = SPECTRAL_MODE
     orig_k = V2_PERIOD_EXPONENT
     
+    print("=" * 70)
     print("===== RND MASTER REPORT =====")
+    print("=" * 70)
     print(f"MODEL_VERSION: {MODEL_VERSION}")
     print(f"SPECTRAL_MODE default: {orig_mode}")
     print(f"V2_PERIOD_EXPONENT default: {orig_k}")
+    print(f"[INFO] Default production mode: {SPECTRAL_MODE_V3}, k_period={V2_PERIOD_EXPONENT}")
     print()
     
     # ========== SECTION 1: BASELINE v1.0 ==========
@@ -3049,7 +3166,54 @@ def run_rnd_master_report() -> None:
     print_reaction_block("v3.0 (eps-coupled)")
     run_super_O_vs_S_v3(k_period=orig_k, super_eps=-5.0)
 
-    print("\n===== END OF RND MASTER REPORT =====")
+    # ========== SECTION 7: v4.0 FULL MODEL ==========
+    print("\n" + "=" * 70)
+    print("--- SECTION 7: v4.0 FULL (period + eps-coupled) ---")
+    print("=" * 70)
+
+    SPECTRAL_MODE = SPECTRAL_MODE_V4
+
+    print(f"\n[v4.0] Mode: {SPECTRAL_MODE_V4}")
+    print(f"[v4.0] period exponent k = {orig_k}")
+    print(f"[v4.0] eps coupling λ = {EPS_COUPLING_STRENGTH}")
+
+    print_compact_spectral_table("v4.0 (full)")
+    print_organic_testbench_with_reactivity("v4.0 (full)")
+    print_reaction_block("v4.0 (full)")
+
+    # Super-O in v4 (both period AND eps effects active)
+    run_super_O_vs_S_v3(k_period=orig_k, super_eps=-5.0)
+
+    # ========== FINAL SUMMARY ==========
+    print("\n" + "=" * 70)
+    print("===== ИТОГОВАЯ СВОДКА: ЭВОЛЮЦИЯ МОДЕЛИ =====")
+    print("=" * 70)
+    print("""
+v1.0 (базовый режим):
+  - Li~Na, F~Cl — спектральные «близнецы» (одинаковые E_port, χ_spec)
+  - Обменные реакции изоэнергетичны: ΔF ≈ 0
+  - Нет дифференциации по периоду или ε
+
+v2.0 (разделение по периоду):
+  - E_port ~ period^(-k), где k ≈ 0.7
+  - F ≠ Cl (F — «жёстче»), Li ≠ Na
+  - Обменные реакции неизоэнергетичны: ΔF ≠ 0 (предсказательные)
+  - Только геометрия: ε не влияет на χ
+
+v3.0 (ε-связь при фиксированной геометрии):
+  - E_port как в v1 (без периодного скейлинга)
+  - χ_spec зависит от ε через связь λ_ε
+  - Близнецы возвращаются (F~Cl, O~S), но Super-O работает
+  - Ортогональный эксперимент к v2: чистый эффект ε
+
+v4.0 (полная модель):
+  - Объединяет v2 (period-scaling) + v3 (ε-coupling)
+  - Лучшее от обоих: период ломает близнецов, ε добавляет характер
+  - Готова для химических предсказаний
+""")
+
+    print("===== КОНЕЦ R&D МАСТЕР-ОТЧЁТА =====")
+    print("=" * 70)
     
     # Restore original state
     SPECTRAL_MODE = orig_mode
@@ -3057,5 +3221,34 @@ def run_rnd_master_report() -> None:
 
 
 if __name__ == "__main__":
-    # Большой R&D мастер-отчёт (все эксперименты в одном логе)
-    run_rnd_master_report()
+    import sys
+
+    args = sys.argv[1:]
+
+    if "--rnd" in args:
+        # Полный R&D-отчёт (все эксперименты v1/v2/v3)
+        run_rnd_master_report()
+    elif "--export-periodic" in args:
+        # CSV периодической таблицы v3
+        export_periodic_table_v3_csv()
+    elif "--export-organic" in args:
+        # CSV органического тестбенча v3
+        export_organic_testbench_v3_csv()
+    elif "--export-reactions" in args:
+        # CSV реакций v3
+        export_reactions_v3_csv()
+    else:
+        # По умолчанию – короткая справка
+        print(f"geom_atoms.py :: {MODEL_VERSION}")
+        print()
+        print("Usage:")
+        print("  python geom_atoms.py --rnd               # полный R&D-отчёт v1+v2+v3")
+        print("  python geom_atoms.py --export-periodic   # CSV периодической таблицы v3")
+        print("  python geom_atoms.py --export-organic    # CSV органического тестбенча v3")
+        print("  python geom_atoms.py --export-reactions  # CSV реакций v3")
+        print()
+        print("Examples:")
+        print("  python geom_atoms.py --rnd             > rnd_master_report.txt")
+        print("  python geom_atoms.py --export-periodic > table_periodic_v3.csv")
+        print("  python geom_atoms.py --export-organic  > organic_v3.csv")
+        print("  python geom_atoms.py --export-reactions > reactions_v3.csv")
