@@ -32,7 +32,8 @@ MODEL_VERSION = "geom-spec v4.0 (period + eps-coupled full)"
 #   "v2_period_split" – period-based scaling of port energies (breaks clones)
 #   "v3_eps_coupled"  – eps→chi coupling at FIXED geometry (Super-O experiment)
 #   "v4_full"         – v2 + v3 combined (period scaling + eps coupling)
-SPECTRAL_MODE = "v4_full"
+SPECTRAL_MODE_DEFAULT = "v4_full"  # Production default
+SPECTRAL_MODE = SPECTRAL_MODE_DEFAULT
 SPECTRAL_MODE_V3 = "v3_eps_coupled"
 SPECTRAL_MODE_V4 = "v4_full"
 
@@ -676,8 +677,13 @@ def get_atom(name: str) -> AtomGraph:
     """
     Найти прототип атома по символу элемента.
 
-    Возвращает объект из base_atoms.
+    Возвращает объект из PERIODIC_TABLE (поддерживает R&D переопределения).
     """
+    # Use global PERIODIC_TABLE if available (runtime), otherwise fallback to base_atoms
+    # This allows finding dynamically added atoms like "X"
+    if "PERIODIC_TABLE" in globals() and name in PERIODIC_TABLE:
+        return PERIODIC_TABLE[name]
+    
     for atom in base_atoms:
         if atom.name == name:
             return atom
@@ -3077,6 +3083,191 @@ def export_reactions_v3_csv(out=None) -> None:
         SPECTRAL_MODE = old_mode
 
 
+# ============================================================
+# ELEMENT INDICES (donor/acceptor characterization)
+# ============================================================
+
+def compute_element_indices(
+    a: float = 0.5,
+    b: float = 1.0,
+    c: float = 1.5,
+) -> list:
+    """
+    Для каждого элемента из base_atoms считает в v4-режиме:
+      - chi_spec (подписанная)
+      - E_port
+      - DonorIndex  = max(-chi_spec, 0) / max(E_port, 1e-6)
+      - AcceptorIndex = max(chi_spec, 0) / max(E_port, 1e-6)
+    Возвращает список словарей.
+    """
+    global SPECTRAL_MODE
+    old_mode = SPECTRAL_MODE
+    SPECTRAL_MODE = SPECTRAL_MODE_V4
+    
+    results = []
+    for atom in base_atoms:
+        chi = atom.chi_geom_signed_spec()
+        e_port = atom.per_port_energy(a=a, b=b, c=c)
+        
+        if chi is None:
+            chi = 0.0
+        if e_port is None:
+            e_port = 0.0
+        
+        denom = max(e_port, 1e-6)
+        D_index = max(-chi, 0.0) / denom  # donor: negative chi
+        A_index = max(chi, 0.0) / denom   # acceptor: positive chi
+        
+        results.append({
+            "Z": atom.Z,
+            "El": atom.name,
+            "role": atom.role,
+            "period": atom.period,
+            "chi_spec": chi,
+            "E_port": e_port,
+            "D_index": D_index,
+            "A_index": A_index,
+        })
+    
+    SPECTRAL_MODE = old_mode
+    return results
+
+
+def print_element_indices_table(label: str = "v4.0 indices") -> None:
+    """
+    Печатает компактную таблицу индексов:
+    Z  El  role  per  chi_spec  E_port  D_index  A_index
+    """
+    indices = compute_element_indices()
+    
+    print(f"\n[{label}] Element donor/acceptor indices:")
+    print("Z  El   role       per  chi_spec  E_port  D_index  A_index")
+    print("-" * 65)
+    
+    for item in indices:
+        print(f"{item['Z']:2d} {item['El']:3s}  {item['role']:10s} "
+              f"{item['period']:2d}  {item['chi_spec']:+7.3f}  "
+              f"{item['E_port']:6.3f}  {item['D_index']:7.4f}  {item['A_index']:7.4f}")
+    
+    print()
+    print("[LEGEND]")
+    print("  D_index = max(-χ, 0) / E_port  → higher = stronger donor (metals)")
+    print("  A_index = max(χ, 0) / E_port   → higher = stronger acceptor (halogens)")
+
+
+# ============================================================
+# ISLAND OF STABILITY SCAN (Virtual Atom X)
+# ============================================================
+
+def make_virtual_molecule(central_symbol: str, ligand_symbol: str, n_ligands: int = 1):
+    """Создаёт простую молекулу: центральный атом + лиганды."""
+    central = get_atom(central_symbol)
+    ligand = get_atom(ligand_symbol)
+    
+    if central is None or ligand is None:
+        return None
+    
+    atoms = [central] + [ligand for _ in range(n_ligands)]
+    bonds = [(0, i+1) for i in range(n_ligands)]
+    
+    try:
+        mol = MolGraph(atoms=atoms, bonds=bonds)
+        return mol
+    except:
+        return None
+
+
+def run_virtual_atom_island_scan(
+    period_values: tuple = (2, 3, 4, 5),
+    epsilon_values: tuple = (-0.5, -1.0, -2.0, -3.0, -5.0),
+    ports_values: tuple = (1, 2, 3, 4),
+) -> None:
+    """
+    Для виртуального атома X перебирает сетку параметров (period, epsilon, ports),
+    через AtomOverrideContext подставляет их в PERIODIC_TABLE,
+    и для каждого варианта:
+      - собирает молекулы HX, XO, XF
+      - считает F_total в v4 режиме
+      - пишет компактный лог
+    """
+    global SPECTRAL_MODE
+    old_mode = SPECTRAL_MODE
+    SPECTRAL_MODE = SPECTRAL_MODE_V4
+    
+    # Use Si as base template for X
+    if "X" not in PERIODIC_TABLE:
+        # Create virtual atom X (Z=14 gives period=3 like Si)
+        # AtomGraph fields: name, Z, nodes, edges, ports, symmetry_score, port_geometry, role, notes, epsilon
+        x_atom = AtomGraph(
+            name="X", Z=14,  # Z=14 → period=3
+            nodes=4, edges=6, ports=4,
+            symmetry_score=0.0, port_geometry="tetrahedral",
+            role="hub", notes="R&D virtual", epsilon=-1.0
+        )
+        PERIODIC_TABLE["X"] = x_atom
+    
+    print("\n[ISLAND SCAN] Virtual atom X parameter sweep")
+    print("period  ports   eps     F(HX)    F(XO)    F(XF)   chi_X")
+    print("-" * 65)
+    
+    scanned = 0
+    for period in period_values:
+        for ports in ports_values:
+            for eps in epsilon_values:
+                # Compute Z that gives the desired period
+                # period 1: Z=1-2, period 2: Z=3-10, period 3: Z=11-18, period 4: Z=19-36
+                z_for_period = {1: 1, 2: 5, 3: 14, 4: 25, 5: 40}
+                target_z = z_for_period.get(period, 14)
+                
+                # Apply overrides to X (use Z instead of period)
+                with AtomOverrideContext(PERIODIC_TABLE, "X", 
+                                         Z=target_z, ports=ports, epsilon=eps):
+                    x = get_atom("X")
+                    chi_x = x.chi_geom_signed_spec() if x else 0.0
+                    
+                    # Try to build molecules
+                    F_HX = F_XO = F_XF = float('nan')
+                    
+                    mol_hx = make_virtual_molecule("X", "H", 1)
+                    if mol_hx:
+                        try:
+                            F_HX = mol_hx.total_energy(a=0.5, b=1.0, c=1.5)
+                        except:
+                            pass
+                    
+                    mol_xo = make_virtual_molecule("X", "O", 1)
+                    if mol_xo:
+                        try:
+                            F_XO = mol_xo.total_energy(a=0.5, b=1.0, c=1.5)
+                        except:
+                            pass
+                    
+                    mol_xf = make_virtual_molecule("X", "F", 1)
+                    if mol_xf:
+                        try:
+                            F_XF = mol_xf.total_energy(a=0.5, b=1.0, c=1.5)
+                        except:
+                            pass
+                    
+                    # Format output
+                    def fmt(x):
+                        return f"{x:8.3f}" if not (x != x) else "     N/A"
+                    
+                    print(f"{period:5d}  {ports:5d}  {eps:6.2f}  "
+                          f"{fmt(F_HX)}  {fmt(F_XO)}  {fmt(F_XF)}  {chi_x:+7.3f}")
+                    scanned += 1
+    
+    print()
+    print(f"[INFO] Scanned {scanned} configurations")
+    print("[INTERPRETATION]")
+    print("  - Low |F_total| → stable molecule")
+    print("  - Very negative F → super-stable (possibly unphysical)")
+    print("  - Very positive F or N/A → unstable/impossible configuration")
+    print("  - Look for 'sweet spot' where F values are moderate")
+    
+    SPECTRAL_MODE = old_mode
+
+
 def run_rnd_master_report() -> None:
     """
     Большой R&D отчёт:
@@ -3092,13 +3283,15 @@ def run_rnd_master_report() -> None:
     orig_mode = SPECTRAL_MODE
     orig_k = V2_PERIOD_EXPONENT
     
+    # Reset to default v4 for fresh start
+    SPECTRAL_MODE = SPECTRAL_MODE_DEFAULT
+    
     print("=" * 70)
     print("===== RND MASTER REPORT =====")
     print("=" * 70)
-    print(f"MODEL_VERSION: {MODEL_VERSION}")
-    print(f"SPECTRAL_MODE default: {orig_mode}")
-    print(f"V2_PERIOD_EXPONENT default: {orig_k}")
-    print(f"[INFO] Default production mode: {SPECTRAL_MODE_V3}, k_period={V2_PERIOD_EXPONENT}")
+    print(f"[MODEL] {MODEL_VERSION}")
+    print(f"[MODES] v1=twins, v2=period, v3=eps, v4=full (production)")
+    print(f"[PARAMS] k_period={V2_PERIOD_EXPONENT}, eps_coupling={EPS_COUPLING_STRENGTH}")
     print()
     
     # ========== SECTION 1: BASELINE v1.0 ==========
@@ -3183,6 +3376,21 @@ def run_rnd_master_report() -> None:
 
     # Super-O in v4 (both period AND eps effects active)
     run_super_O_vs_S_v3(k_period=orig_k, super_eps=-5.0)
+
+    # ========== SECTION 7: ELEMENT INDICES ==========
+    print("\n" + "=" * 70)
+    print("--- SECTION 7: ELEMENT INDICES (v4.0) ---")
+    print("=" * 70)
+    
+    SPECTRAL_MODE = SPECTRAL_MODE_V4
+    print_element_indices_table("v4.0 (period+eps)")
+
+    # ========== SECTION 8: ISLAND OF STABILITY SCAN ==========
+    print("\n" + "=" * 70)
+    print("--- SECTION 8: VIRTUAL ATOM X - ISLAND SCAN (coarse) ---")
+    print("=" * 70)
+    
+    run_virtual_atom_island_scan()
 
     # ========== FINAL SUMMARY ==========
     print("\n" + "=" * 70)
