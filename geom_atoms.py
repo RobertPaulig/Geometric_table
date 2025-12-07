@@ -5,11 +5,7 @@ from typing import List, Optional, Tuple
 from collections import defaultdict
 
 import numpy as np
-import numpy as np
-import numpy as np
 from fdm import IFS, FDMIntegrator, make_tensor_grid_ifs
-from complexity import atom_complexity_from_adjacency, compute_complexity_features
-# We import grower inside the report function to avoid circular imports
 from complexity import atom_complexity_from_adjacency, compute_complexity_features
 # We import grower inside the report function to avoid circular imports
 
@@ -490,7 +486,7 @@ class AtomGraph:
         """
         Спектральная χ_geom с:
           - демпфером для доноров,
-          - мягким "фоном" для hub-центров (B/C/Al/Si).
+          - мягким "фоном" для hub-центров (почти нейтральные элементы).
         """
         e = self.per_port_energy(a=a, b=b, c=c)
         if e is None:
@@ -522,9 +518,11 @@ class AtomGraph:
         if abs(delta) <= eps_neutral:
             if self.role == "hub":
                 if delta > 0.0:
-                    sign_center = -1.0  # слабый донор (B, Al)
+                    # слабый донорный центр в нейтральном окне
+                    sign_center = -1.0
                 else:
-                    sign_center = 1.0   # слабый акцептор (C, Si)
+                    # слабый акцепторный центр в нейтральном окне
+                    sign_center = 1.0
                 return sign_center * (k_center * chi_abs)
             else:
                 return 0.0
@@ -618,7 +616,8 @@ def _make_base_atoms() -> List[AtomGraph]:
             port_geometry="trigonal",
             role="hub",
             notes="Три порта, тригональная конфигурация",
-            epsilon=0.2,
+            # лёгкий акцепторный сдвиг: B не должен быть чистым донором
+            epsilon=-0.1,
         ),
         # C: четырёхпортовая, близкая к тетраэдрической симметрии.
         AtomGraph(
@@ -720,7 +719,8 @@ def _make_base_atoms() -> List[AtomGraph]:
             port_geometry="trigonal",
             role="hub",
             notes="Геометрический аналог B: тригональный плоский хаб",
-            epsilon=0.2,
+            # тоже чуть акцепторный центр, а не металлический донор
+            epsilon=-0.1,
         ),
         AtomGraph(
             name="Si",
@@ -780,6 +780,119 @@ def _make_base_atoms() -> List[AtomGraph]:
             port_geometry="none",
             role="inert",
             notes="Геометрический аналог Ne: инертная замкнутая конфигурация",
+            epsilon=-3.0,
+        ),
+        # --- 4-й период: главные группы (черновой прототип) ---
+
+        # K: геометрический аналог Li/Na (щёлочной донор 4-го периода)
+        AtomGraph(
+            name="K",
+            Z=19,
+            nodes=3,
+            edges=2,
+            ports=1,
+            symmetry_score=0.5,
+            port_geometry="single",
+            role="terminator",
+            notes="Геометрический аналог Li/Na: щёлочной донор 4-го периода",
+            epsilon=2.0,
+        ),
+
+        # Ca: геометрический аналог Be/Mg (щёлочноземельный донор)
+        AtomGraph(
+            name="Ca",
+            Z=20,
+            nodes=4,
+            edges=3,
+            ports=2,
+            symmetry_score=0.4,
+            port_geometry="linear",
+            role="bridge",
+            notes="Геометрический аналог Be/Mg: двухпортовый донор 4-го периода",
+            epsilon=1.0,
+        ),
+
+        # Ga: геометрический аналог B/Al (слабый акцептор-хаб)
+        AtomGraph(
+            name="Ga",
+            Z=31,
+            nodes=5,
+            edges=4,
+            ports=3,
+            symmetry_score=0.6,
+            port_geometry="trigonal",
+            role="hub",
+            notes="Геометрический аналог B/Al: тригональный слабый акцептор",
+            epsilon=-0.1,
+        ),
+
+        # Ge: геометрический аналог C/Si (четырёхпортовый центр)
+        AtomGraph(
+            name="Ge",
+            Z=32,
+            nodes=6,
+            edges=6,
+            ports=4,
+            symmetry_score=0.2,
+            port_geometry="tetra",
+            role="hub",
+            notes="Геометрический аналог C/Si: слабый акцепторный центр 4-го периода",
+            epsilon=0.0,
+        ),
+
+        # As: геометрический аналог N/P (сильный акцептор-хаб)
+        AtomGraph(
+            name="As",
+            Z=33,
+            nodes=7,
+            edges=7,
+            ports=3,
+            symmetry_score=0.25,
+            port_geometry="pyramidal",
+            role="hub",
+            notes="Геометрический аналог N/P: трёхпортовый акцептор 4-го периода",
+            epsilon=-0.5,
+        ),
+
+        # Se: геометрический аналог O/S (акцепторный мост)
+        AtomGraph(
+            name="Se",
+            Z=34,
+            nodes=8,
+            edges=8,
+            ports=2,
+            symmetry_score=0.3,
+            port_geometry="bent",
+            role="bridge",
+            notes="Геометрический аналог O/S: двухпортовый акцепторный мост",
+            epsilon=-1.0,
+        ),
+
+        # Br: геометрический аналог F/Cl (сильный одиночный порт)
+        AtomGraph(
+            name="Br",
+            Z=35,
+            nodes=9,
+            edges=10,
+            ports=1,
+            symmetry_score=0.35,
+            port_geometry="single",
+            role="terminator",
+            notes="Геометрический аналог F/Cl: сильный одиночный порт 4-го периода",
+            epsilon=-1.5,
+        ),
+
+        # Kr: геометрический аналог Ne/Ar (инертная замкнутая конфигурация)
+        AtomGraph(
+            name="Kr",
+            Z=36,
+            nodes=12,
+            edges=13,
+            ports=0,
+            symmetry_score=0.1,
+            port_geometry="none",
+            role="inert",
+            notes="Геометрический аналог Ne/Ar: инертный газ 4-го периода",
             epsilon=-3.0,
         ),
     ]
@@ -878,6 +991,17 @@ class Molecule:
     name: str
     atoms: List[AtomGraph]
     bonds: List[Tuple[int, int]]
+
+    def adjacency_matrix(self) -> np.ndarray:
+        """
+        Build adjacency matrix of the molecule (NxN).
+        """
+        n = len(self.atoms)
+        A = np.zeros((n, n), dtype=float)
+        for i, j in self.bonds:
+            A[i, j] = 1.0
+            A[j, i] = 1.0
+        return A
 
     def F_mol(self, a: float = 0.5, b: float = 1.0, c: float = 1.5) -> float:
         """
