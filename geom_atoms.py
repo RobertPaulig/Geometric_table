@@ -103,6 +103,24 @@ PAULING = {
     "P": 2.19,
     "S": 2.58,
     "Cl": 3.16,
+    # 4-й период: калибровка для геометрических клонов
+    "K": 0.82,
+    "Ca": 1.00,
+    "Ga": 1.81,
+    "Ge": 2.01,
+    "As": 2.18,
+    "Se": 2.55,
+    "Br": 2.96,
+    "Kr": 3.00,
+    # 5-й период: клоны 4-го периода
+    "Rb": 0.82,
+    "Sr": 0.95,
+    "In": 1.78,
+    "Sn": 1.96,
+    "Sb": 2.05,
+    "Te": 2.10,
+    "I": 2.66,
+    # "Xe": 2.60,  # при необходимости можно включить
 }
 
 # Model version identifier
@@ -882,19 +900,127 @@ def _make_base_atoms() -> List[AtomGraph]:
             epsilon=-1.5,
         ),
 
-        # Kr: геометрический аналог Ne/Ar (инертная замкнутая конфигурация)
+          # Kr: геометрический аналог Ne/Ar (инертная замкнутая конфигурация)
+          AtomGraph(
+              name="Kr",
+              Z=36,
+              nodes=12,
+              edges=13,
+              ports=0,
+              symmetry_score=0.1,
+              port_geometry="none",
+              role="inert",
+              notes="Геометрический аналог Ne/Ar: инертный газ 4-го периода",
+              epsilon=-3.0,
+          ),
+
+        # --- 5-й период: Rb–Xe как клоны 4-го периода ---------------------
+        # Здесь мы копируем геометрию и роли с K–Kr, меняем только name и Z.
+
         AtomGraph(
-            name="Kr",
-            Z=36,
-            nodes=12,
-            edges=13,
-            ports=0,
-            symmetry_score=0.1,
+            name="Rb",
+            Z=37,
+            nodes=3,              # как у K
+            edges=2,              # как у K
+            ports=1,              # как у K
+            symmetry_score=0.5,   # как у K
+            port_geometry="single",
+            role="terminator",
+            notes="Клон K (5-й период): щёлочной терминатор",
+            epsilon=2.0,          # как у K
+        ),
+
+        AtomGraph(
+            name="Sr",
+            Z=38,
+            nodes=4,              # как у Ca
+            edges=3,              # как у Ca
+            ports=2,              # как у Ca
+            symmetry_score=0.4,   # как у Ca
+            port_geometry="linear",
+            role="bridge",
+            notes="Клон Ca (5-й период): щёлочноземельный мост",
+            epsilon=1.0,          # как у Ca
+        ),
+
+        AtomGraph(
+            name="In",
+            Z=49,
+            nodes=5,              # как у Ga
+            edges=4,              # как у Ga
+            ports=3,              # как у Ga
+            symmetry_score=0.6,   # как у Ga
+            port_geometry="trigonal",
+            role="hub",
+            notes="Клон Ga (5-й период): мягкий p-hub",
+            epsilon=-0.1,         # как у Ga
+        ),
+
+        AtomGraph(
+            name="Sn",
+            Z=50,
+            nodes=6,              # как у Ge
+            edges=6,              # как у Ge
+            ports=4,              # как у Ge
+            symmetry_score=0.2,   # как у Ge
+            port_geometry="tetra",
+            role="hub",
+            notes="Клон Ge (5-й период): четырёхпортовый hub",
+            epsilon=0.0,          # как у Ge
+        ),
+
+        AtomGraph(
+            name="Sb",
+            Z=51,
+            nodes=7,              # как у As
+            edges=7,              # как у As
+            ports=3,              # как у As
+            symmetry_score=0.25,  # как у As
+            port_geometry="pyramidal",
+            role="hub",
+            notes="Клон As (5-й период): трёхпортовый hub",
+            epsilon=-0.5,         # как у As
+        ),
+
+        AtomGraph(
+            name="Te",
+            Z=52,
+            nodes=8,              # как у Se
+            edges=8,              # как у Se
+            ports=2,              # как у Se
+            symmetry_score=0.3,   # как у Se
+            port_geometry="bent",
+            role="bridge",
+            notes="Клон Se (5-й период): мост-акцептор",
+            epsilon=-1.0,         # как у Se
+        ),
+
+        AtomGraph(
+            name="I",
+            Z=53,
+            nodes=9,              # как у Br
+            edges=10,             # как у Br
+            ports=1,              # как у Br
+            symmetry_score=0.35,  # как у Br
+            port_geometry="single",
+            role="terminator",
+            notes="Клон Br (5-й период): терминатор",
+            epsilon=-1.5,         # как у Br
+        ),
+
+        AtomGraph(
+            name="Xe",
+            Z=54,
+            nodes=12,             # как у Kr
+            edges=13,             # как у Kr
+            ports=0,              # как у Kr
+            symmetry_score=0.1,   # как у Kr
             port_geometry="none",
             role="inert",
-            notes="Геометрический аналог Ne/Ar: инертный газ 4-го периода",
-            epsilon=-3.0,
+            notes="Клон Kr (5-й период): инертный газ",
+            epsilon=-3.0,         # как у Kr
         ),
+        # --- конец 5-го периода -------------------------------------------
     ]
 
 
