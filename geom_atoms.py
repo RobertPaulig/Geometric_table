@@ -5,7 +5,13 @@ from typing import List, Optional, Tuple
 from collections import defaultdict
 
 import numpy as np
+import numpy as np
+import numpy as np
 from fdm import IFS, FDMIntegrator, make_tensor_grid_ifs
+from complexity import atom_complexity_from_adjacency, compute_complexity_features
+# We import grower inside the report function to avoid circular imports
+from complexity import atom_complexity_from_adjacency, compute_complexity_features
+# We import grower inside the report function to avoid circular imports
 
 # ============================================================
 # FDM / NUMERICAL ENGINE HELPERS
@@ -146,6 +152,12 @@ FIT_ELEMENTS = [
     "Cl",
 ]
 
+# Weight for complexity in F_geom
+W_COMPLEXITY = 0.3
+
+# Weight for complexity in F_geom
+W_COMPLEXITY = 0.3
+
 @dataclass
 class AtomGraph:
     """
@@ -165,7 +177,23 @@ class AtomGraph:
     port_geometry: str      # тип геометрии портов ('tetra', 'trigonal', ...)
     role: str               # роль в сетях: 'inert', 'hub', 'bridge', 'terminator'
     notes: str = ""         # произвольный комментарий
+    notes: str = ""         # произвольный комментарий
+    notes: str = ""         # произвольный комментарий
     epsilon: float = 0.0    # игрушечное положение уровня ε_Z относительно Среды
+
+    def adjacency_matrix(self) -> np.ndarray:
+        """
+        Вернуть каноническую матрицу смежности атомного графа.
+        Прокси к canonical_adjacency_matrix.
+        """
+        return self.canonical_adjacency_matrix()
+
+    def adjacency_matrix(self) -> np.ndarray:
+        """
+        Вернуть каноническую матрицу смежности атомного графа.
+        Прокси к canonical_adjacency_matrix.
+        """
+        return self.canonical_adjacency_matrix()
 
     @property
     def period(self) -> int:
@@ -338,19 +366,27 @@ class AtomGraph:
         F = np.trapezoid(integrand, omegas)
         return float(F)
 
-    def F_geom(self, a: float = 0.5, b: float = 1.0, c: float = 1.5) -> float:
+    def F_geom(self, a: float = 0.5, b: float = 1.0, c: float = 1.5, use_complexity: bool = True) -> float:
         """
         Простейший геометрический функционал:
 
             F_geom = a * cyclomatic_number
                    + b * symmetry_score
                    + c * ports
+                   + W_COMPLEXITY * C_complex (if enabled)
         """
-        return (
+        base_val = (
             a * self.cyclomatic_number()
             + b * self.symmetry_score
             + c * self.ports
         )
+        if use_complexity:
+            adj = self.adjacency_matrix()
+            # If C_complex fails for some reason (empty graph), we handle inside
+            C_complex = atom_complexity_from_adjacency(adj)
+            base_val += W_COMPLEXITY * C_complex
+            
+        return base_val
 
     def per_port_energy(
         self, a: float = 0.5, b: float = 1.0, c: float = 1.5
@@ -3589,6 +3625,47 @@ def run_rnd_master_report() -> None:
             print(f"{sym:4s} {a.Z:2d}   {e_port:6.3f}       {e_fdm:8.4f}")
             
     print("\n[NOTE] E_fdm reflects total spectral volume; E_port is per-bond Potential.")
+
+    # ========== SECTION 9: GRAPH COMPLEXITY ==========
+    print("\n" + "=" * 70)
+    print("--- SECTION 9: GRAPH COMPLEXITY ---")
+    print("=" * 70)
+    
+    print(f"{'Z':<3} {'El':<3} {'Role':<10} {'Ports':<5}  {'Cyclomatic':<10}  {'C_graph':<8}")
+    print("-" * 65)
+    
+    # Sort atoms by Z
+    all_atoms = sorted(PERIODIC_TABLE.values(), key=lambda x: x.Z)
+    for a in all_atoms:
+        if a.Z > 18: continue
+        adj = a.adjacency_matrix()
+        feats = compute_complexity_features(adj)
+        print(f"{a.Z:<3} {a.name:<3} {a.role:<10} {a.ports:<5}  {feats.cyclomatic:<10}  {feats.total:8.3f}")
+        
+    print("-" * 65)
+    
+    # ========== SECTION 10: CHRISTMAS TREE GROWTH (R&D) ==========
+    print("\n" + "=" * 70)
+    print("--- SECTION 10: CHRISTMAS TREE GROWTH (R&D) ---")
+    print("=" * 70)
+    
+    # Import locally
+    from grower import GrowthParams, grow_molecule_christmas_tree, describe_molecule
+    
+    # Demo parameters
+    params = GrowthParams(max_depth=4, max_atoms=16)
+    seeds = ["C", "Si", "O"]
+    
+    for root in seeds:
+        print(f"\n[ROOT = {root} | MaxDepth=4]")
+        # Fixed seed for reproducibility in R&D report
+        rng_seed = 42 + sum(ord(c) for c in root)
+        rng = np.random.default_rng(rng_seed)
+        
+        for i in range(2):
+            mol = grow_molecule_christmas_tree(root, params, rng=rng)
+            print(f"  Tree #{i+1}: {describe_molecule(mol)}")
+
 
     # ========== FINAL SUMMARY ==========
     print("\n" + "=" * 70)
