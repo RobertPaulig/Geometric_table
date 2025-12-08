@@ -80,8 +80,8 @@ def liquid_drop_binding(Z: int, N: int) -> float:
     if A <= 1:
         return 0.0
 
-    # You can replace these with the output of fit_nuclear_coeffs.py later
-    a_v, a_s, a_c, a_a = 15.5, 16.8, 0.72, 23.0
+    # Coefficients fitted by fit_nuclear_coeffs.py
+    a_v, a_s, a_c, a_a = 15.062, 15.379, 0.730, 15.728
 
     volume = a_v * A
     surface = -a_s * A ** (2.0 / 3.0)
