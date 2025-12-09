@@ -3,6 +3,9 @@ from __future__ import annotations
 import numpy as np
 
 
+_MAGIC_N_WS_CACHE: list[int] | None = None
+
+
 def build_radial_hamiltonian_ws(
     R_max: float,
     R0: float,
@@ -60,6 +63,59 @@ def collect_levels_ws(
 
     levels.sort(key=lambda t: t[0])
     return levels
+
+
+def get_magic_numbers_ws(
+    R_max: float = 12.0,
+    R0: float = 4.5,
+    a: float = 0.8,
+    V0: float = 55.0,
+    N_grid: int = 220,
+    L_max: int = 6,
+    levels_per_l: int = 12,
+    energy_cut: float = 0.0,
+    top_k_gaps: int = 8,
+) -> list[int]:
+    """
+    Построить спектр WS-оператора и вернуть список магических чисел N_magic,
+    определённых по крупным энергетическим разрывам между связаными уровнями.
+    """
+    levels = collect_levels_ws(
+        R_max=R_max,
+        R0=R0,
+        a=a,
+        V0=V0,
+        N_grid=N_grid,
+        L_max=L_max,
+        levels_per_l=levels_per_l,
+        energy_cut=energy_cut,
+    )
+    if not levels:
+        return []
+
+    energies = np.array([E for (E, g, ell) in levels])
+    g = np.array([g for (E, g, ell) in levels], dtype=int)
+    N_cum = np.cumsum(g)
+
+    dE = energies[1:] - energies[:-1]
+    if dE.size == 0:
+        return []
+
+    top_k_gaps = min(top_k_gaps, dE.size)
+    gap_idx = np.argsort(dE)[-top_k_gaps:]
+    gap_idx.sort()
+
+    magic = [int(N_cum[i]) for i in gap_idx]
+    magic_sorted = sorted(dict.fromkeys(magic))
+    return magic_sorted
+
+
+def get_magic_numbers_ws_cached() -> list[int]:
+    """Ленивая обёртка для получения списка магических N из WS-оператора."""
+    global _MAGIC_N_WS_CACHE
+    if _MAGIC_N_WS_CACHE is None:
+        _MAGIC_N_WS_CACHE = get_magic_numbers_ws()
+    return _MAGIC_N_WS_CACHE
 
 
 def analyze_low_shells_ws(
@@ -131,12 +187,13 @@ def analyze_low_shells_ws(
         toy_magic.append(int(N_here))
 
     print("\nToy low-N magic numbers (WS):", toy_magic)
+    return toy_magic
 
 
 def main():
+    print("WS magic numbers (cached):", get_magic_numbers_ws_cached())
     analyze_low_shells_ws()
 
 
 if __name__ == "__main__":
     main()
-

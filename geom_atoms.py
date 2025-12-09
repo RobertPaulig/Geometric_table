@@ -830,6 +830,144 @@ def _make_base_atoms() -> List[AtomGraph]:
             epsilon=1.0,
         ),
 
+        # --- 4-й период: d-блок (Sc–Zn) как металлические хабы/inert ---
+        # Для простоты все d-металлы моделируются как 6‑портовые
+        # октаэдрические графы одинаковой сложности. Роли согласованы
+        # с таблицей индексов element_indices_with_dblock.csv.
+
+        # Sc: спектрально почти инертный центр d-блока
+        AtomGraph(
+            name="Sc",
+            Z=21,
+            nodes=7,
+            edges=9,
+            ports=6,
+            symmetry_score=0.25,
+            port_geometry="octa",
+            role="inert",
+            notes="Прототип раннего d-металла: октаэдрическая 6‑портовая конфигурация",
+            epsilon=-0.1,
+        ),
+
+        # Ti: слабый акцепторный центр, но по D/A близок к инертному сектору
+        AtomGraph(
+            name="Ti",
+            Z=22,
+            nodes=7,
+            edges=9,
+            ports=6,
+            symmetry_score=0.25,
+            port_geometry="octa",
+            role="inert",
+            notes="Ранний d-металл: октаэдрическая 6‑портовая конфигурация",
+            epsilon=0.26,
+        ),
+
+        # V: первый выраженный d‑hub
+        AtomGraph(
+            name="V",
+            Z=23,
+            nodes=7,
+            edges=9,
+            ports=6,
+            symmetry_score=0.25,
+            port_geometry="octa",
+            role="hub",
+            notes="Ранний d-hub: октаэдрический металлический центр",
+            epsilon=0.44,
+        ),
+
+        AtomGraph(
+            name="Cr",
+            Z=24,
+            nodes=7,
+            edges=9,
+            ports=6,
+            symmetry_score=0.25,
+            port_geometry="octa",
+            role="hub",
+            notes="Cr: октаэдрический d-hub, χ_spec ~ 0.5",
+            epsilon=0.50,
+        ),
+
+        AtomGraph(
+            name="Mn",
+            Z=25,
+            nodes=7,
+            edges=9,
+            ports=6,
+            symmetry_score=0.25,
+            port_geometry="octa",
+            role="inert",
+            notes="Mn: геометрически похож на Sc/Ti, слабый акцептор",
+            epsilon=0.28,
+        ),
+
+        AtomGraph(
+            name="Fe",
+            Z=26,
+            nodes=7,
+            edges=9,
+            ports=6,
+            symmetry_score=0.25,
+            port_geometry="octa",
+            role="hub",
+            notes="Fe: классический d-hub (металлический центр)",
+            epsilon=0.84,
+        ),
+
+        AtomGraph(
+            name="Co",
+            Z=27,
+            nodes=7,
+            edges=9,
+            ports=6,
+            symmetry_score=0.25,
+            port_geometry="octa",
+            role="hub",
+            notes="Co: поздний d-hub с увеличенной χ_spec",
+            epsilon=0.94,
+        ),
+
+        AtomGraph(
+            name="Ni",
+            Z=28,
+            nodes=7,
+            edges=9,
+            ports=6,
+            symmetry_score=0.25,
+            port_geometry="octa",
+            role="hub",
+            notes="Ni: поздний d-hub, χ_spec ~ 1.0",
+            epsilon=1.00,
+        ),
+
+        AtomGraph(
+            name="Cu",
+            Z=29,
+            nodes=7,
+            edges=9,
+            ports=6,
+            symmetry_score=0.25,
+            port_geometry="octa",
+            role="hub",
+            notes="Cu: мягкий d-hub, близок к низкоакцепторному плато",
+            epsilon=0.98,
+        ),
+
+        AtomGraph(
+            name="Zn",
+            Z=30,
+            nodes=7,
+            edges=9,
+            ports=6,
+            symmetry_score=0.25,
+            port_geometry="octa",
+            role="hub",
+            notes="Zn: замыкающий d-hub, χ_spec ~ 0.48",
+            epsilon=0.48,
+        ),
+
         # Ga: геометрический аналог B/Al (слабый акцептор-хаб)
         AtomGraph(
             name="Ga",

@@ -6,8 +6,26 @@ import math
 
 
 # --- Magic numbers for protons / neutrons (incl. superheavy region) ---
-MAGIC_Z = [2, 8, 20, 28, 50, 82, 114]  # candidate proton magic numbers
-MAGIC_N = [2, 8, 20, 28, 50, 82, 126, 184]  # neutron magic, incl. 184
+# Legacy (v0.2) lists used when spectral H_nuc is unavailable.
+MAGIC_Z_LEGACY = [2, 8, 20, 28, 50, 82, 114]
+MAGIC_N_LEGACY = [2, 8, 20, 28, 50, 82, 126, 184]
+
+# By default we try to import spectral magic numbers from the
+# Woods–Saxon operator implemented in nuclear_spectrum_ws.py.
+USE_SPECTRAL_MAGIC_N = True
+
+try:
+    from nuclear_spectrum_ws import get_magic_numbers_ws_cached
+except ImportError:
+    get_magic_numbers_ws_cached = None  # type: ignore[assignment]
+    USE_SPECTRAL_MAGIC_N = False
+
+if USE_SPECTRAL_MAGIC_N and get_magic_numbers_ws_cached is not None:
+    MAGIC_Z = MAGIC_Z_LEGACY
+    MAGIC_N = get_magic_numbers_ws_cached()
+else:
+    MAGIC_Z = MAGIC_Z_LEGACY
+    MAGIC_N = MAGIC_N_LEGACY
 
 
 def _min_sq_distance(x: int, magic_list, sigma: float) -> float:
