@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import List, Tuple
 import math
+import argparse
 
 
 # --- Magic numbers for protons / neutrons (incl. superheavy region) ---
@@ -12,17 +13,31 @@ MAGIC_N_LEGACY = [2, 8, 20, 28, 50, 82, 126, 184]
 
 # By default we try to import spectral magic numbers from the
 # Woods–Saxon operator implemented in nuclear_spectrum_ws.py.
-USE_SPECTRAL_MAGIC_N = True
+USE_SPECTRAL_MAGIC_N = False
 
 try:
     from nuclear_spectrum_ws import get_magic_numbers_ws_cached
 except ImportError:
     get_magic_numbers_ws_cached = None  # type: ignore[assignment]
-    USE_SPECTRAL_MAGIC_N = False
 
-if USE_SPECTRAL_MAGIC_N and get_magic_numbers_ws_cached is not None:
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--magic",
+        choices=["legacy", "ws"],
+        default="legacy",
+        help="which set of neutron magic numbers to use in shell_penalty",
+    )
+    return parser.parse_args()
+
+
+_args = parse_args()
+USE_SPECTRAL_MAGIC_N = (_args.magic == "ws") and (get_magic_numbers_ws_cached is not None)
+
+if USE_SPECTRAL_MAGIC_N:
     MAGIC_Z = MAGIC_Z_LEGACY
-    MAGIC_N = get_magic_numbers_ws_cached()
+    MAGIC_N = get_magic_numbers_ws_cached()  # type: ignore[operator]
 else:
     MAGIC_Z = MAGIC_Z_LEGACY
     MAGIC_N = MAGIC_N_LEGACY
@@ -172,7 +187,9 @@ def scan_island(
 
 
 if __name__ == "__main__":
-    # Пример: грубый скан тяжёлой области для поиска "островка"
+    print("MAGIC mode:", "WS" if USE_SPECTRAL_MAGIC_N else "LEGACY")
+    print("MAGIC_Z =", MAGIC_Z)
+    print("MAGIC_N =", MAGIC_N)
     best = scan_island()
     print("Top candidates (even-even):")
     for Z, N, F in best:
