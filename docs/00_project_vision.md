@@ -15,3 +15,6 @@ Geom-Mendeleev v1:
 - результаты: `results/geom_periodic_table_v1.csv` и `results/geom_periodic_law_stats.txt`;
 - подтверждает базовый закон геометрической периодичности D/A для s/p-блоков и инертных элементов.
 
+Визуальная форма Geom-таблицы реализована как рисунок `results/geom_periodic_table_v1.png`,
+где по вертикали отложены периоды, а по горизонтали — geom-классы
+(`s_donor`, `s_bridge`, `p_semihub`, `p_acceptor`, `inert`, `d_octa`, `other`).

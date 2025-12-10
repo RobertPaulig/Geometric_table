@@ -1,0 +1,8 @@
+Geom s/p extension stats (Hypothesis SP-extended)
+
+geom_class  mean_D_old  std_D_old  mean_A_old  std_A_old  n_old mean_D_new std_D_new mean_A_new std_A_new n_new
+     inert    0.000000        0.0    0.000000   0.000000      5       <NA>      <NA>       <NA>      <NA>  <NA>
+p_acceptor    0.000000        0.0    1.237000   0.000000     17       <NA>      <NA>       <NA>      <NA>  <NA>
+ p_semihub    0.000000        0.0    0.131911   0.013769      6       <NA>      <NA>       <NA>      <NA>  <NA>
+  s_bridge    0.312582        0.0    0.000000   0.000000      4       <NA>      <NA>       <NA>      <NA>  <NA>
+   s_donor    0.193281        0.0    0.000000   0.000000      4       <NA>      <NA>       <NA>      <NA>  <NA>
