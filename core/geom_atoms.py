@@ -1158,7 +1158,65 @@ def _make_base_atoms() -> List[AtomGraph]:
             notes="Клон Kr (5-й период): инертный газ",
             epsilon=-3.0,         # как у Kr
         ),
-        # --- конец 5-го периода -------------------------------------------
+
+        # --- 6-й период: Cs/Ba/Tl/Pb как клоны 5-го периода (черновой прототип) ---
+
+        # Cs: клон Rb (щелочной донор 6-го периода)
+        AtomGraph(
+            name="Cs",
+            Z=55,
+            nodes=3,              # как у Rb
+            edges=2,              # как у Rb
+            ports=1,              # как у Rb
+            symmetry_score=0.5,   # как у Rb
+            port_geometry="single",
+            role="terminator",
+            notes="Клон Rb (6-й период): щелочной терминатор",
+            epsilon=2.0,          # как у Rb/K
+        ),
+
+        # Ba: клон Sr (щелочноземельный мост 6-го периода)
+        AtomGraph(
+            name="Ba",
+            Z=56,
+            nodes=4,              # как у Sr
+            edges=3,              # как у Sr
+            ports=2,              # как у Sr
+            symmetry_score=0.4,   # как у Sr
+            port_geometry="linear",
+            role="bridge",
+            notes="Клон Sr (6-й период): щелочноземельный мост",
+            epsilon=1.0,          # как у Sr/Ca
+        ),
+
+        # Tl: клон In (мягкий p-hub 6-го периода)
+        AtomGraph(
+            name="Tl",
+            Z=81,
+            nodes=5,              # как у In
+            edges=4,              # как у In
+            ports=3,              # как у In
+            symmetry_score=0.6,   # как у In
+            port_geometry="trigonal",
+            role="hub",
+            notes="Клон In (6-й период): мягкий p-hub",
+            epsilon=-0.1,         # как у In/Ga
+        ),
+
+        # Pb: клон Sn (четырехпортовый p-hub 6-го периода)
+        AtomGraph(
+            name="Pb",
+            Z=82,
+            nodes=6,              # как у Sn
+            edges=6,              # как у Sn
+            ports=4,              # как у Sn
+            symmetry_score=0.2,   # как у Sn
+            port_geometry="tetra",
+            role="hub",
+            notes="Клон Sn (6-й период): четырехпортовый hub",
+            epsilon=0.0,          # как у Sn/Ge
+        ),
+        # --- конец 5-го/6-го периода -------------------------------------------
     ]
 
 
