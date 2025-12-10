@@ -1,7 +1,12 @@
 \documentclass[12pt,a4paper]{article}
 
-\usepackage[utf8]{inputenc}
-\usepackage[T2A]{fontenc}
+% Компиляция через XeLaTeX / LuaLaTeX: нативный UTF-8 и корректный текстовый слой в PDF.
+\usepackage{fontspec}
+\defaultfontfeatures{Ligatures=TeX}
+\setmainfont{Times New Roman} % можно заменить на любую установленную кириллическую гарнитуру
+\setsansfont{Arial}
+\setmonofont{Consolas}
+
 \usepackage[russian]{babel}
 \usepackage{amsmath,amssymb,amsthm}
 \usepackage{bm}

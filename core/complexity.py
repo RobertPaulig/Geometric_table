@@ -5,9 +5,15 @@ complexity.py — геометрическая/топологическая сл
 """
 
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import numpy as np
 from typing import Dict, Any, Optional
+
+from .complexity_fdm import (
+    compute_fdm_complexity,
+    LAMBDA_FDM_DEFAULT,
+    Q_FDM_DEFAULT,
+)
 
 @dataclass
 class ComplexityDecomposition:
@@ -167,3 +173,43 @@ def atom_complexity_from_adjacency(adj_matrix: np.ndarray) -> float:
     Специальная версия для атомных графов.
     """
     return compute_crossing_complexity(adj_matrix)
+
+
+def compute_complexity_features_v2(
+    adj_matrix: np.ndarray,
+    backend: str = "heuristic",
+) -> ComplexityDecomposition:
+    """
+    Расширенная версия complexity, включающая FDM-слой.
+
+    backend:
+        - "heuristic": текущий v1 (compute_complexity_features).
+        - "fdm": чистая FDM-компонента (total берётся из compute_fdm_complexity).
+        - "hybrid": гибридная смесь heuristic + FDM (для R&D, калибровки).
+
+    Важно: эта функция не используется существующим пайплайном по умолчанию и
+    безопасна для интеграции. Её могут вызывать только новые R&D-скрипты.
+    """
+    feats = compute_complexity_features(adj_matrix)
+
+    if backend == "heuristic":
+        return feats
+
+    if backend == "fdm":
+        total_fdm = compute_fdm_complexity(
+            adj_matrix,
+            lambda_weight=LAMBDA_FDM_DEFAULT,
+            q=Q_FDM_DEFAULT,
+        )
+        return replace(feats, total=total_fdm)
+
+    if backend == "hybrid":
+        total_fdm = compute_fdm_complexity(
+            adj_matrix,
+            lambda_weight=LAMBDA_FDM_DEFAULT,
+            q=Q_FDM_DEFAULT,
+        )
+        total_hybrid = 0.5 * feats.total + 0.5 * total_fdm
+        return replace(feats, total=total_hybrid)
+
+    raise ValueError(f"Unknown backend for compute_complexity_features_v2: {backend!r}")

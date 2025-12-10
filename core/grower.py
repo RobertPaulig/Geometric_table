@@ -62,7 +62,11 @@ def grow_molecule_christmas_tree(
     root_idx = add_atom_to_mol(root_symbol)
     root_atom_data = get_atom(root_symbol)
     if root_atom_data is None:
-        return mol # Should not happen if symbol is valid
+        return mol  # Should not happen if symbol is valid
+
+    # QSG v5.0: softness of the seed globally damps branching
+    seed_softness = getattr(root_atom_data, "softness", 0.0)
+    seed_softness = max(0.0, min(float(seed_softness), 0.95))
 
     # 2. Initialize Frontier
     frontier = [
@@ -103,6 +107,10 @@ def grow_molecule_christmas_tree(
             p_continue += params.role_bonus_hub
         elif parent_atom.role == 'terminator':
             p_continue += params.role_penalty_terminator
+
+        # Apply global softness penalty if the seed is soft (e.g. Si)
+        if seed_softness > 0.0:
+            p_continue *= (1.0 - seed_softness)
         
         # Clamp probability
         p_continue = max(0.0, min(1.0, p_continue))

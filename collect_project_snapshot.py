@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+from datetime import datetime
 from typing import Iterable, List
 
 
@@ -36,6 +37,8 @@ EXCLUDED_EXTENSIONS = {
     ".dylib",
     ".exe",
 }
+
+MAX_INLINE_SIZE_BYTES = 200 * 1024  # порог для инлайна содержимого файла в снапшот
 
 
 def should_exclude_file(path: Path, output_file: Path) -> bool:
@@ -107,9 +110,14 @@ def build_tree(root: Path) -> str:
 
 
 def create_snapshot(root: Path, output_file: Path) -> None:
+    sections: List[str] = []
+
+    # Дата и время формирования снапшота
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    sections.append(f"# SNAPSHOT GENERATED AT: {timestamp}\n\n")
+
     tree = build_tree(root)
 
-    sections: List[str] = []
     sections.append("# PROJECT TREE\n")
     sections.append(tree)
     sections.append("\n\n# FILE CONTENTS\n")
@@ -117,6 +125,17 @@ def create_snapshot(root: Path, output_file: Path) -> None:
     for file_path in iter_project_files(root, output_file):
         rel = file_path.relative_to(root)
         sections.append(f"\n\n===== FILE: {rel.as_posix()} =====\n")
+
+        # Для очень больших файлов не инлайним содержимое, чтобы снапшот не раздувался.
+        size_bytes = file_path.stat().st_size
+        if size_bytes > MAX_INLINE_SIZE_BYTES:
+            sections.append(
+                f"[SKIPPED LARGE FILE >200KB: {size_bytes} bytes]\n"
+                "Для ИИ: если нужен этот файл целиком, попроси пользователя "
+                "открыть его отдельно или дать доступ к исходному файлу.\n"
+            )
+            continue
+
         try:
             text = file_path.read_text(encoding="utf-8")
         except UnicodeDecodeError:
@@ -160,4 +179,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

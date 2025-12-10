@@ -190,10 +190,9 @@ class AtomGraph:
     symmetry_score: float   # чем меньше, тем ближе к идеальной симметрии
     port_geometry: str      # тип геометрии портов ('tetra', 'trigonal', ...)
     role: str               # роль в сетях: 'inert', 'hub', 'bridge', 'terminator'
-    notes: str = ""         # произвольный комментарий
-    notes: str = ""         # произвольный комментарий
-    notes: str = ""         # произвольный комментарий
     epsilon: float = 0.0    # игрушечное положение уровня ε_Z относительно Среды
+    notes: str = ""         # произвольный комментарий
+    softness: float = 0.0   # мягкость в росте деревьев (penalty factor)
 
     def adjacency_matrix(self) -> np.ndarray:
         """
@@ -749,8 +748,9 @@ def _make_base_atoms() -> List[AtomGraph]:
             symmetry_score=0.2,
             port_geometry="tetra",
             role="hub",
-            notes="Геометрический аналог C: тетраэдрический 3D-хаб",
             epsilon=0.0,
+            notes="Геометрический аналог C: тетраэдрический 3D-хаб",
+            softness=0.30,  # QSG v5.0: silicon is softer than carbon in tree growth
         ),
         AtomGraph(
             name="P",

@@ -1,0 +1,33 @@
+FDM vs nuclear metrics (geom_nuclear_complexity_summary)
+========================================================
+
+[GLOBAL]
+C_norm_fdm_mean vs band_width: missing column
+C_norm_fdm_mean vs Nbest_over_Z: not enough data (n=0)
+C_norm_fdm_mean vs neutron_excess: not enough data (n=0)
+
+[ROLE=terminator]
+C_norm_fdm_mean vs band_width: missing column
+C_norm_fdm_mean vs Nbest_over_Z: not enough data (n=0)
+C_norm_fdm_mean vs neutron_excess: not enough data (n=0)
+
+[ROLE=bridge]
+C_norm_fdm_mean vs band_width: missing column
+C_norm_fdm_mean vs Nbest_over_Z: not enough data (n=0)
+C_norm_fdm_mean vs neutron_excess: not enough data (n=0)
+
+[ROLE=hub]
+C_norm_fdm_mean vs band_width: missing column
+C_norm_fdm_mean vs Nbest_over_Z: not enough data (n=0)
+C_norm_fdm_mean vs neutron_excess: not enough data (n=0)
+
+[GROUP=d_block]
+C_norm_fdm_mean vs band_width: missing column
+C_norm_fdm_mean vs Nbest_over_Z: not enough data (n=0)
+C_norm_fdm_mean vs neutron_excess: not enough data (n=0)
+
+[GROUP=living_hubs]
+C_norm_fdm_mean vs band_width: missing column
+C_norm_fdm_mean vs Nbest_over_Z: not enough data (n=0)
+C_norm_fdm_mean vs neutron_excess: not enough data (n=0)
+

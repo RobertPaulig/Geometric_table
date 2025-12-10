@@ -29,18 +29,22 @@ def load_data() -> pd.DataFrame:
     # Start from geometric dataframe and merge others
     df = df_geom.copy()
 
-    df = df.merge(
-        df_comp[
-            [
-                "symbol",
-                "Avg_Complexity",
-                "Max_Complexity",
-                "Avg_Size",
-            ]
-        ],
-        on="symbol",
-        how="left",
-    )
+    comp_cols = ["symbol", "Avg_Complexity", "Max_Complexity", "Avg_Size"]
+    # add FDM-related columns if present
+    for col in [
+        "C_total_v1_mean",
+        "C_total_v1_std",
+        "C_total_fdm_mean",
+        "C_total_fdm_std",
+        "C_norm_v1_mean",
+        "C_norm_v1_std",
+        "C_norm_fdm_mean",
+        "C_norm_fdm_std",
+    ]:
+        if col in df_comp.columns:
+            comp_cols.append(col)
+
+    df = df.merge(df_comp[comp_cols], on="symbol", how="left")
 
     if df_iso is not None:
         # Try to standardize column names for isotope bands
@@ -104,7 +108,8 @@ def load_data() -> pd.DataFrame:
 
 def summarize_group(df: pd.DataFrame, name: str, out) -> None:
     cols = ["Avg_Complexity", "Max_Complexity", "band_width", "Nbest_over_Z", "neutron_excess"]
-    sub = df[cols]
+    cols_present = [c for c in cols if c in df.columns]
+    sub = df[cols_present]
     print(f"[GROUP] {name:15s}: n={len(sub):2d}", file=out)
     for c in cols:
         if c in sub.columns and not sub[c].dropna().empty:

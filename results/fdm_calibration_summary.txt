@@ -1,0 +1,35 @@
+FDM calibration summary (tree growth law)
+=========================================
+
+lambda=0.40, q=1.00, order_ok=True, min_gap=0.1317, max_C2_norm_std=0.1944, score=-0.0043
+lambda=0.50, q=2.50, order_ok=True, min_gap=0.1272, max_C2_norm_std=0.1989, score=-0.0120
+lambda=0.30, q=1.00, order_ok=True, min_gap=0.1217, max_C2_norm_std=0.1954, score=-0.0151
+lambda=0.60, q=2.50, order_ok=True, min_gap=0.1163, max_C2_norm_std=0.1988, score=-0.0228
+lambda=0.60, q=1.50, order_ok=True, min_gap=0.1204, max_C2_norm_std=0.2070, score=-0.0245
+lambda=0.30, q=2.50, order_ok=True, min_gap=0.1150, max_C2_norm_std=0.2008, score=-0.0256
+lambda=0.70, q=2.00, order_ok=True, min_gap=0.1093, max_C2_norm_std=0.1999, score=-0.0306
+lambda=0.60, q=1.00, order_ok=True, min_gap=0.1051, max_C2_norm_std=0.1965, score=-0.0325
+lambda=0.60, q=2.00, order_ok=True, min_gap=0.0999, max_C2_norm_std=0.1969, score=-0.0379
+lambda=0.30, q=2.00, order_ok=True, min_gap=0.1033, max_C2_norm_std=0.2051, score=-0.0403
+lambda=0.70, q=1.00, order_ok=True, min_gap=0.0968, max_C2_norm_std=0.1962, score=-0.0405
+lambda=0.50, q=2.00, order_ok=True, min_gap=0.0845, max_C2_norm_std=0.1844, score=-0.0446
+lambda=0.50, q=1.50, order_ok=True, min_gap=0.0938, max_C2_norm_std=0.2012, score=-0.0470
+lambda=0.70, q=2.50, order_ok=True, min_gap=0.0819, max_C2_norm_std=0.1855, score=-0.0480
+lambda=0.70, q=1.50, order_ok=True, min_gap=0.0941, max_C2_norm_std=0.2030, score=-0.0480
+lambda=0.30, q=1.50, order_ok=True, min_gap=0.0901, max_C2_norm_std=0.1997, score=-0.0496
+lambda=0.40, q=2.50, order_ok=True, min_gap=0.0898, max_C2_norm_std=0.2060, score=-0.0544
+lambda=0.40, q=1.50, order_ok=True, min_gap=0.0741, max_C2_norm_std=0.1884, score=-0.0577
+lambda=0.40, q=2.00, order_ok=True, min_gap=0.0749, max_C2_norm_std=0.1938, score=-0.0607
+lambda=0.50, q=1.00, order_ok=True, min_gap=0.0499, max_C2_norm_std=0.1996, score=-0.0898
+
+Top 10 parameter pairs by score (higher is better):
+- lambda=0.400, q=1.000, score=-0.0043, min_gap=0.1317, max_std=0.1944, order_ok=True
+- lambda=0.500, q=2.500, score=-0.0120, min_gap=0.1272, max_std=0.1989, order_ok=True
+- lambda=0.300, q=1.000, score=-0.0151, min_gap=0.1217, max_std=0.1954, order_ok=True
+- lambda=0.600, q=2.500, score=-0.0228, min_gap=0.1163, max_std=0.1988, order_ok=True
+- lambda=0.600, q=1.500, score=-0.0245, min_gap=0.1204, max_std=0.2070, order_ok=True
+- lambda=0.300, q=2.500, score=-0.0256, min_gap=0.1150, max_std=0.2008, order_ok=True
+- lambda=0.700, q=2.000, score=-0.0306, min_gap=0.1093, max_std=0.1999, order_ok=True
+- lambda=0.600, q=1.000, score=-0.0325, min_gap=0.1051, max_std=0.1965, order_ok=True
+- lambda=0.600, q=2.000, score=-0.0379, min_gap=0.0999, max_std=0.1969, order_ok=True
+- lambda=0.300, q=2.000, score=-0.0403, min_gap=0.1033, max_std=0.2051, order_ok=True

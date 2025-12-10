@@ -8,7 +8,11 @@ into liquid_drop_binding() in nuclear_island.py.
 
 from __future__ import annotations
 
+import argparse
+
 import numpy as np
+
+from optimize.symmetric_newton import symmetric_newton_nd
 
 
 # label, Z, N, binding energy per nucleon (MeV)
@@ -25,7 +29,21 @@ DATA = [
 ]
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Fit liquid-drop coefficients (a_v, a_s, a_c, a_a)."
+    )
+    parser.add_argument(
+        "--method",
+        choices=["least_squares", "symmetric_newton"],
+        default="least_squares",
+        help="Optimization method for coefficient fit.",
+    )
+    return parser.parse_args()
+
+
 def main() -> None:
+    args = parse_args()
     rows = []
     targets = []
 
@@ -44,8 +62,24 @@ def main() -> None:
     X = np.array(rows, dtype=float)
     y = np.array(targets, dtype=float)
 
-    coef, residuals, rank, s = np.linalg.lstsq(X, y, rcond=None)
-    a_v, a_s, a_c, a_a = coef
+    if args.method == "least_squares":
+        coef, residuals, rank, s = np.linalg.lstsq(X, y, rcond=None)
+        a_v, a_s, a_c, a_a = coef
+    else:
+        # symmetric_newton on normal equations X^T X a = X^T y
+        XtX = X.T @ X
+        Xty = X.T @ y
+
+        def F(a_vec: np.ndarray) -> np.ndarray:
+            return XtX @ a_vec - Xty
+
+        a0 = np.zeros(4, dtype=float)
+        res = symmetric_newton_nd(F, a0)
+        a_v, a_s, a_c, a_a = res.x
+        print(
+            f"[symmetric_newton] converged={res.converged}, "
+            f"n_iter={res.n_iter}, f_norm={res.f_norm:.3e}"
+        )
 
     def B_model(Z: int, N: int) -> float:
         A = Z + N
@@ -73,4 +107,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

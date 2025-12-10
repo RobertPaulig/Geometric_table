@@ -1,11 +1,13 @@
-
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from math import log2
+from pathlib import Path
+
 from core.geom_atoms import get_atom, SPECTRAL_MODE_V4, SPECTRAL_MODE, compute_element_indices
 import core.geom_atoms as geom_atoms
 from core.grower import GrowthParams, grow_molecule_christmas_tree
-from core.complexity import compute_complexity_features
+from core.complexity import compute_complexity_features, compute_complexity_features_v2
 
 # Ensure V4 mode
 geom_atoms.SPECTRAL_MODE = geom_atoms.SPECTRAL_MODE_V4
@@ -39,56 +41,117 @@ def run_living_sectors_scan():
     # Params
     params = GrowthParams(max_depth=4, max_atoms=25)
     n_trials = 20
-    
+
     results = []
-    
-    elements_to_scan = [e['El'] for e in indices if e['Z'] <= 36 and e['role'] != 'inert']
-    
+
+    elements_to_scan = [e["El"] for e in indices if e["Z"] <= 36 and e["role"] != "inert"]
+
     for el in elements_to_scan:
         d_val, a_val, role = el_map[el]
-        
-        # Collect stats
-        complexities = []
+
+        # Collect stats per element
+        c_v1_list = []
+        c_fdm_list = []
+        c_norm_v1_list = []
+        c_norm_fdm_list = []
         sizes = []
+
         for i_trial in range(n_trials):
-            # Grow tree starting from 'el'
             try:
                 mol = grow_molecule_christmas_tree(el, params)
-                # Compute C_graph
                 adj = mol.adjacency_matrix()
-                feats = compute_complexity_features(adj)
-                complexities.append(feats.total)
-                sizes.append(len(mol.atoms))
-                
-                # Debug print for first few trials of first element
+
+                feats_v1 = compute_complexity_features(adj)
+                feats_fdm = compute_complexity_features_v2(adj, backend="fdm")
+
+                n = feats_v1.n
+                if n <= 1:
+                    continue
+
+                c_v1 = feats_v1.total
+                c_fdm = feats_fdm.total
+                denom = n * log2(1.0 + n)
+
+                c_v1_list.append(c_v1)
+                c_fdm_list.append(c_fdm)
+                c_norm_v1_list.append(c_v1 / denom)
+                c_norm_fdm_list.append(c_fdm / denom)
+                sizes.append(n)
+
                 if el == "C" and i_trial < 2:
-                    print(f"DEBUG: {el} Trial {i_trial}: Atoms={len(mol.atoms)}, Complexity={feats.total:.3f}")
-                    
+                    print(
+                        f"DEBUG: {el} Trial {i_trial}: "
+                        f"Atoms={n}, C_v1={c_v1:.3f}, C_fdm={c_fdm:.3f}"
+                    )
+
             except Exception as e:
-                # Growth failed or 0 complexity
-                complexities.append(0.0)
                 if i_trial == 0:
-                   print(f"DEBUG: Growth failed for {el}: {e}")
-                   import traceback
-                   traceback.print_exc()
-        
-        avg_c = np.mean(complexities)
-        max_c = np.max(complexities)
-        avg_s = np.mean(sizes) if sizes else 0.0
-        
-        results.append({
-            "Element": el,
-            "D": d_val,
-            "A": a_val,
-            "Role": role,
-            "Avg_Complexity": avg_c,
-            "Max_Complexity": max_c,
-            "Avg_Size": avg_s
-        })
-        
+                    print(f"DEBUG: Growth failed for {el}: {e}")
+                    import traceback
+
+                    traceback.print_exc()
+                continue
+
+        if not c_v1_list:
+            avg_c = 0.0
+            max_c = 0.0
+            avg_s = 0.0
+            c_v1_mean = c_v1_std = 0.0
+            c_fdm_mean = c_fdm_std = 0.0
+            c_norm_v1_mean = c_norm_v1_std = 0.0
+            c_norm_fdm_mean = c_norm_fdm_std = 0.0
+        else:
+            c_v1_arr = np.array(c_v1_list, dtype=float)
+            c_fdm_arr = np.array(c_fdm_list, dtype=float)
+            c_norm_v1_arr = np.array(c_norm_v1_list, dtype=float)
+            c_norm_fdm_arr = np.array(c_norm_fdm_list, dtype=float)
+            sizes_arr = np.array(sizes, dtype=float)
+
+            avg_c = float(c_v1_arr.mean())
+            max_c = float(c_v1_arr.max())
+            avg_s = float(sizes_arr.mean()) if sizes else 0.0
+
+            c_v1_mean = float(c_v1_arr.mean())
+            c_v1_std = float(c_v1_arr.std())
+            c_fdm_mean = float(c_fdm_arr.mean())
+            c_fdm_std = float(c_fdm_arr.std())
+            c_norm_v1_mean = float(c_norm_v1_arr.mean())
+            c_norm_v1_std = float(c_norm_v1_arr.std())
+            c_norm_fdm_mean = float(c_norm_fdm_arr.mean())
+            c_norm_fdm_std = float(c_norm_fdm_arr.std())
+
+        results.append(
+            {
+                "Element": el,
+                "D": d_val,
+                "A": a_val,
+                "Role": role,
+                # legacy fields (v1)
+                "Avg_Complexity": avg_c,
+                "Max_Complexity": max_c,
+                "Avg_Size": avg_s,
+                # explicit v1/FDM stats
+                "C_total_v1_mean": c_v1_mean,
+                "C_total_v1_std": c_v1_std,
+                "C_total_fdm_mean": c_fdm_mean,
+                "C_total_fdm_std": c_fdm_std,
+                "C_norm_v1_mean": c_norm_v1_mean,
+                "C_norm_v1_std": c_norm_v1_std,
+                "C_norm_fdm_mean": c_norm_fdm_mean,
+                "C_norm_fdm_std": c_norm_fdm_std,
+            }
+        )
+
     df = pd.DataFrame(results)
     print("Scan complete.")
     print(df.sort_values("Max_Complexity", ascending=False).head(10))
+
+    # Save complexity summary for downstream analysis
+    data_dir = Path("data")
+    data_dir.mkdir(exist_ok=True)
+    out_csv = data_dir / "complexity_summary.csv"
+    df.to_csv(out_csv, index=False)
+    print(f"Saved complexity summary to {out_csv}")
     
     # PLOTTING
     plt.figure(figsize=(10, 8))
