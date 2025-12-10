@@ -1,0 +1,5 @@
+Heavy s/p Pauling-fit check (geom-spec v4.x)
+============================================
+
+No heavy s/p elements from HEAVY_SP found in element_indices_with_dblock.csv.
+Add Cs/Ba/Tl/Pb/... to index CSV before running this check.
