@@ -1,7 +1,7 @@
 __pycache__/
 *.pyc
-geom_isotope_bands.csv
-geom_nuclear_map.csv
-nuclear_spectrum_toy_levels.csv
-tuned_nuclear_magic_scan.csv
 
+docs/name3.log
+docs/name3.aux
+docs/name3.out
+docs/name3.toc
