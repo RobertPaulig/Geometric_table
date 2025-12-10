@@ -3,8 +3,8 @@ from __future__ import annotations
 import csv
 from typing import Dict, Any, List, Tuple
 
-from geom_atoms import compute_element_indices
-from nuclear_island import nuclear_functional
+from core.geom_atoms import compute_element_indices
+from core.nuclear_island import nuclear_functional
 
 
 def find_best_N_for_Z(

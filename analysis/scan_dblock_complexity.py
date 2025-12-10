@@ -3,10 +3,10 @@ from __future__ import annotations
 import math
 import statistics as stats
 
-import geom_atoms
-from geom_atoms import compute_element_indices
-from grower import GrowthParams, grow_molecule_christmas_tree
-from complexity import compute_complexity_features
+import core.geom_atoms as geom_atoms
+from core.geom_atoms import compute_element_indices
+from core.grower import GrowthParams, grow_molecule_christmas_tree
+from core.complexity import compute_complexity_features
 
 
 def scan_dblock_complexity(

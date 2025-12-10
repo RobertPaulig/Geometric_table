@@ -48,8 +48,10 @@ def classify_role(d_index: float, a_index: float) -> str:
     return "inert"
 
 
-def main() -> None:
-    df = pd.read_csv("element_indices_v4.csv")
+def main(indices_path: str | None = None) -> None:
+    if indices_path is None:
+        indices_path = "data/element_indices_v4.csv"
+    df = pd.read_csv(indices_path)
 
     rows = []
     for Z, (El, chi_p) in PAULING_D_BLOCK.items():

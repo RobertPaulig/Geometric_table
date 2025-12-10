@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from geom_atoms import base_atoms, ALPHA_CALIBRATED, EPS_NEUTRAL, PAULING
+from core.geom_atoms import base_atoms, ALPHA_CALIBRATED, EPS_NEUTRAL, PAULING
 
 
 # Набор элементов для калибровки спектральной χ к шкале Полинга

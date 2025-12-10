@@ -16,7 +16,7 @@ MAGIC_N_LEGACY = [2, 8, 20, 28, 50, 82, 126, 184]
 USE_SPECTRAL_MAGIC_N = False
 
 try:
-    from nuclear_spectrum_ws import get_magic_numbers_ws_cached
+    from .nuclear_spectrum_ws import get_magic_numbers_ws_cached
 except ImportError:
     get_magic_numbers_ws_cached = None  # type: ignore[assignment]
 

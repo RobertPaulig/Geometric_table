@@ -1,0 +1,10 @@
+Geom periodic law stats (D/A by class):
+
+geom_class       role   mean_D  std_D   mean_A    std_A  n
+     inert      inert 0.000000    0.0 0.000000 0.000000  5
+p_acceptor     bridge 0.000000    0.0 1.237000 0.000000  4
+p_acceptor        hub 0.000000    0.0 1.237000 0.000000  8
+p_acceptor terminator 0.000000    0.0 1.237000 0.000000  5
+ p_semihub        hub 0.000000    0.0 0.131911 0.013769  6
+  s_bridge     bridge 0.312582    0.0 0.000000 0.000000  4
+   s_donor terminator 0.193281    0.0 0.000000 0.000000  4

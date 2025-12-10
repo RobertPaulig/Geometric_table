@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import argparse
-from geom_atoms import (
+from core.geom_atoms import (
     AtomOverrideContext, PERIODIC_TABLE, get_atom, 
     make_virtual_molecule, SPECTRAL_MODE_V4, SPECTRAL_MODE
 )
@@ -15,7 +15,7 @@ geom_atoms.SPECTRAL_MODE = geom_atoms.SPECTRAL_MODE_V4
 if "X" not in PERIODIC_TABLE:
     base_x = get_atom("B")  # copy B
     # Create a new AtomGraph for X
-    from geom_atoms import AtomGraph
+    from core.geom_atoms import AtomGraph
     if base_x:
         atom_x = AtomGraph(
             name="X",

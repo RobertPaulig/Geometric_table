@@ -1,0 +1,12 @@
+D-block universality stats (Hypothesis D-layer)
+
+[By period]
+ period   mean_D    std_D   mean_A    std_A  mean_AvgC  std_AvgC  mean_MaxC  std_MaxC  n
+      4 0.002083 0.005893 0.082083 0.057733        NaN       NaN        NaN       NaN  8
+
+[Global]
+  mean_D    std_D   mean_A    std_A  mean_AvgC  std_AvgC  mean_MaxC  std_MaxC
+0.002083 0.005893 0.082083 0.057733        NaN       NaN        NaN       NaN
+
+[Summary]
+period=4: D=0.002083±0.005893, A=0.082083±0.057733, AvgC=nan±nan, MaxC=nan±nan

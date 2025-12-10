@@ -5,8 +5,8 @@ from typing import List, Optional, Tuple
 from collections import defaultdict
 
 import numpy as np
-from fdm import IFS, FDMIntegrator, make_tensor_grid_ifs
-from complexity import atom_complexity_from_adjacency, compute_complexity_features
+from .fdm import IFS, FDMIntegrator, make_tensor_grid_ifs
+from .complexity import atom_complexity_from_adjacency, compute_complexity_features
 # We import grower inside the report function to avoid circular imports
 
 # ============================================================
@@ -4038,7 +4038,7 @@ def run_rnd_master_report() -> None:
     print("=" * 70)
     
     # Import locally
-    from grower import GrowthParams, grow_molecule_christmas_tree, describe_molecule
+    from .grower import GrowthParams, grow_molecule_christmas_tree, describe_molecule
     
     # Demo parameters
     params = GrowthParams(max_depth=4, max_atoms=16)

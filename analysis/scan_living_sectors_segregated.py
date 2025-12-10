@@ -2,10 +2,10 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from geom_atoms import get_atom, SPECTRAL_MODE_V4, SPECTRAL_MODE, compute_element_indices
-import geom_atoms
-from grower import GrowthParams, grow_molecule_christmas_tree
-from complexity import compute_complexity_features
+from core.geom_atoms import get_atom, SPECTRAL_MODE_V4, SPECTRAL_MODE, compute_element_indices
+import core.geom_atoms as geom_atoms
+from core.grower import GrowthParams, grow_molecule_christmas_tree
+from core.complexity import compute_complexity_features
 
 # Ensure V4 mode
 geom_atoms.SPECTRAL_MODE = geom_atoms.SPECTRAL_MODE_V4
@@ -121,6 +121,12 @@ def run_all_scenarios():
     # Summary statistics
     print("\n[SUMMARY STATISTICS]")
     print(df.groupby("Scenario")[["Avg_Complexity", "Max_Complexity", "Avg_Size"]].mean())
+
+
+def run_segregated_scan() -> None:
+    """Convenience alias used by the pipeline."""
+    run_all_scenarios()
+
 
 if __name__ == "__main__":
     run_all_scenarios()

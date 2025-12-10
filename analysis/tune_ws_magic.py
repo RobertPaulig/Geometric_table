@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from nuclear_spectrum_ws import collect_levels_ws
+from core.nuclear_spectrum_ws import collect_levels_ws
 
 
 TARGET_MAGICS = np.array([2, 8, 20, 28, 50, 82], dtype=float)

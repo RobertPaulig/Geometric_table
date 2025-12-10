@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import List, Tuple, Dict, Any
 
-from geom_atoms import compute_element_indices
+from core.geom_atoms import compute_element_indices
 from nuclear_island import nuclear_functional
 
 WS_MAGIC_N = [8, 20, 40, 112, 142, 184]

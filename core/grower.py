@@ -44,7 +44,7 @@ def grow_molecule_christmas_tree(
     Returns: geom_atoms.Molecule
     """
     # Lazy import to avoid circular dependency
-    from geom_atoms import Molecule, get_atom, AtomGraph, PERIODIC_TABLE
+    from .geom_atoms import Molecule, get_atom, AtomGraph, PERIODIC_TABLE
 
     if rng is None:
         rng = np.random.default_rng()
@@ -159,7 +159,7 @@ def describe_molecule(mol: Any) -> str:
     Return a short description of the molecule.
     """
     # No need to import compute_molecule_energy if we use the method directly
-    # from geom_atoms import compute_molecule_energy
+    # from .geom_atoms import compute_molecule_energy
     
     # Count atoms
     counts = {}

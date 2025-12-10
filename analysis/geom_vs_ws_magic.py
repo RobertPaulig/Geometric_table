@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Dict, List, Tuple
 
-from geom_atoms import compute_element_indices
+from core.geom_atoms import compute_element_indices
 from nuclear_island import nuclear_functional
 
 # Woods–Saxon toy magic neutron numbers (from tune_ws_magic.py scan)

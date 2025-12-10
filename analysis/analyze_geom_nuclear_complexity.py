@@ -10,18 +10,18 @@ def load_data() -> pd.DataFrame:
     base = Path(".")
 
     # Geometric layer
-    geom_path = base / "element_indices_with_dblock.csv"
+    geom_path = base / "data" / "element_indices_with_dblock.csv"
     df_geom = pd.read_csv(geom_path)
     df_geom = df_geom.rename(columns={"El": "symbol"})
 
     # Complexity layer
-    comp_path = base / "complexity_summary.csv"
+    comp_path = base / "data" / "complexity_summary.csv"
     df_comp = pd.read_csv(comp_path)
     df_comp = df_comp.rename(columns={"Element": "symbol", "D": "D_index", "A": "A_index", "Role": "role"})
 
     # Optional nuclear layers
-    iso_path = base / "geom_isotope_bands.csv"
-    map_path = base / "geom_nuclear_map.csv"
+    iso_path = base / "data" / "geom_isotope_bands.csv"
+    map_path = base / "data" / "geom_nuclear_map.csv"
 
     df_iso = pd.read_csv(iso_path) if iso_path.exists() else None
     df_map = pd.read_csv(map_path) if map_path.exists() else None
@@ -121,11 +121,11 @@ def main() -> None:
     df_all = load_data()
 
     # Save combined table
-    out_csv = Path("geom_nuclear_complexity_summary.csv")
+    out_csv = Path("data") / "geom_nuclear_complexity_summary.csv"
     df_all.to_csv(out_csv, index=False)
 
     # Prepare text stats
-    out_txt_path = Path("geom_nuclear_complexity_stats.txt")
+    out_txt_path = Path("results") / "geom_nuclear_complexity_stats.txt"
     with out_txt_path.open("w", encoding="utf-8") as f:
         out = f
         summarize_group(df_all[df_all["role"] == "terminator"], "role=terminator", out)

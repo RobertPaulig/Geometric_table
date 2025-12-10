@@ -9,7 +9,7 @@ try:
 except ImportError:
     MATPLOTLIB_AVAILABLE = False
 
-from geom_atoms import compute_element_indices, PERIODIC_TABLE
+from core.geom_atoms import compute_element_indices, PERIODIC_TABLE
 
 def get_element_indices():
     """

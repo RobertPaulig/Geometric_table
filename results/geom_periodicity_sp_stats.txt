@@ -1,0 +1,41 @@
+Geom periodicity stats for s/p blocks (Hypothesis S/P)
+
+[By geom_class, period]
+geom_class  period   mean_D  std_D   mean_A    std_A  n
+     inert       1 0.000000    NaN 0.000000      NaN  1
+     inert       2 0.000000    NaN 0.000000      NaN  1
+     inert       3 0.000000    NaN 0.000000      NaN  1
+     inert       4 0.000000    NaN 0.000000      NaN  1
+     inert       5 0.000000    NaN 0.000000      NaN  1
+p_acceptor       1 0.000000    NaN 1.237000      NaN  1
+p_acceptor       2 0.000000    0.0 1.237000 0.000000  4
+p_acceptor       3 0.000000    0.0 1.237000 0.000000  4
+p_acceptor       4 0.000000    0.0 1.237000 0.000000  4
+p_acceptor       5 0.000000    0.0 1.237000 0.000000  4
+ p_semihub       2 0.000000    NaN 0.123700      NaN  1
+ p_semihub       3 0.000000    NaN 0.123700      NaN  1
+ p_semihub       4 0.000000    0.0 0.140122 0.016484  3
+ p_semihub       5 0.000000    NaN 0.123700      NaN  1
+  s_bridge       2 0.312582    NaN 0.000000      NaN  1
+  s_bridge       3 0.312582    NaN 0.000000      NaN  1
+  s_bridge       4 0.312582    NaN 0.000000      NaN  1
+  s_bridge       5 0.312582    NaN 0.000000      NaN  1
+   s_donor       2 0.193281    NaN 0.000000      NaN  1
+   s_donor       3 0.193281    NaN 0.000000      NaN  1
+   s_donor       4 0.193281    NaN 0.000000      NaN  1
+   s_donor       5 0.193281    NaN 0.000000      NaN  1
+
+[By geom_class]
+geom_class   mean_D  std_D   mean_A    std_A  n
+     inert 0.000000    0.0 0.000000 0.000000  5
+p_acceptor 0.000000    0.0 1.237000 0.000000 17
+ p_semihub 0.000000    0.0 0.131911 0.013769  6
+  s_bridge 0.312582    0.0 0.000000 0.000000  4
+   s_donor 0.193281    0.0 0.000000 0.000000  4
+
+[Summary]
+inert     : mean_D=0.000000, std_D=0.000000, mean_A=0.000000, std_A=0.000000
+p_acceptor: mean_D=0.000000, std_D=0.000000, mean_A=1.237000, std_A=0.000000
+p_semihub : mean_D=0.000000, std_D=0.000000, mean_A=0.131911, std_A=0.013769
+s_bridge  : mean_D=0.312582, std_D=0.000000, mean_A=0.000000, std_A=0.000000
+s_donor   : mean_D=0.193281, std_D=0.000000, mean_A=0.000000, std_A=0.000000
