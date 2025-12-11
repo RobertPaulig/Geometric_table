@@ -6,6 +6,18 @@ from pathlib import Path
 import pandas as pd
 
 
+def _find_csv(base: Path, name: str) -> Path | None:
+    """
+    Ищет CSV сначала в data/, затем в корне репозитория.
+    Возвращает Path или None, если файл не найден.
+    """
+    candidates = [base / "data" / name, base / name]
+    for p in candidates:
+        if p.exists():
+            return p
+    return None
+
+
 def load_data() -> pd.DataFrame:
     base = Path(".")
 
@@ -20,11 +32,11 @@ def load_data() -> pd.DataFrame:
     df_comp = df_comp.rename(columns={"Element": "symbol", "D": "D_index", "A": "A_index", "Role": "role"})
 
     # Optional nuclear layers
-    iso_path = base / "data" / "geom_isotope_bands.csv"
-    map_path = base / "data" / "geom_nuclear_map.csv"
+    iso_path = _find_csv(base, "geom_isotope_bands.csv")
+    map_path = _find_csv(base, "geom_nuclear_map.csv")
 
-    df_iso = pd.read_csv(iso_path) if iso_path.exists() else None
-    df_map = pd.read_csv(map_path) if map_path.exists() else None
+    df_iso = pd.read_csv(iso_path) if iso_path is not None else None
+    df_map = pd.read_csv(map_path) if map_path is not None else None
 
     # Start from geometric dataframe and merge others
     df = df_geom.copy()

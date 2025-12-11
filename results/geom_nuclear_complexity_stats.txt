@@ -1,49 +1,49 @@
 [GROUP] role=terminator: n= 9
-  Avg_Complexity : mean=   2.215, std=   0.806
-  Max_Complexity : mean=   6.178, std=   2.604
-  band_width     : mean=    nan, std=    nan
-  Nbest_over_Z   : mean=    nan, std=    nan
-  neutron_excess : mean=    nan, std=    nan
+  Avg_Complexity : mean=   2.556, std=   1.076
+  Max_Complexity : mean=   5.539, std=   2.028
+  band_width     : mean=   2.625, std=   1.923
+  Nbest_over_Z   : mean=   1.702, std=   0.194
+  neutron_excess : mean=  11.125, std=   8.357
 
 [GROUP] role=bridge    : n= 8
-  Avg_Complexity : mean=   3.419, std=   1.023
-  Max_Complexity : mean=  11.726, std=   3.420
-  band_width     : mean=    nan, std=    nan
-  Nbest_over_Z   : mean=    nan, std=    nan
-  neutron_excess : mean=    nan, std=    nan
+  Avg_Complexity : mean=   3.930, std=   0.699
+  Max_Complexity : mean=  13.226, std=   1.521
+  band_width     : mean=   3.000, std=   2.236
+  Nbest_over_Z   : mean=   1.734, std=   0.046
+  neutron_excess : mean=  13.714, std=   9.429
 
 [GROUP] role=hub       : n=19
-  Avg_Complexity : mean=   9.329, std=   2.805
-  Max_Complexity : mean=  14.037, std=   0.688
-  band_width     : mean=    nan, std=    nan
-  Nbest_over_Z   : mean=    nan, std=    nan
-  neutron_excess : mean=    nan, std=    nan
+  Avg_Complexity : mean=   9.033, std=   2.768
+  Max_Complexity : mean=  13.968, std=   0.943
+  band_width     : mean=   2.000, std=   1.414
+  Nbest_over_Z   : mean=   1.766, std=   0.040
+  neutron_excess : mean=  16.500, std=   7.581
 
 [GROUP] role=inert     : n= 8
   Avg_Complexity : mean=    nan, std=    nan
   Max_Complexity : mean=    nan, std=    nan
-  band_width     : mean=    nan, std=    nan
-  Nbest_over_Z   : mean=    nan, std=    nan
-  neutron_excess : mean=    nan, std=    nan
+  band_width     : mean=   3.143, std=   2.116
+  Nbest_over_Z   : mean=   1.593, std=   0.281
+  neutron_excess : mean=  12.714, std=   7.365
 
 [GROUP] d_block        : n=10
-  Avg_Complexity : mean=  12.008, std=   0.887
-  Max_Complexity : mean=  14.595, std=   0.146
-  band_width     : mean=    nan, std=    nan
-  Nbest_over_Z   : mean=    nan, std=    nan
-  neutron_excess : mean=    nan, std=    nan
+  Avg_Complexity : mean=  11.714, std=   0.602
+  Max_Complexity : mean=  14.511, std=   0.111
+  band_width     : mean=   1.900, std=   1.663
+  Nbest_over_Z   : mean=   1.746, std=   0.089
+  neutron_excess : mean=  19.200, std=   3.967
 
 [GROUP] living_hubs    : n= 8
-  Avg_Complexity : mean=   7.356, std=   2.098
-  Max_Complexity : mean=  13.800, std=   0.096
-  band_width     : mean=    nan, std=    nan
-  Nbest_over_Z   : mean=    nan, std=    nan
-  neutron_excess : mean=    nan, std=    nan
+  Avg_Complexity : mean=   6.962, std=   2.089
+  Max_Complexity : mean=  13.359, std=   1.336
+  band_width     : mean=   2.833, std=   1.941
+  Nbest_over_Z   : mean=   1.736, std=   0.052
+  neutron_excess : mean=  13.167, std=   8.612
 
 [GROUP] non_living     : n=36
-  Avg_Complexity : mean=   6.137, std=   4.324
-  Max_Complexity : mean=  11.104, std=   4.114
-  band_width     : mean=    nan, std=    nan
-  Nbest_over_Z   : mean=    nan, std=    nan
-  neutron_excess : mean=    nan, std=    nan
+  Avg_Complexity : mean=   6.271, std=   3.995
+  Max_Complexity : mean=  11.368, std=   4.175
+  band_width     : mean=   2.469, std=   1.814
+  Nbest_over_Z   : mean=   1.711, std=   0.171
+  neutron_excess : mean=  14.344, std=   8.051
 
