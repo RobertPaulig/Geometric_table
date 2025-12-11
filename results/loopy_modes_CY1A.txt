@@ -1,0 +1,12 @@
+CY1A/Li: frac_cycles=0.000, max_cyclomatic=0, n_mean=1.00, cycle_load_mean=0.000
+CY1A/Na: frac_cycles=0.000, max_cyclomatic=0, n_mean=1.00, cycle_load_mean=0.000
+CY1A/K: frac_cycles=0.000, max_cyclomatic=0, n_mean=1.00, cycle_load_mean=0.000
+CY1A/Be: frac_cycles=0.492, max_cyclomatic=3, n_mean=5.33, cycle_load_mean=0.158
+CY1A/Mg: frac_cycles=0.492, max_cyclomatic=3, n_mean=5.33, cycle_load_mean=0.158
+CY1A/Ca: frac_cycles=0.492, max_cyclomatic=3, n_mean=5.33, cycle_load_mean=0.158
+CY1A/C: frac_cycles=0.982, max_cyclomatic=3, n_mean=16.11, cycle_load_mean=0.216
+CY1A/N: frac_cycles=0.980, max_cyclomatic=3, n_mean=13.28, cycle_load_mean=0.262
+CY1A/O: frac_cycles=0.492, max_cyclomatic=3, n_mean=5.33, cycle_load_mean=0.158
+CY1A/Si: frac_cycles=0.896, max_cyclomatic=3, n_mean=7.79, cycle_load_mean=0.331
+CY1A/P: frac_cycles=0.980, max_cyclomatic=3, n_mean=13.28, cycle_load_mean=0.262
+CY1A/S: frac_cycles=0.492, max_cyclomatic=3, n_mean=5.33, cycle_load_mean=0.158

@@ -14,6 +14,15 @@ from .complexity_fdm import (
     LAMBDA_FDM_DEFAULT,
     Q_FDM_DEFAULT,
 )
+from core.crossing import estimate_crossing_number_circle
+
+# Насколько сильно наказываем циклы в FDM-R&D-режиме
+LOOPY_FDM_ALPHA_CYCLE = 0.3   # штраф за общее количество циклов
+LOOPY_FDM_ALPHA_LOAD = 1.0    # штраф за циклонагрузку на вершину
+
+# R&D: crossing-aware FDM penalty (используется только backend="fdm_loopy_cross")
+LOOPY_FDM_BETA_CROSS: float = 1.0  # базовый коэффициент β_cross для QSG v6.x
+LOOPY_FDM_MAX_CROSS_N: int = 8     # до какого n считаем crossing точно
 
 @dataclass
 class ComplexityDecomposition:
@@ -185,6 +194,8 @@ def compute_complexity_features_v2(
     backend:
         - "heuristic": текущий v1 (compute_complexity_features).
         - "fdm": чистая FDM-компонента (total берётся из compute_fdm_complexity).
+        - "fdm_loopy": FDM-компонента с топологическим штрафом по cyclomatic/cycle_load (R&D).
+        - "fdm_loopy_cross": FDM-компонента с цикловым и crossing-proxy штрафом (R&D).
         - "hybrid": гибридная смесь heuristic + FDM (для R&D, калибровки).
 
     Важно: эта функция не используется существующим пайплайном по умолчанию и
@@ -202,6 +213,45 @@ def compute_complexity_features_v2(
             q=Q_FDM_DEFAULT,
         )
         return replace(feats, total=total_fdm)
+
+    if backend == "fdm_loopy":
+        # База: чистый FDM, как в 'fdm'
+        total_fdm = compute_fdm_complexity(
+            adj_matrix,
+            lambda_weight=LAMBDA_FDM_DEFAULT,
+            q=Q_FDM_DEFAULT,
+        )
+        cyclomatic = max(feats.cyclomatic, 0)
+        n = max(feats.n, 1)
+        cycle_load = cyclomatic / n
+        penalty = 1.0 + LOOPY_FDM_ALPHA_CYCLE * cyclomatic + LOOPY_FDM_ALPHA_LOAD * cycle_load
+        total_loopy = total_fdm * penalty
+        return replace(feats, total=total_loopy)
+
+    if backend == "fdm_loopy_cross":
+        # 1) базовый FDM, как в 'fdm'
+        feats_fdm = compute_complexity_features_v2(adj_matrix, backend="fdm")
+        total_fdm = feats_fdm.total
+        n = max(feats_fdm.n, 1)
+        cyclomatic = max(feats_fdm.cyclomatic, 0)
+        cycle_load = cyclomatic / float(n)
+
+        # 2) цикловой штраф, как в 'fdm_loopy'
+        penalty_cycle = 1.0 + LOOPY_FDM_ALPHA_CYCLE * cyclomatic + LOOPY_FDM_ALPHA_LOAD * cycle_load
+
+        # 3) crossing-proxy: точный для малых n, proxy для больших
+        if n <= LOOPY_FDM_MAX_CROSS_N:
+            crossing, _ = estimate_crossing_number_circle(
+                adj_matrix, max_exact_n=LOOPY_FDM_MAX_CROSS_N
+            )
+            m = max(int(feats_fdm.m), 1)
+            crossing_proxy = crossing / float(m)
+        else:
+            crossing_proxy = cycle_load
+
+        penalty_cross = 1.0 + LOOPY_FDM_BETA_CROSS * crossing_proxy
+        total_cross = float(total_fdm) * penalty_cycle * penalty_cross
+        return replace(feats_fdm, total=total_cross)
 
     if backend == "hybrid":
         total_fdm = compute_fdm_complexity(

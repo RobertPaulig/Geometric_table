@@ -1,0 +1,34 @@
+beta=0.00: corr(penalty_total, crossing_density)=0.6298, hubs_mean=2.129, term_bridge_mean=1.664
+beta=0.10: corr(penalty_total, crossing_density)=0.6448, hubs_mean=2.142, term_bridge_mean=1.671
+beta=0.20: corr(penalty_total, crossing_density)=0.6591, hubs_mean=2.155, term_bridge_mean=1.678
+beta=0.30: corr(penalty_total, crossing_density)=0.6727, hubs_mean=2.168, term_bridge_mean=1.684
+beta=0.40: corr(penalty_total, crossing_density)=0.6856, hubs_mean=2.181, term_bridge_mean=1.691
+beta=0.50: corr(penalty_total, crossing_density)=0.6980, hubs_mean=2.194, term_bridge_mean=1.698
+beta=0.60: corr(penalty_total, crossing_density)=0.7097, hubs_mean=2.207, term_bridge_mean=1.704
+beta=0.70: corr(penalty_total, crossing_density)=0.7208, hubs_mean=2.220, term_bridge_mean=1.711
+beta=0.80: corr(penalty_total, crossing_density)=0.7314, hubs_mean=2.233, term_bridge_mean=1.718
+beta=0.90: corr(penalty_total, crossing_density)=0.7416, hubs_mean=2.246, term_bridge_mean=1.725
+beta=1.00: corr(penalty_total, crossing_density)=0.7512, hubs_mean=2.259, term_bridge_mean=1.731
+beta=1.10: corr(penalty_total, crossing_density)=0.7603, hubs_mean=2.272, term_bridge_mean=1.738
+beta=1.20: corr(penalty_total, crossing_density)=0.7690, hubs_mean=2.284, term_bridge_mean=1.745
+beta=1.30: corr(penalty_total, crossing_density)=0.7773, hubs_mean=2.297, term_bridge_mean=1.752
+beta=1.40: corr(penalty_total, crossing_density)=0.7853, hubs_mean=2.310, term_bridge_mean=1.758
+beta=1.50: corr(penalty_total, crossing_density)=0.7928, hubs_mean=2.323, term_bridge_mean=1.765
+beta=1.60: corr(penalty_total, crossing_density)=0.8000, hubs_mean=2.336, term_bridge_mean=1.772
+beta=1.70: corr(penalty_total, crossing_density)=0.8068, hubs_mean=2.349, term_bridge_mean=1.778
+beta=1.80: corr(penalty_total, crossing_density)=0.8134, hubs_mean=2.362, term_bridge_mean=1.785
+beta=1.90: corr(penalty_total, crossing_density)=0.8196, hubs_mean=2.375, term_bridge_mean=1.792
+beta=2.00: corr(penalty_total, crossing_density)=0.8256, hubs_mean=2.388, term_bridge_mean=1.799
+beta=2.10: corr(penalty_total, crossing_density)=0.8313, hubs_mean=2.401, term_bridge_mean=1.805
+beta=2.20: corr(penalty_total, crossing_density)=0.8367, hubs_mean=2.414, term_bridge_mean=1.812
+beta=2.30: corr(penalty_total, crossing_density)=0.8419, hubs_mean=2.427, term_bridge_mean=1.819
+beta=2.40: corr(penalty_total, crossing_density)=0.8468, hubs_mean=2.440, term_bridge_mean=1.826
+beta=2.50: corr(penalty_total, crossing_density)=0.8516, hubs_mean=2.453, term_bridge_mean=1.832
+beta=2.60: corr(penalty_total, crossing_density)=0.8561, hubs_mean=2.466, term_bridge_mean=1.839
+beta=2.70: corr(penalty_total, crossing_density)=0.8605, hubs_mean=2.478, term_bridge_mean=1.846
+beta=2.80: corr(penalty_total, crossing_density)=0.8647, hubs_mean=2.491, term_bridge_mean=1.852
+beta=2.90: corr(penalty_total, crossing_density)=0.8686, hubs_mean=2.504, term_bridge_mean=1.859
+beta=3.00: corr(penalty_total, crossing_density)=0.8725, hubs_mean=2.517, term_bridge_mean=1.866
+
+# Summary (manual inspection recommended):
+# look for beta where corr stays high and means are moderate.

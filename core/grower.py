@@ -26,6 +26,10 @@ class GrowthParams:
     role_bonus_hub: float = 0.2   # надбавка к ветвлению для hubs
     role_penalty_terminator: float = -0.4 
     temperature: float = 1.0      # "температура" для софтмакса по χ
+    # --- CY-1: loopy-режим (R&D QSG v6.x) ---
+    allow_cycles: bool = False
+    max_extra_bonds: int = 0      # сколько "добавочных" рёбер максимум
+    p_extra_bond: float = 0.0     # вероятность попытки добавить каждую связь
 
 @dataclass
 class GrowthNode:
@@ -33,6 +37,60 @@ class GrowthNode:
     atom_index: int       # индекс в Molecule.atoms
     depth: int
     free_ports: int
+
+
+def _add_loopy_bonds(
+    mol: Any,
+    params: GrowthParams,
+    rng: np.random.Generator,
+) -> None:
+    """
+    CY-1: R&D-слой. Поверх уже выросшего дерева пытается добавить
+    до max_extra_bonds дополнительных связей между существующими узлами,
+    чтобы породить циклы.
+
+    Инвариант: если allow_cycles=False или max_extra_bonds<=0, ничего не делает.
+    """
+    if (
+        not params.allow_cycles
+        or params.max_extra_bonds <= 0
+        or params.p_extra_bond <= 0.0
+    ):
+        return
+
+    n_atoms = len(mol.atoms)
+    if n_atoms < 3:
+        return
+
+    adj = mol.adjacency_matrix()
+    candidate_pairs: list[Tuple[int, int]] = []
+    for i in range(n_atoms):
+        for j in range(i + 1, n_atoms):
+            if adj[i, j] == 0:
+                candidate_pairs.append((i, j))
+
+    if not candidate_pairs:
+        return
+
+    added = 0
+    attempts = 0
+    max_attempts = params.max_extra_bonds * 4
+
+    while (
+        added < params.max_extra_bonds
+        and attempts < max_attempts
+        and candidate_pairs
+    ):
+        attempts += 1
+        if rng.random() > params.p_extra_bond:
+            continue
+
+        idx = rng.integers(low=0, high=len(candidate_pairs))
+        i, j = candidate_pairs.pop(int(idx))
+
+        # Добавляем ребро i-j в mol (как и в основном grower-е).
+        mol.bonds.append((i, j))
+        added += 1
 
 def grow_molecule_christmas_tree(
     root_symbol: str,
@@ -159,8 +217,43 @@ def grow_molecule_christmas_tree(
                     ))
                 
             current_node.free_ports -= 1
-            
+
+    # CY-1: R&D-слой циклов (loopy overlay) — по умолчанию выключен.
+    _add_loopy_bonds(mol, params, rng)
+
     return mol
+
+
+def grow_molecule_loopy(
+    seed: str,
+    *,
+    params: Optional[GrowthParams] = None,
+    rng: Optional[np.random.Generator] = None,
+) -> Any:
+    """
+    CY-1: R&D-режим роста с циклами.
+
+    Если params is None, используется канонический loopy-режим
+    (близкий к конфигурации CY-1-A).
+    """
+    if rng is None:
+        rng = np.random.default_rng()
+
+    if params is None:
+        params = GrowthParams(
+            max_depth=4,
+            max_atoms=25,
+            p_continue_base=0.5,
+            chi_sensitivity=0.3,
+            role_bonus_hub=0.4,
+            role_penalty_terminator=-0.6,
+            temperature=1.0,
+            allow_cycles=True,
+            max_extra_bonds=3,
+            p_extra_bond=0.3,
+        )
+
+    return grow_molecule_christmas_tree(seed, params=params, rng=rng)
 
 def describe_molecule(mol: Any) -> str:
     """
@@ -220,4 +313,3 @@ def run_grower_demo():
         for i in range(2):
             mol = grow_molecule_christmas_tree(s, params)
             print(f"  Tree {i+1}: {describe_molecule(mol)}")
-

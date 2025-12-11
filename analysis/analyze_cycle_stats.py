@@ -23,6 +23,9 @@ def main(argv=None) -> None:
     )
     args = parser.parse_args(argv)
 
+    # QSG v5.0 baseline: деревьевый режим grower'а.
+    # Эти параметры считаются «зелёной зоной» и не меняются
+    # в рамках CY-1 R&D-экспериментов.
     seeds = ["Li", "Na", "K", "Be", "Mg", "Ca", "C", "N", "O", "Si", "P", "S"]
 
     if args.config:

@@ -1,0 +1,18 @@
+# Loopy FDM penalty summary (CY-1/step3)
+
+Hubs (C,N,Si,P): n=1600
+  C_norm_fdm: mean=0.1370, std=0.1009
+  C_norm_fdm_loopy: mean=0.2724, std=0.1857
+  penalty_factor: mean=1.9981, std=0.3352
+  cycle_load: mean=0.2293, std=0.1644
+
+Terminators/bridges rough set: n=3200
+  C_norm_fdm: mean=0.1592, std=0.1942
+  C_norm_fdm_loopy: mean=0.2512, std=0.2585
+  penalty_factor: mean=1.5062, std=0.5553
+  cycle_load: mean=0.1399, std=0.1819
+
+Correlation(penalty_factor, cycle_load) over loopy samples: r=0.6864
+Frac(penalty_factor > 1.1) = 0.652
+Frac(penalty_factor > 1.2) = 0.652
+Frac(penalty_factor > 1.5) = 0.613
