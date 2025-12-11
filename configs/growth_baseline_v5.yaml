@@ -1,0 +1,20 @@
+experiment_name: "growth_baseline_v5"
+version: "5.0"
+
+growth:
+  max_atoms: 25
+  max_depth: 4
+  p_continue_base: 0.8
+
+roles:
+  role_bonus_hub: 0.0
+  role_penalty_terminator: 0.0
+
+physics:
+  temperature: 1.0
+
+loops:
+  allow_cycles: false
+  max_extra_bonds: 0
+  p_extra_bond: 0.0
+

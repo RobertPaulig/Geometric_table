@@ -1,0 +1,20 @@
+experiment_name: "CY-1-B"
+version: "6.x"
+
+growth:
+  max_atoms: 25
+  max_depth: 4
+  p_continue_base: 0.9
+
+roles:
+  role_bonus_hub: 0.2
+  role_penalty_terminator: -0.6
+
+physics:
+  temperature: 1.0
+
+loops:
+  allow_cycles: true
+  max_extra_bonds: 3
+  p_extra_bond: 0.3
+

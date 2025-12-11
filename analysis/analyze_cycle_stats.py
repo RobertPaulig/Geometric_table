@@ -1,19 +1,36 @@
 from __future__ import annotations
 
 from pathlib import Path
+import argparse
 
 import numpy as np
 
 from core.grower import GrowthParams, grow_molecule_christmas_tree
 from core.complexity import compute_complexity_features
+from core.growth_config import load_growth_config
 
 
 RESULTS_DIR = Path("results")
 
 
-def main() -> None:
+def main(argv=None) -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--config",
+        type=str,
+        required=False,
+        help="Путь к YAML/JSON-конфигу роста (например, configs/growth_baseline_v5.yaml)",
+    )
+    args = parser.parse_args(argv)
+
     seeds = ["Li", "Na", "K", "Be", "Mg", "Ca", "C", "N", "O", "Si", "P", "S"]
-    params = GrowthParams(max_depth=4, max_atoms=25)
+
+    if args.config:
+        cfg = load_growth_config(args.config)
+        params = cfg.to_growth_params()
+    else:
+        params = GrowthParams(max_depth=4, max_atoms=25)
+
     num_runs = 1000
 
     RESULTS_DIR.mkdir(exist_ok=True)
@@ -45,4 +62,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
