@@ -711,6 +711,30 @@
   `--magic-config=...`, позволяющие загрузить кастомный `MagicSet` из YAML и
   активировать его для всех ядерных расчётов (через `core.nuclear_magic.set_magic_numbers`).
 
+## [THERMO-1] Введение термодинамического слоя (ThermoConfig)
+
+**Дата:** 2025-12-13  
+**Статус:** инфраструктура реализована  
+
+**Решение.**
+- Введён `core/thermo_config.py` с dataclass `ThermoConfig`, глобальным состоянием
+  `get_current_thermo_config` / `set_current_thermo_config` и загрузкой из YAML/JSON
+  через `load_thermo_config(path)`.
+- Поддержаны два режима конфигурирования:
+  1) отдельный thermo-конфиг (YAML/JSON);
+  2) секция `thermo:` внутри общего экспериментального YAML (growth/nuclear).
+- Добавлен модуль `analysis/thermo_cli.py` с helper-ами `apply_thermo_config_if_provided`
+  и `apply_thermo_from_args`, реализующими порядок разрешения:
+  defaults -> YAML -> CLI overrides.
+- Для обратной совместимости загрузчик ростового конфига (`core/growth_config.py`)
+  игнорирует top-level секцию `thermo:`, чтобы ростовые YAML могли содержать
+  термодинамику без поломки парсинга.
+
+**Инварианты.**
+- На этапе THERMO-1 термодинамический слой является инфраструктурой: поведение v5/v6
+  не меняется, couplings по умолчанию равны 0.0, а доменные модули ещё не используют
+  `ThermoConfig` в расчётах.
+
 ## [DATA-CLEAN-ROOT-1] Канонические CSV не должны жить в корне репозитория
 
 Решение:

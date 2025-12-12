@@ -48,7 +48,7 @@ class GrowthConfig:
                 merged.update(section_dict)
 
         for key, value in data.items():
-            if key not in ("growth", "roles", "physics", "loops"):
+            if key not in ("growth", "roles", "physics", "loops", "thermo"):
                 merged[key] = value
 
         return cls(**merged)
@@ -92,4 +92,3 @@ def load_growth_config(path: str | Path) -> GrowthConfig:
         raise ValueError(f"Конфиг {path} должен содержать объект верхнего уровня")
 
     return GrowthConfig.from_dict(data)
-
