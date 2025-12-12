@@ -14,8 +14,6 @@ def test_scan_cycles_vs_params_small() -> None:
         [
             "--config",
             "configs/growth_cy1a.yaml",
-            "--num-runs",
-            "20",
         ]
     )
     path = Path("results") / "cycle_param_scan.csv"
@@ -28,10 +26,7 @@ def test_scan_temperature_effects_small() -> None:
         [
             "--config",
             "configs/growth_cy1a.yaml",
-            "--num-runs",
-            "20",
         ]
     )
     path = Path("results") / "temperature_scan_growth.csv"
     assert path.exists()
-

@@ -71,3 +71,6 @@
   - добавить `requirements.txt` (PyYAML как runtime),
   - сделать `requirements-dev.txt` надстройкой над runtime,
   - обновить `pytest.ini` для регистрации `@pytest.mark.slow`.
+- [DEV-TESTS-3] Довести `pytest -q` до “содержательных” падений для роста:
+  - Molecule: восстановить совместимый API (nodes/depth) через shim в `core/geom_atoms.Molecule`,
+  - growth-сканы: синхронизировать тесты с текущим CLI (`tests/test_growth_scans_small.py`).

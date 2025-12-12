@@ -1351,6 +1351,48 @@ class Molecule:
     atoms: List[AtomGraph]
     bonds: List[Tuple[int, int]]
 
+    @property
+    def nodes(self):
+        """
+        Backward-compatibility shim for older code/tests.
+
+        New code should use `atoms` explicitly.
+        """
+        return self.atoms
+
+    @property
+    def depth(self) -> int:
+        """
+        Backward-compatibility shim.
+
+        Depth определяется как максимальная длина пути от "корня"
+        (первого атома) по списку связей bonds, если он есть.
+        Для пустых/одиночных молекул возвращает 0.
+        """
+        n = len(self.atoms)
+        if n <= 1:
+            return 0
+        if not self.bonds:
+            return 0
+
+        # Строим простую неориентированную смежность и считаем расстояния BFS.
+        adj: dict[int, list[int]] = {i: [] for i in range(n)}
+        for i, j in self.bonds:
+            if 0 <= i < n and 0 <= j < n:
+                adj[i].append(j)
+                adj[j].append(i)
+
+        visited = {0: 0}
+        queue: list[int] = [0]
+        while queue:
+            v = queue.pop(0)
+            for u in adj.get(v, []):
+                if u not in visited:
+                    visited[u] = visited[v] + 1
+                    queue.append(u)
+
+        return max(visited.values()) if visited else 0
+
     def adjacency_matrix(self) -> np.ndarray:
         """
         Build adjacency matrix of the molecule (NxN).
