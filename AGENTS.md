@@ -66,7 +66,11 @@ You are the **coding agent (Исполнитель)** for the project *Geometric
   `analysis/analyze_cycle_stats.py`, `analysis/calibrate_fdm_params.py`
   и `analysis/scan_cycles_vs_params.py` принимают `--config=...` для
   задания GrowthParams, но при запуске без этого параметра работают
-  строго в прежнем v5.0-бейзлайне.
+  строго в прежнем v5.0-бейзлайне. Топологические штрафы FDM
+  (`fdm_loopy`, `fdm_loopy_cross`) могут настраиваться только через
+  модуль `core/complexity_config.py` и соответствующие конфиги в
+  `configs/complexity_penalties_*.yaml` в рамках R&D-скриптов; базовый
+  FDM-режим v5.0 без явного указания конфигов не меняется.
 
 ## Формат ответов пользователю
 

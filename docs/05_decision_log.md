@@ -336,6 +336,40 @@
   а сеточный скрипт `analysis/scan_cycles_vs_params.py` использует
   конфиг как базовую точку для параметр-скана (при отсутствии конфига
   оба скрипта воспроизводят прежний деревьевый v5.0 baseline).
+
+## [ARCH-1/step3] Конфигурируемые топологические штрафы FDM
+
+**Решение.**
+
+- Введён модуль `core/complexity_config.py` с классами
+  `LoopyPenaltyConfig`, `CrossingPenaltyConfig`,
+  `ComplexityPenaltyConfig` и функциями
+  `get_current_penalties()`, `set_current_penalties(...)`,
+  `load_complexity_penalties(...)`, задающими параметры
+  топологических штрафов FDM (`alpha_cycle`, `alpha_load`,
+  `beta_cross`, `max_cross_n`) через конфиг.
+- Backends `"fdm_loopy"` и `"fdm_loopy_cross"` в
+  `core/complexity.py` теперь читают коэффициенты штрафа из
+  `ComplexityPenaltyConfig` (через `get_current_penalties()`),
+  а не из жёстко зашитых констант.
+- Добавлены конфиги `configs/complexity_penalties_default.yaml`
+  (совпадает с прежними значениями 0.3/1.0/1.0/8) и
+  `configs/complexity_penalties_soft.yaml` с более мягкими
+  штрафами для R\&D.
+- Скрипт `analysis/analyze_loopy_fdm_penalty.py` принимает
+  параметр `--complexity-config=...`, загружает конфиг штрафов
+  и применяет его через `set_current_penalties(...)` перед
+  расчётом FDM-сложностей.
+
+**Статус.**
+
+- При отсутствии вызова `set_current_penalties(...)` поведение
+  FDM-штрафов идентично прежним константам (0.3/1.0/1.0/8).
+  Базовый FDM-режим v5.0, зелёная зона и продакшн-цепочка не
+  зависят от новых конфигов.
+ - R\&D-скрипты CY-1 могут запускаться с различными профилями
+   топологических штрафов, указывая `--complexity-config`, без
+   правки ядра.
 =======
 ## [CY-1] Loopy-growth и первые режимы с циклами (QSG v6.x)
 

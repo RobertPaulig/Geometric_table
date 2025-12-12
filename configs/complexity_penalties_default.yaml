@@ -1,0 +1,8 @@
+loopy:
+  alpha_cycle: 0.3
+  alpha_load: 1.0
+
+crossing:
+  beta_cross: 1.0
+  max_cross_n: 8
+

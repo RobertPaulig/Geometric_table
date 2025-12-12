@@ -15,14 +15,7 @@ from .complexity_fdm import (
     Q_FDM_DEFAULT,
 )
 from core.crossing import estimate_crossing_number_circle
-
-# Насколько сильно наказываем циклы в FDM-R&D-режиме
-LOOPY_FDM_ALPHA_CYCLE = 0.3   # штраф за общее количество циклов
-LOOPY_FDM_ALPHA_LOAD = 1.0    # штраф за циклонагрузку на вершину
-
-# R&D: crossing-aware FDM penalty (используется только backend="fdm_loopy_cross")
-LOOPY_FDM_BETA_CROSS: float = 1.0  # базовый коэффициент β_cross для QSG v6.x
-LOOPY_FDM_MAX_CROSS_N: int = 8     # до какого n считаем crossing точно
+from core.complexity_config import get_current_penalties
 
 @dataclass
 class ComplexityDecomposition:
@@ -224,7 +217,10 @@ def compute_complexity_features_v2(
         cyclomatic = max(feats.cyclomatic, 0)
         n = max(feats.n, 1)
         cycle_load = cyclomatic / n
-        penalty = 1.0 + LOOPY_FDM_ALPHA_CYCLE * cyclomatic + LOOPY_FDM_ALPHA_LOAD * cycle_load
+        pen_cfg = get_current_penalties()
+        alpha_cycle = pen_cfg.loopy.alpha_cycle
+        alpha_load = pen_cfg.loopy.alpha_load
+        penalty = 1.0 + alpha_cycle * cyclomatic + alpha_load * cycle_load
         total_loopy = total_fdm * penalty
         return replace(feats, total=total_loopy)
 
@@ -237,19 +233,24 @@ def compute_complexity_features_v2(
         cycle_load = cyclomatic / float(n)
 
         # 2) цикловой штраф, как в 'fdm_loopy'
-        penalty_cycle = 1.0 + LOOPY_FDM_ALPHA_CYCLE * cyclomatic + LOOPY_FDM_ALPHA_LOAD * cycle_load
+        pen_cfg = get_current_penalties()
+        alpha_cycle = pen_cfg.loopy.alpha_cycle
+        alpha_load = pen_cfg.loopy.alpha_load
+        beta_cross = pen_cfg.crossing.beta_cross
+        max_cross_n = pen_cfg.crossing.max_cross_n
+        penalty_cycle = 1.0 + alpha_cycle * cyclomatic + alpha_load * cycle_load
 
         # 3) crossing-proxy: точный для малых n, proxy для больших
-        if n <= LOOPY_FDM_MAX_CROSS_N:
+        if n <= max_cross_n:
             crossing, _ = estimate_crossing_number_circle(
-                adj_matrix, max_exact_n=LOOPY_FDM_MAX_CROSS_N
+                adj_matrix, max_exact_n=max_cross_n
             )
             m = max(int(feats_fdm.m), 1)
             crossing_proxy = crossing / float(m)
         else:
             crossing_proxy = cycle_load
 
-        penalty_cross = 1.0 + LOOPY_FDM_BETA_CROSS * crossing_proxy
+        penalty_cross = 1.0 + beta_cross * crossing_proxy
         total_cross = float(total_fdm) * penalty_cycle * penalty_cross
         return replace(feats_fdm, total=total_cross)
 

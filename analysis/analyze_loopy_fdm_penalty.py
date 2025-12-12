@@ -8,6 +8,7 @@ analyze_loopy_fdm_penalty.py — CY-1/step3:
 import math
 from pathlib import Path
 from typing import Iterable, List
+import argparse
 
 import numpy as np
 import pandas as pd
@@ -15,6 +16,7 @@ import pandas as pd
 from core.grower import GrowthParams, grow_molecule_christmas_tree
 from core.complexity import compute_complexity_features, compute_complexity_features_v2
 from core.growth_config import load_growth_config
+from core.complexity_config import load_complexity_penalties, set_current_penalties
 
 
 RESULTS_DIR = Path("results")
@@ -131,7 +133,24 @@ def summarize_penalty(csv_paths: Iterable[Path]) -> None:
     print(f"Wrote {out_txt}")
 
 
-def main() -> None:
+def main(argv=None) -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--complexity-config",
+        type=str,
+        required=False,
+        help=(
+            "YAML/JSON-конфиг штрафов FDM (alpha_cycle, alpha_load, "
+            "beta_cross, max_cross_n); по умолчанию используются "
+            "дефолтные значения ядра."
+        ),
+    )
+    args = parser.parse_args(argv)
+
+    if args.complexity_config:
+        cfg_pen = load_complexity_penalties(args.complexity_config)
+        set_current_penalties(cfg_pen)
+
     cy1a_csv = run_loopy_fdm_stats("CY1A", make_params_cy1a())
     cy1b_csv = run_loopy_fdm_stats("CY1B", make_params_cy1b())
     summarize_penalty([cy1a_csv, cy1b_csv])
