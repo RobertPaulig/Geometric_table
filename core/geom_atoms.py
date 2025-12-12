@@ -235,22 +235,11 @@ class AtomGraph:
         else:
             return 5
 
-    def epsilon_spec(self) -> float:
-        """
-        Игрушечный спектральный параметр жёсткости/связности (λ1 Лапласиана).
-
-        Для R&D-целей используем простую прокси через среднюю степень вершины.
-        Более плотные графы считаются "жёстче".
-        """
-        n = max(self.nodes, 1)
-        avg_degree = 2.0 * float(self.edges) / float(n)
-        return float(1.0 / (1.0 + np.exp(-avg_degree + 2.0)))
-
     def effective_softness(self, thermo) -> float:
         """
         Legacy: coupling_softness<=0 -> softness из atoms_db.
         Physics: при coupling_softness>0 подмешиваем оценку мягкости
-        из (period, epsilon_spec).
+        из спектрального масштаба epsilon_spec и периода.
         """
         base = max(0.0, min(float(getattr(self, "softness", 0.0)), 0.95))
         c = max(0.0, min(float(getattr(thermo, "coupling_softness", 0.0)), 1.0))
@@ -259,12 +248,14 @@ class AtomGraph:
             return base
 
         eps = float(self.epsilon_spec())
-        per = int(self.period)
+        spec_soft = 1.0 / (1.0 + eps)
 
-        spec_soft = (per - 1) / (per + 1) * (1.0 / (1.0 + eps))
+        per = max(1.0, float(self.period))
+        per_factor = (per - 1.0) / (per + 1.0)
+        spec_soft = spec_soft * (0.5 + 0.5 * per_factor)
         spec_soft = max(0.0, min(float(spec_soft), 0.95))
 
-        return base * (1.0 - c) + spec_soft * c
+        return max(0.0, min(base * (1.0 - c) + spec_soft * c, 0.95))
 
     def cyclomatic_number(self) -> int:
         """

@@ -30,9 +30,12 @@ def compute_delta_F(
     """
     if args_deltaF is not None:
         return float(args_deltaF)
-    if coupling_delta_F <= 0.0:
-        return float(delta_F_base)
-    return float(delta_F_base) * float(temperature)
+
+    c = max(0.0, min(float(coupling_delta_F), 1.0))
+    T = max(float(temperature), 1e-9)
+
+    delta_phys = float(delta_F_base) * T
+    return float(delta_F_base) * (1.0 - c) + delta_phys * c
 
 
 def scan_isotope_bands(
