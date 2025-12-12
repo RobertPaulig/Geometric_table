@@ -6,8 +6,9 @@ from typing import Any, Dict, List, Tuple
 
 from analysis.nuclear_cli import apply_nuclear_config_if_provided
 from core.geom_atoms import compute_element_indices
-from core.nuclear_bands import default_N_corridor
-from core.nuclear_island import nuclear_functional, get_magic_numbers
+from core.nuclear_bands import make_default_corridor
+from core.nuclear_island import nuclear_functional
+from core.nuclear_magic import get_magic_numbers
 LIVING_HUBS = {"C", "N", "Si", "P", "Ge", "As"}
 DONORS = {"Li", "Na", "K", "Be", "Mg", "Ca", "Rb", "Sr"}
 
@@ -16,7 +17,7 @@ def compute_isotope_band(
     Z: int,
     delta_F: float = 5.0,
 ) -> Tuple[int, int, int]:
-    N_min_scan, N_max_scan = default_N_corridor(Z, factor=1.7)
+    N_min_scan, N_max_scan = make_default_corridor(Z, factor=1.7)
 
     F_min = float("inf")
     N_best = N_min_scan
@@ -50,7 +51,8 @@ def main(argv=None) -> None:
     args = parser.parse_args(argv)
 
     apply_nuclear_config_if_provided(args.nuclear_config)
-    _, magic_N = get_magic_numbers()
+    magic = get_magic_numbers()
+    magic_N = magic.N
     rows = compute_element_indices()
     delta_F = 5.0
 

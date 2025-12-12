@@ -6,7 +6,7 @@ from typing import Any, Dict, List
 
 from analysis.nuclear_cli import apply_nuclear_config_if_provided
 from core.geom_atoms import compute_element_indices
-from core.nuclear_bands import find_best_N_for_Z, default_N_corridor
+from core.nuclear_bands import find_best_N_for_Z, make_default_corridor
 
 
 def map_geom_to_valley(
@@ -33,7 +33,7 @@ def map_geom_to_valley(
             continue
 
         # Коридор по N: от симметричного N≈Z до умеренно нейтронобогатого
-        N_min, N_max = default_N_corridor(Z, factor=N_corridor_factor)
+        N_min, N_max = make_default_corridor(Z, factor=N_corridor_factor)
 
         N_best, F_min = find_best_N_for_Z(Z, N_min, N_max)
 

@@ -26,3 +26,5 @@ def test_element_indices_v4_schema() -> None:
     assert not df["D_index"].isna().any()
     assert not df["A_index"].isna().any()
 
+    roles = set(df["role"].astype(str).unique())
+    assert {"hub", "donor", "other"} & roles, "Roles column looks broken"

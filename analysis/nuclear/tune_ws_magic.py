@@ -5,7 +5,7 @@ import argparse
 import numpy as np
 
 from analysis.nuclear_cli import apply_nuclear_config_if_provided
-from core.nuclear_island import set_magic_mode
+from core.nuclear_magic import set_magic_mode
 from core.nuclear_spectrum_ws import collect_levels_ws
 
 

@@ -615,3 +615,72 @@
 - Путь по умолчанию всегда `PROJECT_ROOT/data/...` и `PROJECT_ROOT/results/...`.
 - При падении по отсутствию файла или колонок поднимается `MissingDataError`
   с понятным сообщением, а не молчаливый NaN.
+
+## [GROWTH-CLEAN-1] Единый reporting/RNG для growth-скриптов
+
+**Решение.**
+- Введён `analysis/growth/reporting.py` с хелпером `write_growth_txt(name, lines, header=None)`,
+  завязанным на `analysis.io_utils.results_path` и `write_text_result`.
+- Введён `analysis/growth/rng.py` с хелпером `make_rng(label, offset=0)` для детерминированного RNG.
+- Growth-скрипты переведены на эти хелперы: `analyze_cycle_stats.py`,
+  `analyze_loopy_modes.py`, `analyze_loopy_fdm_penalty.py`, `analyze_crossing_proxy.py`,
+  `scan_cycles_vs_params.py`, `scan_temperature_effects.py`, `fit_tree_capacity.py`,
+  `explore_loopy_cross_beta.py`.
+
+**Инварианты.**
+- Все growth-скрипты пишут текстовые отчёты только через `write_growth_txt`.
+- RNG внутри growth-стендов создаётся только через `make_rng(label)`;
+  ручные `np.random.default_rng(1234)` и глобальные `np.random.seed` не используются.
+
+## [NUC-CLEAN-1] Магические числа и N-коридоры
+
+**Решение.**
+- Введён `core/nuclear_magic.py` с неизменяемыми наборами magic-чисел `LEGACY_MAGIC` и `WS_MAGIC`
+  и единым интерфейсом `set_magic_mode(mode: str)` / `get_magic_numbers()`.
+- `core/nuclear_island.py` переведён на `core.nuclear_magic`: `shell_penalty` читает magic-числа
+  только через `get_magic_numbers()`, дефолтный режим задаётся `set_magic_mode("legacy")`.
+- В `core/nuclear_bands.py` добавлен хелпер `make_default_corridor(Z, factor=1.7, min_width=1)`
+  для стандартного диапазона `N` при поиске долины стабильности.
+- Nuclear-скрипты переведены на новые хелперы: `scan_valley.py`, `map_geom_to_valley.py`,
+  `geom_vs_ws_magic.py`, `geom_band_vs_ws_magic.py`, `nuclear_magic_cli.py`, `tune_ws_magic.py`.
+
+**Инварианты.**
+- Во всём проекте используется единый интерфейс `core.nuclear_magic.set_magic_mode` /
+  `get_magic_numbers` для выбора набора magic-чисел (legacy vs WS).
+- Любой поиск `N_best` по nuclear_functional использует helper `make_default_corridor(...)`
+  вместо захардкоженных формул `N_min = Z`, `N_max ≈ factor * Z`.
+
+## [TEST-2] Базовые smoke-тесты по доменам
+
+**Решение.**
+- Добавлены быстрые sanity-тесты, покрывающие ключевые домены:
+  - `tests/test_geom_schema.py` — проверка схемы `data/element_indices_v4.csv`
+    (обязательные колонки, отсутствие NaN в `Z/El/D_index/A_index`, базовая проверка `role`).
+  - `tests/test_scan_isotope_band_smoke.py` — смоук по `analysis.nuclear.scan_isotope_band`
+    на узком диапазоне Z, проверка структуры `data/geom_isotope_bands.csv`.
+  - `tests/test_growth_scans_small.py` (`@pytest.mark.slow`) — малые прогоны
+    `scan_cycles_vs_params` и `scan_temperature_effects` с проверкой наличия
+    соответствующих CSV в `results/`.
+
+**Инварианты.**
+- Тяжёлые R&D-прогоны помечаются `@pytest.mark.slow` и не должны входить в
+  дефолтный CI-набор.
+- Быстрые smoke-тесты обязаны проверять существование ключевых артефактов
+  (`geom_isotope_bands.csv`, `cycle_param_scan.csv`, `temperature_scan_growth.csv`)
+  и базовые свойства данных.
+
+## [DOC-1] Структура analysis/ и навигация
+
+**Решение.**
+- Добавлен документ `docs/analysis_structure.md` с обзором подпакетов
+  `analysis/growth/`, `analysis/nuclear/`, `analysis/geom/`, `analysis/dblock/`,
+  `analysis/spectral1d/` и перечислением ключевых скриптов и их артефактов.
+- Зафиксирован набор утилит верхнего уровня: `analysis/io_utils.py`,
+  `analysis/seeds.py`, `analysis/growth_cli.py`, `analysis/nuclear_cli.py`,
+  `analysis/cli_common.py`.
+
+**Инварианты.**
+- Любой новый analysis-скрипт должен быть вписан в структуру `analysis/`
+  (либо в существующий подпакет, либо с явным описанием в docs).
+- Основные точки входа для ростовых и ядерных стендов документируются
+  с указанием CLI-аргументов и выходных файлов.

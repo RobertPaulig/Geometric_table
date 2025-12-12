@@ -6,8 +6,8 @@ from typing import Dict, List, Tuple
 
 from analysis.nuclear_cli import apply_nuclear_config_if_provided
 from core.geom_atoms import compute_element_indices
-from core.nuclear_bands import find_best_N_for_Z, default_N_corridor
-from core.nuclear_island import get_magic_numbers
+from core.nuclear_bands import find_best_N_for_Z, make_default_corridor
+from core.nuclear_magic import get_magic_numbers
 
 # "Living hubs" in geom table
 LIVING_HUBS = {"C", "N", "Si", "P", "Ge", "As"}
@@ -33,7 +33,8 @@ def main(argv=None) -> None:
     args = parser.parse_args(argv)
 
     apply_nuclear_config_if_provided(args.nuclear_config)
-    _, magic_N = get_magic_numbers()
+    magic = get_magic_numbers()
+    magic_N = magic.N
     rows = compute_element_indices()
 
     records: List[Tuple[int, str, str, int, int, int]] = []
@@ -45,7 +46,7 @@ def main(argv=None) -> None:
         if Z < 2 or Z > 60:
             continue
 
-        N_min, N_max = default_N_corridor(Z, factor=1.7)
+        N_min, N_max = make_default_corridor(Z, factor=1.7)
         N_best, F_best = find_best_N_for_Z(Z, N_min, N_max)
 
         N_magic, dN = nearest_magic_N(N_best, list(magic_N))

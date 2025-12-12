@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 from scipy import stats
 
+from analysis.cli_common import script_banner
 from analysis.io_utils import (
     read_data_csv,
     ensure_results_dir,
@@ -160,15 +161,16 @@ def plot_correlations(df):
     print(f"[ANALYSIS-IO] Saved figure: {out_png}")
 
 def main():
-    # Load precomputed summary from scan_living_sectors
-    df = load_complexity_summary()
-    print(f"\nLoaded complexity_summary.csv ({len(df)} elements)")
-    
-    # Analyze correlations
-    analyze_correlations(df)
-    
-    # Plot
-    plot_correlations(df)
+    with script_banner("analyze_complexity_correlations"):
+        # Load precomputed summary from scan_living_sectors
+        df = load_complexity_summary()
+        print(f"\nLoaded complexity_summary.csv ({len(df)} elements)")
+
+        # Analyze correlations
+        analyze_correlations(df)
+
+        # Plot
+        plot_correlations(df)
 
 if __name__ == "__main__":
     main()

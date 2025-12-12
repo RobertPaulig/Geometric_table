@@ -5,55 +5,11 @@ from typing import List, Tuple
 import math
 
 from core.nuclear_config import get_current_nuclear_config
-
-
-# --- Magic numbers for protons / neutrons (incl. superheavy region) ---
-# Legacy (v0.2) lists used when spectral H_nuc is unavailable.
-MAGIC_Z_LEGACY = [2, 8, 20, 28, 50, 82, 114]
-MAGIC_N_LEGACY = [2, 8, 20, 28, 50, 82, 126, 184]
-
-USE_SPECTRAL_MAGIC_N: bool = False
-
-try:
-    from .nuclear_spectrum_ws import get_magic_numbers_ws_cached
-except ImportError:  # на всякий случай
-    get_magic_numbers_ws_cached = None  # type: ignore[assignment]
-
-MAGIC_Z = MAGIC_Z_LEGACY
-MAGIC_N = MAGIC_N_LEGACY
-
-
-def set_magic_mode(mode: str) -> None:
-    """
-    Выбрать набор нейтронных magic-чисел для shell_penalty.
-
-    mode = "legacy" — использовать MAGIC_N_LEGACY.
-    mode = "ws"     — использовать спектральные WS-числа, если доступны,
-                      иначе fallback к legacy.
-    """
-    global USE_SPECTRAL_MAGIC_N, MAGIC_Z, MAGIC_N
-
-    if mode == "ws" and get_magic_numbers_ws_cached is not None:
-        USE_SPECTRAL_MAGIC_N = True
-        MAGIC_Z = MAGIC_Z_LEGACY
-        MAGIC_N = get_magic_numbers_ws_cached()  # type: ignore[operator]
-    else:
-        USE_SPECTRAL_MAGIC_N = False
-        MAGIC_Z = MAGIC_Z_LEGACY
-        MAGIC_N = MAGIC_N_LEGACY
+from core.nuclear_magic import get_magic_numbers, set_magic_mode
 
 
 # дефолт: старый режим
 set_magic_mode("legacy")
-
-
-def get_magic_numbers() -> tuple[tuple[int, ...], tuple[int, ...]]:
-    """
-    Возвращает текущие списки MAGIC_Z, MAGIC_N в виде кортежей.
-
-    Используется analysis-слоем, чтобы не дублировать WS/legacy magic.
-    """
-    return tuple(MAGIC_Z), tuple(MAGIC_N)
 
 
 def _min_sq_distance(x: int, magic_list, sigma: float) -> float:
@@ -84,8 +40,9 @@ def shell_penalty(
 
     P_shell = P_p(Z) + P_n(N)
     """
-    Pp = _min_sq_distance(Z, MAGIC_Z, sigma_p)
-    Pn = _min_sq_distance(N, MAGIC_N, sigma_n)
+    magic = get_magic_numbers()
+    Pp = _min_sq_distance(Z, magic.Z, sigma_p)
+    Pn = _min_sq_distance(N, magic.N, sigma_n)
     return Pp + Pn
 
 

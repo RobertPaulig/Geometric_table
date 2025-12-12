@@ -4,8 +4,9 @@ import argparse
 import csv
 from typing import Any, Dict, List
 
+from analysis.cli_common import script_banner
 from core.geom_atoms import compute_element_indices
-from core.nuclear_bands import scan_isotope_band_for_Z
+from core.nuclear_bands import scan_isotope_band_for_Z, make_default_corridor
 from analysis.io_utils import data_path
 from analysis.nuclear_cli import apply_nuclear_config_if_provided
 
@@ -31,8 +32,7 @@ def scan_isotope_bands(
         if Z < Z_min or Z > Z_max:
             continue
 
-        N_min = Z
-        N_max = max(Z + 1, int(N_corridor_factor * Z))
+        N_min, N_max = make_default_corridor(Z, factor=N_corridor_factor)
 
         # базовый скан по F_nuc для данного Z
         band_points = scan_isotope_band_for_Z(Z, N_min, N_max)
@@ -160,15 +160,16 @@ def main(argv=None) -> None:
 
     apply_nuclear_config_if_provided(args.nuclear_config)
 
-    rows = save_isotope_bands_csv(
-        path="data/geom_isotope_bands.csv",
-        Z_min=args.z_min,
-        Z_max=args.z_max,
-        delta_F=5.0,
-        N_corridor_factor=1.8,
-    )
-    if rows:
-        print_band_summary(rows)
+    with script_banner("scan_isotope_band"):
+        rows = save_isotope_bands_csv(
+            path="data/geom_isotope_bands.csv",
+            Z_min=args.z_min,
+            Z_max=args.z_max,
+            delta_F=5.0,
+            N_corridor_factor=1.8,
+        )
+        if rows:
+            print_band_summary(rows)
 
 
 if __name__ == "__main__":
