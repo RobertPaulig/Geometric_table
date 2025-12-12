@@ -4,12 +4,24 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 from scipy import stats
 
+from analysis.io_utils import (
+    read_data_csv,
+    ensure_results_dir,
+)
+
 
 def load_complexity_summary() -> pd.DataFrame:
-    """Load precomputed complexity summary from scan_living_sectors."""
-    path = Path("data") / "complexity_summary.csv"
-    df = pd.read_csv(path)
-    return df
+    """
+    Load precomputed complexity summary from scan_living_sectors /
+    scan_living_sectors_segregated.
+
+    Ожидает data/complexity_summary.csv.
+    """
+    return read_data_csv(
+        "complexity_summary.csv",
+        required=True,
+        # expected_columns=["element", "role", "D", "A", "C_avg", "C_max"],
+    )
 
 def analyze_correlations(df):
     """Perform correlation analysis."""
@@ -55,8 +67,7 @@ def analyze_correlations(df):
     print(df.groupby("Role")[role_cols].mean())
     
     # Export statistics
-    results_dir = Path("results")
-    results_dir.mkdir(exist_ok=True)
+    results_dir = ensure_results_dir()
     stats_path = results_dir / "correlation_stats.txt"
     with stats_path.open("w", encoding="utf-8") as f:
         f.write("[CORRELATION STATISTICS]\n\n")
@@ -92,7 +103,7 @@ def analyze_correlations(df):
             df.groupby("Role")[role_cols].describe().to_string()
         )
 
-    print(f"Saved {stats_path}")
+    print(f"[ANALYSIS-IO] Saved stats: {stats_path}")
 
 def plot_correlations(df):
     """Generate correlation plots."""
@@ -134,11 +145,11 @@ def plot_correlations(df):
     ax.set_ylabel("Acceptor Index (A)")
     ax.set_title("D/A Plane colored by Complexity")
     ax.grid(True, alpha=0.3)
-    
+
     plt.tight_layout()
-    out_png = Path("results") / "correlation_plots.png"
-    plt.savefig(out_png)
-    print(f"Saved {out_png}")
+    out_png = ensure_results_dir() / "correlation_plots.png"
+    plt.savefig(out_png, dpi=150, bbox_inches="tight")
+    print(f"[ANALYSIS-IO] Saved figure: {out_png}")
 
 def main():
     # Load precomputed summary from scan_living_sectors

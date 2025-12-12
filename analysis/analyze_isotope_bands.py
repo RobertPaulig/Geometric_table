@@ -3,14 +3,21 @@ from __future__ import annotations
 import argparse
 import csv
 from collections import defaultdict
+from pathlib import Path
 from typing import Any, Dict, List
 
+from analysis.io_utils import data_path
 from analysis.nuclear_cli import apply_nuclear_config_if_provided
 
 
-def load_bands(path: str = "data/geom_isotope_bands.csv") -> List[Dict[str, Any]]:
+def load_bands(path: str | None = None) -> List[Dict[str, Any]]:
+    if path is None:
+        csv_path = data_path("geom_isotope_bands.csv")
+    else:
+        csv_path = Path(path)
+
     rows: List[Dict[str, Any]] = []
-    with open(path, newline="", encoding="utf-8") as f:
+    with csv_path.open(newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for r in reader:
             rows.append(r)

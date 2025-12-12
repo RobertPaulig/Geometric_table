@@ -2,32 +2,32 @@ FDM vs nuclear metrics (geom_nuclear_complexity_summary)
 ========================================================
 
 [GLOBAL]
-C_norm_fdm_mean vs band_width: Spearman r=0.3296, p=0.0807635, n=29
-C_norm_fdm_mean vs Nbest_over_Z: Spearman r=-0.4303, p=0.019822, n=29
-C_norm_fdm_mean vs neutron_excess: Spearman r=-0.4267, p=0.0209644, n=29
+C_norm_fdm_mean vs band_width: Spearman r=0.0922, p=0.634185, n=29
+C_norm_fdm_mean vs Nbest_over_Z: Spearman r=-0.3099, p=0.101823, n=29
+C_norm_fdm_mean vs neutron_excess: Spearman r=-0.4469, p=0.0150759, n=29
 
 [ROLE=terminator]
-C_norm_fdm_mean vs band_width: Spearman r=0.0374, p=0.936511, n=7
-C_norm_fdm_mean vs Nbest_over_Z: Spearman r=-0.3571, p=0.431611, n=7
-C_norm_fdm_mean vs neutron_excess: Spearman r=0.3424, p=0.452251, n=7
+C_norm_fdm_mean vs band_width: Spearman r=0.3152, p=0.491016, n=7
+C_norm_fdm_mean vs Nbest_over_Z: Spearman r=-0.1786, p=0.701658, n=7
+C_norm_fdm_mean vs neutron_excess: Spearman r=0.3819, p=0.397917, n=7
 
 [ROLE=bridge]
 C_norm_fdm_mean vs band_width: Spearman r=-0.5508, p=0.257369, n=6
-C_norm_fdm_mean vs Nbest_over_Z: Spearman r=0.8452, p=0.0341094, n=6
-C_norm_fdm_mean vs neutron_excess: Spearman r=-0.7714, p=0.0723965, n=6
+C_norm_fdm_mean vs Nbest_over_Z: Spearman r=0.2732, p=0.600355, n=6
+C_norm_fdm_mean vs neutron_excess: Spearman r=-0.7537, p=0.0835233, n=6
 
 [ROLE=hub]
-C_norm_fdm_mean vs band_width: Spearman r=0.5629, p=0.0232103, n=16
-C_norm_fdm_mean vs Nbest_over_Z: Spearman r=-0.1994, p=0.459041, n=16
-C_norm_fdm_mean vs neutron_excess: Spearman r=-0.3737, p=0.153906, n=16
+C_norm_fdm_mean vs band_width: Spearman r=0.0448, p=0.869017, n=16
+C_norm_fdm_mean vs Nbest_over_Z: Spearman r=-0.2784, p=0.296532, n=16
+C_norm_fdm_mean vs neutron_excess: Spearman r=-0.4089, p=0.115853, n=16
 
 [GROUP=d_block]
-C_norm_fdm_mean vs band_width: Spearman r=0.4082, p=0.363217, n=7
-C_norm_fdm_mean vs Nbest_over_Z: Spearman r=-0.0714, p=0.879048, n=7
+C_norm_fdm_mean vs band_width: Spearman r=-0.3744, p=0.408058, n=7
+C_norm_fdm_mean vs Nbest_over_Z: Spearman r=0.1071, p=0.819151, n=7
 C_norm_fdm_mean vs neutron_excess: Spearman r=0.3571, p=0.431611, n=7
 
 [GROUP=living_hubs]
-C_norm_fdm_mean vs band_width: Spearman r=-0.0870, p=0.86988, n=6
-C_norm_fdm_mean vs Nbest_over_Z: Spearman r=0.1429, p=0.787172, n=6
-C_norm_fdm_mean vs neutron_excess: Spearman r=-0.1429, p=0.787172, n=6
+C_norm_fdm_mean vs band_width: Spearman r=-0.1543, p=0.770382, n=6
+C_norm_fdm_mean vs Nbest_over_Z: Spearman r=-0.0857, p=0.871743, n=6
+C_norm_fdm_mean vs neutron_excess: Spearman r=-0.2571, p=0.622787, n=6
 

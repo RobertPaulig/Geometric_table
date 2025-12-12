@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import sys
+import pandas as pd
 from pathlib import Path
 
-import pandas as pd
+from analysis.io_utils import (
+    data_path,
+    write_text_result,
+)
 
 
 def _find_csv(base: Path, name: str) -> Path | None:
@@ -138,22 +142,31 @@ def main() -> None:
     df_all = load_data()
 
     # Save combined table
-    out_csv = Path("data") / "geom_nuclear_complexity_summary.csv"
+    out_csv = data_path("geom_nuclear_complexity_summary.csv")
     df_all.to_csv(out_csv, index=False)
 
     # Prepare text stats
-    out_txt_path = Path("results") / "geom_nuclear_complexity_stats.txt"
-    with out_txt_path.open("w", encoding="utf-8") as f:
-        out = f
-        summarize_group(df_all[df_all["role"] == "terminator"], "role=terminator", out)
-        summarize_group(df_all[df_all["role"] == "bridge"], "role=bridge", out)
-        summarize_group(df_all[df_all["role"] == "hub"], "role=hub", out)
-        summarize_group(df_all[df_all["role"] == "inert"], "role=inert", out)
-        summarize_group(df_all[df_all["is_d_block"]], "d_block", out)
-        summarize_group(df_all[df_all["is_living_hub"]], "living_hubs", out)
-        summarize_group(df_all[~df_all["is_living_hub"]], "non_living", out)
+    lines: list[str] = []
 
-    print(f"Wrote {out_csv} and {out_txt_path}")
+    def writeln(s: str = "") -> None:
+        lines.append(s + "\n")
+
+    from io import StringIO
+
+    buf = StringIO()
+    summarize_group(df_all[df_all["role"] == "terminator"], "role=terminator", buf)
+    summarize_group(df_all[df_all["role"] == "bridge"], "role=bridge", buf)
+    summarize_group(df_all[df_all["role"] == "hub"], "role=hub", buf)
+    summarize_group(df_all[df_all["role"] == "inert"], "role=inert", buf)
+    summarize_group(df_all[df_all["is_d_block"]], "d_block", buf)
+    summarize_group(df_all[df_all["is_living_hub"]], "living_hubs", buf)
+    summarize_group(df_all[~df_all["is_living_hub"]], "non_living", buf)
+
+    report = buf.getvalue()
+    out_txt_path = write_text_result(report, "geom_nuclear_complexity_stats.txt")
+
+    print(f"[ANALYSIS-IO] Saved complexity summary: {out_csv}")
+    print(f"[ANALYSIS-IO] Saved geom–nuclear stats to {out_txt_path}")
 
 
 if __name__ == "__main__":

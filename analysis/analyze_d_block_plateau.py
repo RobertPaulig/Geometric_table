@@ -3,10 +3,15 @@ from __future__ import annotations
 from pathlib import Path
 import pandas as pd
 
+from analysis.io_utils import read_data_csv
+
 
 def main() -> None:
-    path = Path("data") / "element_indices_with_dblock.csv"
-    df = pd.read_csv(path)
+    df = read_data_csv(
+        "element_indices_with_dblock.csv",
+        required=True,
+        # expected_columns=["Z", "symbol", "is_d_block"],
+    )
 
     d_block = df[(df["Z"] >= 21) & (df["Z"] <= 30)].copy()
     donors = df[df["role"] == "donor"]
