@@ -14,6 +14,7 @@ import numpy as np
 
 from core.grower import GrowthParams, grow_molecule_christmas_tree
 from core.complexity import compute_complexity_features
+from core.growth_config import load_growth_config
 
 
 RESULTS_DIR = Path("results")
@@ -61,32 +62,9 @@ def run_regime(name: str, params: GrowthParams, seeds: Iterable[str], num_runs: 
 def main() -> None:
     seeds = ["Li", "Na", "K", "Be", "Mg", "Ca", "C", "N", "O", "Si", "P", "S"]
 
-    # Режимы CY-1-A и CY-1-B выбраны из results/cycle_param_scan.csv
-    # как конфигурации с умеренной и более высокой долей циклов.
-    params_A = GrowthParams(
-        max_depth=4,
-        max_atoms=25,
-        p_continue_base=0.5,
-        chi_sensitivity=0.3,
-        role_bonus_hub=0.4,
-        role_penalty_terminator=-0.6,
-        temperature=1.0,
-        allow_cycles=True,
-        max_extra_bonds=3,
-        p_extra_bond=0.3,
-    )
-    params_B = GrowthParams(
-        max_depth=4,
-        max_atoms=25,
-        p_continue_base=0.9,
-        chi_sensitivity=0.3,
-        role_bonus_hub=0.2,
-        role_penalty_terminator=-0.6,
-        temperature=1.0,
-        allow_cycles=True,
-        max_extra_bonds=3,
-        p_extra_bond=0.3,
-    )
+    # Режимы CY-1-A и CY-1-B берутся из конфигов growth_cy1a/growth_cy1b.
+    params_A = load_growth_config("configs/growth_cy1a.yaml").to_growth_params()
+    params_B = load_growth_config("configs/growth_cy1b.yaml").to_growth_params()
 
     run_regime("CY1A", params_A, seeds)
     run_regime("CY1B", params_B, seeds)
@@ -94,4 +72,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

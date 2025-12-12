@@ -4,6 +4,7 @@ from collections import defaultdict
 from itertools import product
 from math import log2
 from pathlib import Path
+import argparse
 
 import numpy as np
 import pandas as pd
@@ -11,6 +12,7 @@ import pandas as pd
 from core.grower import GrowthParams, grow_molecule_christmas_tree
 from core.complexity import compute_complexity_features_v2
 from core.geom_atoms import get_atom
+from core.growth_config import load_growth_config
 import core.complexity_fdm as cfdm
 
 
@@ -63,10 +65,24 @@ def run_for_seed_with_params(
     return rows
 
 
-def main() -> None:
+def main(argv=None) -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--config",
+        type=str,
+        required=False,
+        help="Путь к YAML/JSON-конфигу роста (например, configs/growth_baseline_v5.yaml)",
+    )
+    args = parser.parse_args(argv)
+
     RESULTS_DIR.mkdir(exist_ok=True)
 
-    params = GrowthParams(max_depth=4, max_atoms=25)
+    if args.config:
+        cfg = load_growth_config(args.config)
+        params = cfg.to_growth_params()
+    else:
+        # v5.0 baseline: деревьевый режим роста
+        params = GrowthParams(max_depth=4, max_atoms=25)
     n_trials = 100
     seeds = ["Li", "Na", "K", "Be", "Mg", "Ca", "C", "N", "O", "Si", "P", "S"]
 

@@ -16,25 +16,26 @@ scan_cycles_vs_params.py — CY-1 / QSG v6.x R&D стенд циклов.
 from dataclasses import asdict
 from pathlib import Path
 from typing import Iterable, List, Tuple
+import argparse
 
 import numpy as np
 import pandas as pd
 
 from core.complexity import compute_complexity_features
 from core.grower import GrowthParams, grow_molecule_christmas_tree
+from core.growth_config import load_growth_config
 
 
 RESULTS_DIR = Path("results")
 
 
-def iter_param_grid() -> Iterable[Tuple[GrowthParams, dict]]:
+def iter_param_grid(base: GrowthParams) -> Iterable[Tuple[GrowthParams, dict]]:
     """
     Генерирует сетку параметров роста для CY-1.
 
-    Мы варьируем несколько параметров вокруг базового режима v5.0,
-    но не трогаем сами дефолтные значения GrowthParams.
+    Мы варьируем несколько параметров вокруг базового режима,
+    заданного base (по умолчанию v5.0), не меняя его напрямую.
     """
-    base = GrowthParams(max_depth=4, max_atoms=25)
 
     p_continue_values = [0.5, 0.7, 0.9]
     role_bonus_hub_values = [0.0, 0.2, 0.4]
@@ -129,7 +130,16 @@ def run_cycle_stats_for_params(
     }
 
 
-def main() -> None:
+def main(argv=None) -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--config",
+        type=str,
+        required=False,
+        help="Базовый YAML/JSON-конфиг роста для сетки (по умолчанию v5.0 baseline).",
+    )
+    args = parser.parse_args(argv)
+
     seeds = ["Li", "Na", "K", "Be", "Mg", "Ca", "C", "N", "O", "Si", "P", "S"]
     num_runs = 200  # R&D: достаточно для первого скана
 
@@ -137,8 +147,14 @@ def main() -> None:
 
     rng = np.random.default_rng(12345)
 
+    if args.config:
+        cfg = load_growth_config(args.config)
+        base_params = cfg.to_growth_params()
+    else:
+        base_params = GrowthParams(max_depth=4, max_atoms=25)
+
     rows = []
-    for params, meta in iter_param_grid():
+    for params, meta in iter_param_grid(base_params):
         stats = run_cycle_stats_for_params(seeds, params, num_runs, rng=rng)
         row = {
             **meta,
