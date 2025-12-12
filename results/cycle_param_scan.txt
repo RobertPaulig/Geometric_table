@@ -1,4 +1,5 @@
 # CY-1 / QSG v6.x — cycle_param_scan
+
 # Фильтр: frac_cycles in [0.1, 0.5], n_mean in [5, 30]
 
 No parameter regimes matched the filter.

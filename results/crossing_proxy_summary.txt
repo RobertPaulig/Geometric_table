@@ -1,24 +1,26 @@
+[CROSSING PROXY SUMMARY]
+
 # CY-1/step4: crossing-number vs proxy summary
 
-Total samples (n<=8): 2021
+Total samples (n<=8): 2083
 
-Global: n=2021
-  corr(crossing, cyclomatic) = 0.6035
-  corr(crossing_density, cycle_load) = 0.6405
-  corr(crossing, penalty_factor) = 0.6106
-  corr(crossing_density, penalty_factor) = 0.6298
+Global: n=2083
+  corr(crossing, cyclomatic) = 0.6146
+  corr(crossing_density, cycle_load) = 0.6659
+  corr(crossing, penalty_factor) = 0.6282
+  corr(crossing_density, penalty_factor) = 0.6452
 
-Hubs (C,N,Si,P): n=573
-  corr(crossing, cyclomatic) = 0.5197
-  corr(crossing_density, cycle_load) = 0.6414
-  corr(crossing, penalty_factor) = 0.5599
-  corr(crossing_density, penalty_factor) = 0.5940
+Hubs (C,N,Si,P): n=596
+  corr(crossing, cyclomatic) = 0.5251
+  corr(crossing_density, cycle_load) = 0.6595
+  corr(crossing, penalty_factor) = 0.5677
+  corr(crossing_density, penalty_factor) = 0.6063
 
-Terminators/bridges rough set: n=1448
-  corr(crossing, cyclomatic) = 0.6267
-  corr(crossing_density, cycle_load) = 0.6355
-  corr(crossing, penalty_factor) = 0.6235
-  corr(crossing_density, penalty_factor) = 0.6416
+Terminators/bridges rough set: n=1487
+  corr(crossing, cyclomatic) = 0.6349
+  corr(crossing_density, cycle_load) = 0.6603
+  corr(crossing, penalty_factor) = 0.6404
+  corr(crossing_density, penalty_factor) = 0.6530
 
 Frac(crossing>0 | cyclomatic=1) over loopy graphs: 0.000
-Frac(crossing>0 | cyclomatic=2) over loopy graphs: 0.008
+Frac(crossing>0 | cyclomatic=2) over loopy graphs: 0.012

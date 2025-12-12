@@ -10,6 +10,7 @@ from typing import Iterable, List
 import numpy as np
 import pandas as pd
 
+from analysis.growth.reporting import write_growth_txt
 from analysis.io_utils import results_path
 
 
@@ -65,9 +66,11 @@ def main() -> None:
     df = load_crossing_data()
     beta_grid = np.linspace(0.0, 3.0, 31)  # 0.0, 0.1, ..., 3.0
     lines = scan_beta_cross(df, beta_grid)
-    out_txt = results_path("loopy_cross_beta_scan.txt")
-    out_txt.write_text("\n".join(lines), encoding="utf-8")
-    print(f"Wrote {out_txt}")
+    write_growth_txt(
+        name="loopy_cross_beta_scan",
+        lines=lines,
+        header="[LOOPY CROSS BETA SCAN]",
+    )
 
 
 if __name__ == "__main__":

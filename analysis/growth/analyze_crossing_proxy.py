@@ -12,6 +12,8 @@ from typing import Iterable, List
 import numpy as np
 import pandas as pd
 
+from analysis.growth.reporting import write_growth_txt
+from analysis.growth.rng import make_rng
 from analysis.io_utils import results_path
 from analysis.seeds import GROWTH_SEEDS
 from core.grower import GrowthParams, grow_molecule_christmas_tree
@@ -37,7 +39,7 @@ def make_params_cy1b() -> GrowthParams:
 
 def _collect_for_mode(label: str, params: GrowthParams, num_runs: int = 300) -> Path:
     rows: List[dict] = []
-    rng = np.random.default_rng(2025)
+    rng = make_rng(f"analyze_crossing_proxy:{label}")
 
     for seed in SEEDS:
         for _ in range(num_runs):
@@ -134,9 +136,11 @@ def summarize_crossing(csv_paths: Iterable[Path]) -> None:
                 f"Frac(crossing>0 | cyclomatic={mu}) over loopy graphs: {frac:.3f}"
             )
 
-    out_txt = results_path("crossing_proxy_summary.txt")
-    out_txt.write_text("\n".join(lines), encoding="utf-8")
-    print(f"Wrote {out_txt}")
+    write_growth_txt(
+        name="crossing_proxy_summary",
+        lines=lines,
+        header="[CROSSING PROXY SUMMARY]",
+    )
 
 
 def main() -> None:

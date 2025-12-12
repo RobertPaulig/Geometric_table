@@ -13,6 +13,9 @@ from typing import Iterable, List
 import numpy as np
 import pandas as pd
 
+from analysis.growth.reporting import write_growth_txt
+from analysis.growth.rng import make_rng
+from analysis.io_utils import results_path
 from analysis.seeds import GROWTH_SEEDS
 from core.grower import GrowthParams, grow_molecule_christmas_tree
 from core.complexity import compute_complexity_features, compute_complexity_features_v2
@@ -20,7 +23,6 @@ from core.growth_config import load_growth_config
 from core.complexity_config import load_complexity_penalties, set_current_penalties
 
 
-RESULTS_DIR = Path("results")
 SEEDS = GROWTH_SEEDS
 
 
@@ -40,7 +42,7 @@ def make_params_cy1b() -> GrowthParams:
 
 def run_loopy_fdm_stats(label: str, params: GrowthParams, num_runs: int = 200) -> Path:
     rows: List[dict] = []
-    rng = np.random.default_rng(12345)
+    rng = make_rng(f"analyze_loopy_fdm_penalty:{label}")
 
     for seed in SEEDS:
         for _ in range(num_runs):
@@ -75,8 +77,7 @@ def run_loopy_fdm_stats(label: str, params: GrowthParams, num_runs: int = 200) -
                 }
             )
 
-    RESULTS_DIR.mkdir(exist_ok=True)
-    out_csv = RESULTS_DIR / f"loopy_fdm_penalty_{label}.csv"
+    out_csv = results_path(f"loopy_fdm_penalty_{label}.csv")
     pd.DataFrame(rows).to_csv(out_csv, index=False)
     return out_csv
 
@@ -129,9 +130,11 @@ def summarize_penalty(csv_paths: Iterable[Path]) -> None:
         frac = float((df_all["penalty_factor"] > thr).mean())
         lines.append(f"Frac(penalty_factor > {thr:.1f}) = {frac:.3f}")
 
-    out_txt = RESULTS_DIR / "loopy_fdm_penalty_summary.txt"
-    out_txt.write_text("\n".join(lines), encoding="utf-8")
-    print(f"Wrote {out_txt}")
+    write_growth_txt(
+        name="loopy_fdm_penalty",
+        lines=lines,
+        header="[LOOPY FDM PENALTY SUMMARY]",
+    )
 
 
 def main(argv=None) -> None:

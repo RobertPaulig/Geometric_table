@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from analysis.growth.reporting import write_growth_txt
 from analysis.io_utils import results_path
 
 
@@ -31,15 +32,23 @@ def main() -> None:
     alpha_v1 = float(np.sum(C1) / denom)
     alpha_fdm = float(np.sum(C2) / denom)
 
-    out_path = results_path("tree_capacity_fit.txt")
-    with out_path.open("w", encoding="utf-8") as f:
-        f.write("Tree capacity fit (C ~ alpha * n log(1+n))\n")
-        f.write("=========================================\n\n")
-        f.write(f"alpha_tree_v1  = {alpha_v1:.4f}\n")
-        f.write(f"alpha_tree_fdm = {alpha_fdm:.4f}\n")
-        f.write(f"n_mean range   = [{n.min():.2f}, {n.max():.2f}]\n")
-        f.write(f"max C1_mean    = {C1.max():.2f}\n")
-        f.write(f"max C2_mean    = {C2.max():.2f}\n")
+    header = (
+        "Tree capacity fit (C ~ alpha * n log(1+n))\n"
+        "========================================="
+    )
+    lines = [
+        f"alpha_tree_v1  = {alpha_v1:.4f}",
+        f"alpha_tree_fdm = {alpha_fdm:.4f}",
+        f"n_mean range   = [{n.min():.2f}, {n.max():.2f}]",
+        f"max C1_mean    = {C1.max():.2f}",
+        f"max C2_mean    = {C2.max():.2f}",
+    ]
+
+    out_path = write_growth_txt(
+        name="tree_capacity_fit",
+        lines=lines,
+        header=header,
+    )
 
     print(f"Wrote {out_path}")
 

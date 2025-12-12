@@ -4,8 +4,8 @@ import argparse
 import numpy as np
 
 from analysis.growth_cli import make_growth_params_from_config_path
+from analysis.growth.reporting import write_growth_txt
 from analysis.seeds import GROWTH_SEEDS
-from analysis.io_utils import results_path
 from core.grower import grow_molecule_christmas_tree
 from core.complexity import compute_complexity_features
 
@@ -48,9 +48,11 @@ def main(argv=None) -> None:
             f"max_cyclomatic={max_cyclomatic}"
         )
 
-    out = results_path("cycle_stats.txt")
-    out.write_text("\n".join(lines), encoding="utf-8")
-    print(f"Wrote {out}")
+    write_growth_txt(
+        name="cycle_stats",
+        lines=lines,
+        header="[CYCLE STATS]",
+    )
 
 
 if __name__ == "__main__":

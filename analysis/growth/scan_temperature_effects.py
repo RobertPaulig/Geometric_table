@@ -12,6 +12,8 @@ from typing import Dict, List
 import numpy as np
 import pandas as pd
 
+from analysis.growth.reporting import write_growth_txt
+from analysis.growth.rng import make_rng
 from analysis.growth_cli import make_growth_params_from_config_path
 from analysis.io_utils import results_path
 from analysis.seeds import GROWTH_SEEDS
@@ -42,7 +44,7 @@ def main(argv=None) -> None:
     T_grid = [0.5, 1.0, 2.0, 3.0]
     seeds = [s for s in GROWTH_SEEDS if s in ["C", "Si", "O", "S"]]
     num_runs = args.num_runs
-    rng = np.random.default_rng(123456)
+    rng = make_rng("scan_temperature_effects")
 
     rows: List[Dict] = []
 
@@ -95,11 +97,10 @@ def main(argv=None) -> None:
 
     df = pd.DataFrame(rows)
     csv_path = results_path("temperature_scan_growth.csv")
-    txt_path = results_path("temperature_scan_growth.txt")
     df.to_csv(csv_path, index=False)
 
     lines: List[str] = []
-    lines.append("# TEMP-1: temperature_scan_growth")
+    lines.append("TEMP-1: temperature_scan_growth")
     lines.append("")
 
     for seed in seeds:
@@ -116,8 +117,12 @@ def main(argv=None) -> None:
             )
         lines.append("")
 
-    txt_path.write_text("\n".join(lines), encoding="utf-8")
-    print(f"Wrote {csv_path} and {txt_path}")
+    write_growth_txt(
+        name="temperature_scan_growth",
+        lines=lines,
+        header="[TEMPERATURE SCAN GROWTH]",
+    )
+    print(f"Wrote {csv_path} and results/temperature_scan_growth.txt")
 
 
 if __name__ == "__main__":

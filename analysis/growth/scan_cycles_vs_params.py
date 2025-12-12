@@ -15,12 +15,13 @@ scan_cycles_vs_params.py — CY-1 / QSG v6.x R&D стенд циклов.
 
 import argparse
 from dataclasses import asdict
-from pathlib import Path
 from typing import Iterable, List, Tuple
 
 import numpy as np
 import pandas as pd
 
+from analysis.growth.reporting import write_growth_txt
+from analysis.growth.rng import make_rng
 from analysis.growth_cli import make_growth_params_from_config_path
 from analysis.io_utils import results_path
 from analysis.seeds import GROWTH_SEEDS
@@ -142,7 +143,7 @@ def main(argv=None) -> None:
     seeds = GROWTH_SEEDS
     num_runs = 200  # R&D: достаточно для первого скана
 
-    rng = np.random.default_rng(12345)
+    rng = make_rng("scan_cycles_vs_params")
     base_params = make_growth_params_from_config_path(args.config)
 
     rows = []
@@ -156,15 +157,14 @@ def main(argv=None) -> None:
 
     df = pd.DataFrame(rows)
     csv_path = results_path("cycle_param_scan.csv")
-    txt_path = results_path("cycle_param_scan.txt")
-
     df.to_csv(csv_path, index=False)
 
     # Краткий текстовый отчёт по интересным режимам:
     # берём точки, где есть заметная доля циклов и умеренный размер графа.
     lines = []
-    lines.append("# CY-1 / QSG v6.x — cycle_param_scan")
-    lines.append("# Фильтр: frac_cycles in [0.1, 0.5], n_mean in [5, 30]")
+    lines.append(
+        "# Фильтр: frac_cycles in [0.1, 0.5], n_mean in [5, 30]"
+    )
     lines.append("")
 
     mask = (
@@ -191,9 +191,13 @@ def main(argv=None) -> None:
                 )
             )
 
-    Path(txt_path).write_text("\n".join(lines), encoding="utf-8")
+    write_growth_txt(
+        name="cycle_param_scan",
+        lines=lines,
+        header="# CY-1 / QSG v6.x — cycle_param_scan",
+    )
 
-    print(f"Wrote {csv_path} and {txt_path}")
+    print(f"Wrote {csv_path} and results/cycle_param_scan.txt")
 
 
 if __name__ == "__main__":

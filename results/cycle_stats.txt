@@ -1,3 +1,5 @@
+[CYCLE STATS]
+
 Li: frac_trees=1.000, frac_cycles=0.000, max_cyclomatic=0
 Na: frac_trees=1.000, frac_cycles=0.000, max_cyclomatic=0
 K: frac_trees=1.000, frac_cycles=0.000, max_cyclomatic=0
