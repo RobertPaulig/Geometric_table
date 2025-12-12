@@ -25,6 +25,7 @@ class ThermoConfig:
     coupling_delta_F: float = 0.0
     coupling_complexity: float = 0.0
     coupling_softness: float = 0.0
+    coupling_density: float = 0.0
 
     experiment_name: str = "default_thermo"
 
@@ -71,6 +72,7 @@ def _strict_from_mapping(d: Mapping[str, Any]) -> ThermoConfig:
             d.get("coupling_complexity", base.coupling_complexity)
         ),
         coupling_softness=float(d.get("coupling_softness", base.coupling_softness)),
+        coupling_density=float(d.get("coupling_density", base.coupling_density)),
         experiment_name=str(d.get("experiment_name", base.experiment_name)),
     )
 
@@ -107,4 +109,3 @@ def override_thermo_config(tmp_cfg: ThermoConfig):
         yield
     finally:
         set_current_thermo_config(old_cfg)
-

@@ -54,6 +54,12 @@ def add_thermo_args(parser) -> None:
         default=None,
         help="Override coupling_softness.",
     )
+    parser.add_argument(
+        "--coupling-density",
+        type=float,
+        default=None,
+        help="Override coupling_density.",
+    )
 
 
 def apply_thermo_from_args(args, fallback_config_path: Optional[str] = None) -> None:
@@ -73,6 +79,7 @@ def apply_thermo_from_args(args, fallback_config_path: Optional[str] = None) -> 
         cfg = replace(cfg, coupling_complexity=float(args.coupling_complexity))
     if getattr(args, "coupling_softness", None) is not None:
         cfg = replace(cfg, coupling_softness=float(args.coupling_softness))
+    if getattr(args, "coupling_density", None) is not None:
+        cfg = replace(cfg, coupling_density=float(args.coupling_density))
 
     set_current_thermo_config(cfg)
-

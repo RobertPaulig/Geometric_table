@@ -9,6 +9,8 @@ import json
 import numpy as np
 from .fdm import IFS, FDMIntegrator, make_tensor_grid_ifs
 from .complexity import atom_complexity_from_adjacency, compute_complexity_features
+from core.density_models import beta_effective
+from core.thermo_config import get_current_thermo_config
 # We import grower inside the report function to avoid circular imports
 
 # ============================================================
@@ -54,13 +56,12 @@ def estimate_atom_energy_fdm(atom_z: int, e_port: float) -> float:
     Returns:
         Integral[ exp(-beta * r^2) ] (approx)
     """
-    # Heuristic: heavier atoms are more compact/stiff or have complex structure?
-    # In toy model: let's say beta grows with Z (stiffer core).
-    # beta = 0.5 + 0.05 * Z
-    
-    # Wait, usually heavier atoms are larger? 
-    # But inner core is tighter. Let's keep simple toy logic.
-    beta = 0.5 + 0.05 * atom_z
+    thermo = get_current_thermo_config()
+    beta = beta_effective(
+        atom_z,
+        getattr(thermo, "coupling_density", 0.0),
+        model="tf",
+    )
     
     dim = 3
     # Use standard tensor grid IFS for covering the space

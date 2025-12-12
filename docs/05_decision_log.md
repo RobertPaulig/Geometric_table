@@ -797,6 +797,38 @@
   связь между спектральной/периодной структурой атома и глобальным демпфром
   ветвления, не ломая интерфейс grower'а.
 
+## [DENSITY-1] Замена toy beta(Z) на физически мотивированную шкалу плотности (через coupling)
+
+**Контекст.**
+- В FDM-плотности (`estimate_atom_energy_fdm`) использовалась линейная toy-модель
+  `beta(Z) = 0.5 + 0.05 * Z`, слабо связанная с физическим масштабом радиуса/плотности
+  ядра/облака.
+
+**Решение.**
+- Введён модуль `core/density_models.py` с:
+  - `beta_legacy(Z)` — старая toy-модель;
+  - `beta_hydrogenic(Z)` / `beta_tf(Z)` — физически мотивированные шкалы
+    (грубые hydrogenic и Thomas–Fermi);
+  - `beta_effective(Z, coupling, model="tf")` — смешивание legacy и физической шкалы
+    по coupling∈[0,1].
+- В `ThermoConfig` добавлен параметр `coupling_density`, а в `analysis/thermo_cli`
+  появился CLI-override `--coupling-density`.
+- В `core/geom_atoms.py` функция `estimate_atom_energy_fdm` вместо захардкоженного
+  `beta = 0.5 + 0.05 * Z` теперь использует:
+
+      from core.thermo_config import get_current_thermo_config
+      from core.density_models import beta_effective
+
+      thermo = get_current_thermo_config()
+      beta = beta_effective(Z, thermo.coupling_density, model="tf")
+
+**Инварианты.**
+- При `coupling_density = 0.0` поведение совпадает с v5/v6, так как
+  `beta_effective(Z, 0) == beta_legacy(Z)`.
+- При `coupling_density > 0.0` экспериментальные режимы получают более физичную
+  зависимость масштаба beta(Z) от Z, оставаясь при этом в рамках Gaussian proxy
+  для плотности (`exp(-beta*r^2)`).
+
 ## [DATA-CLEAN-ROOT-1] Канонические CSV не должны жить в корне репозитория
 
 Решение:
