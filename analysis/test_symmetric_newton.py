@@ -16,8 +16,8 @@ def test_scalar_quadratic() -> None:
 
     res = symmetric_newton_1d(f, x0=1.0)
     root = res.x[0]
-    print("x^2 - 2 = 0:", res)
-    print("root ≈", root, "error =", abs(root - math.sqrt(2.0)))
+    err = abs(root - math.sqrt(2.0))
+    assert err < 1e-6
 
 
 def test_scalar_oscillatory() -> None:
@@ -25,7 +25,7 @@ def test_scalar_oscillatory() -> None:
         return math.sin(100.0 * x) + x
 
     res = symmetric_newton_1d(f, x0=0.1, h=1e-4)
-    print("sin(100x) + x = 0:", res)
+    assert abs(res.fun) < 1e-6
 
 
 def test_nd_system() -> None:
@@ -42,8 +42,9 @@ def test_nd_system() -> None:
         )
 
     res = symmetric_newton_nd(F, x0=[0.5, 0.5])
-    print("2D system:", res)
-    print("solution ≈", res.x)
+    x, y = res.x
+    assert abs(x - y) < 1e-6
+    assert abs(x**2 + y**2 - 1.0) < 1e-6
 
 
 def main() -> None:
@@ -54,4 +55,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
