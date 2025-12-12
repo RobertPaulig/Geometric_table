@@ -1,0 +1,12 @@
+R_max: 12.0
+N_grid: 220
+L_max: 5
+
+R0_values: [4.0, 5.0, 6.0, 7.0]
+a_values: [0.4, 0.7, 1.0]
+V0_values: [40.0, 55.0, 70.0]
+
+n_prefix: 40
+top_k_gaps: 10
+n_compare: 4
+

@@ -684,3 +684,31 @@
   (либо в существующий подпакет, либо с явным описанием в docs).
 - Основные точки входа для ростовых и ядерных стендов документируются
   с указанием CLI-аргументов и выходных файлов.
+
+## [NUC-TUNE-1] Нормализация тюнинга ядерных magic-чисел
+
+**Решение.**
+- Введён модуль `analysis/nuclear/tune_metrics.py` с общим набором целевых magic-чисел
+  `TARGET_MAGIC = [2, 8, 20, 28, 50, 82]` и метрикой `cost_magic_l2(...)` для оценки совпадения
+  toy magic с эталоном.
+- Скрипт `analysis/nuclear/tune_ws_magic.py`:
+  - переведён на общий `TARGET_MAGIC` и `cost_magic_l2(...)`;
+  - принимает опциональный `--ws-config` (YAML) для задания сеток по параметрам WS-потенциала;
+  - пишет полный результат скана в `results/ws_magic_tuning_results.csv` и краткий summary
+    в `results/ws_magic_tuning_summary.txt`.
+- Скрипт `analysis/nuclear/tune_nuclear_spectrum.py` использует тот же `TARGET_MAGIC` из
+  `tune_metrics`, сохраняя собственную относительную метрику `magic_cost(...)`.
+
+**Инварианты.**
+- Эталонный набор magic-чисел для тюнинга хранится в одном месте (`tune_metrics.TARGET_MAGIC`)
+  и используется в обоих tune-скриптах.
+- Формат вывода WS-тюнинга стандартизован: CSV с параметрами и списком magic_N плюс текстовый
+  summary с топ-строками по минимальному cost.
+
+Дополнение (R&D-цепочка).
+- Добавлен скрипт `analysis/nuclear/export_tuned_magic.py`, который читает
+  `results/ws_magic_tuning_results.csv` и экспортирует лучший набор `magic_N`
+  в YAML-конфиг `configs/nuclear_magic_ws_tuned.yaml` в формате `MagicSet` (Z/N).
+- CLI `analysis/nuclear_magic_cli.py` получил режим `--magic=custom` и флаг
+  `--magic-config=...`, позволяющие загрузить кастомный `MagicSet` из YAML и
+  активировать его для всех ядерных расчётов (через `core.nuclear_magic.set_magic_numbers`).

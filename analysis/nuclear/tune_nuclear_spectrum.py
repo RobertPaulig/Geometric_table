@@ -6,8 +6,7 @@ from typing import List, Tuple
 
 import numpy as np
 
-
-TARGET_MAGIC = [2, 8, 20, 28, 50, 82]
+from analysis.nuclear.tune_metrics import TARGET_MAGIC
 
 
 def build_radial_hamiltonian(
@@ -171,4 +170,3 @@ def scan_parameter_grid() -> None:
 
 if __name__ == "__main__":
     scan_parameter_grid()
-

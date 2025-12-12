@@ -16,6 +16,8 @@
 - `scan_valley.py` — линия valley of stability по nuclear_functional.
 - `geom_vs_ws_magic.py` — сравнение geom N_best с текущими magic-числами.
 - `geom_band_vs_ws_magic.py` — попадания magic N в полосы по `delta_F`.
+ - `tune_ws_magic.py` — тюнинг параметров WS-потенциала по совпадению magic-чисел.
+ - `tune_nuclear_spectrum.py` — 1D-игрушка для настройки ядерного спектра и magic-чисел.
 
 ## analysis/geom/
 - `analyze_geom_table.py` — базовый анализ таблицы элементов, `data/element_indices_v4.csv`.

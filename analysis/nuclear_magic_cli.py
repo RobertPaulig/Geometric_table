@@ -3,7 +3,12 @@ from __future__ import annotations
 import argparse
 
 from analysis.nuclear_cli import apply_nuclear_config_if_provided
-from core.nuclear_island import set_magic_mode, MAGIC_Z, MAGIC_N
+from core.nuclear_magic import (
+    get_magic_numbers,
+    load_magic_from_yaml,
+    set_magic_mode,
+    set_magic_numbers,
+)
 
 
 def main(argv=None) -> None:
@@ -22,9 +27,15 @@ def main(argv=None) -> None:
     parser.add_argument(
         "--magic",
         type=str,
-        choices=["legacy", "ws"],
+        choices=["legacy", "ws", "custom"],
         default="legacy",
-        help="Magic-number mode: legacy neutron magic vs WS spectral magic.",
+        help="Magic-number mode: legacy, ws, или custom (из YAML-конфига).",
+    )
+    parser.add_argument(
+        "--magic-config",
+        type=str,
+        default=None,
+        help="YAML с полями Z/N для режима --magic=custom.",
     )
     parser.add_argument(
         "--print-magic",
@@ -35,13 +46,20 @@ def main(argv=None) -> None:
     args = parser.parse_args(argv)
 
     apply_nuclear_config_if_provided(args.nuclear_config)
-    set_magic_mode(args.magic)
+
+    if args.magic == "custom":
+        if not args.magic_config:
+            raise SystemExit("--magic=custom требует --magic-config=path/to/magic.yaml")
+        magic = load_magic_from_yaml(args.magic_config)
+        set_magic_numbers(magic)
+    else:
+        set_magic_mode(args.magic)
+        magic = get_magic_numbers()
 
     if args.print_magic:
-        print(f"Proton magic numbers Z: {list(MAGIC_Z)}")
-        print(f"Neutron magic numbers N: {list(MAGIC_N)}")
+        print(f"Proton magic numbers Z: {list(magic.Z)}")
+        print(f"Neutron magic numbers N: {list(magic.N)}")
 
 
 if __name__ == "__main__":
     main()
-
