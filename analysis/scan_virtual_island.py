@@ -1,36 +1,43 @@
+import argparse
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import argparse
-from core.geom_atoms import (
-    AtomOverrideContext, PERIODIC_TABLE, get_atom, 
-    make_virtual_molecule, SPECTRAL_MODE_V4, SPECTRAL_MODE
-)
-import geom_atoms
 
-# Ensure V4 mode
-geom_atoms.SPECTRAL_MODE = geom_atoms.SPECTRAL_MODE_V4
+from analysis.io_utils import results_path
+from core import geom_atoms
+from core.geom_atoms import (
+    AtomOverrideContext,
+    PERIODIC_TABLE,
+    get_atom,
+    make_virtual_molecule,
+    SPECTRAL_MODE_V4,
+    AtomGraph,
+)
+
+# Ensure V4 spectral mode for virtual atoms
+geom_atoms.SPECTRAL_MODE = SPECTRAL_MODE_V4
+
 
 # Inject a dummy "X" into the table so AtomOverrideContext can find it
 if "X" not in PERIODIC_TABLE:
-    base_x = get_atom("B")  # copy B
-    # Create a new AtomGraph for X
-    from core.geom_atoms import AtomGraph
+    base_x = get_atom("B")  # copy B as template
     if base_x:
         atom_x = AtomGraph(
             name="X",
-            Z=5, # arbitrary
+            Z=5,  # arbitrary
             nodes=base_x.nodes,
             edges=base_x.edges,
             ports=base_x.ports,
             symmetry_score=base_x.symmetry_score,
             port_geometry=base_x.port_geometry,
-            role="hub", # Default to hub or copy from base_x? base_x is B (hub).
-            epsilon=base_x.epsilon
+            role="hub",
+            epsilon=base_x.epsilon,
         )
         PERIODIC_TABLE["X"] = atom_x
 
-def run_scan(p_min=1, p_max=4, eps_min=-6.0, eps_max=-0.1, n_eps=20):
+
+def run_scan(p_min: int = 1, p_max: int = 4, eps_min: float = -6.0, eps_max: float = -0.1, n_eps: int = 20) -> None:
     print("Starting Virtual Island Scan...")
     print(f"Parameters: p=[{p_min}, {p_max}], ε=[{eps_min:.2f}, {eps_max:.2f}], n_eps={n_eps}")
     
@@ -139,22 +146,30 @@ def run_scan(p_min=1, p_max=4, eps_min=-6.0, eps_max=-0.1, n_eps=20):
     axes[1].set_xticklabels(pivot_stab.columns)
     
     plt.colorbar(im1, ax=axes[1])
-    
+
     plt.tight_layout()
-    plt.savefig("virtual_island_scan.png")
-    print("Saved virtual_island_scan.png")
+    out_png = results_path("virtual_island_scan.png")
+    plt.savefig(out_png, dpi=200, bbox_inches="tight")
+    print(f"Saved {out_png}")
     
     island = df[df["Max_Abs_F"] < 20.0]
     print("\n[ISLAND OF STABILITY SUMMARY]")
     print(island.describe())
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Scan virtual atom stability island")
-    parser.add_argument("--p-min", type=int, default=1, help="Minimum ports")
-    parser.add_argument("--p-max", type=int, default=4, help="Maximum ports")
-    parser.add_argument("--eps-min", type=float, default=-6.0, help="Minimum epsilon")
-    parser.add_argument("--eps-max", type=float, default=-0.1, help="Maximum epsilon")
-    parser.add_argument("--n-eps", type=int, default=20, help="Number of epsilon steps")
-    args = parser.parse_args()
-    
+
+def main(argv=None) -> None:
+    parser = argparse.ArgumentParser(
+        description="Scan virtual atom stability island over (ports, epsilon)."
+    )
+    parser.add_argument("--p-min", type=int, default=1, help="Minimum ports.")
+    parser.add_argument("--p-max", type=int, default=4, help="Maximum ports.")
+    parser.add_argument("--eps-min", type=float, default=-6.0, help="Minimum epsilon.")
+    parser.add_argument("--eps-max", type=float, default=-0.1, help="Maximum epsilon.")
+    parser.add_argument("--n-eps", type=int, default=20, help="Number of epsilon steps.")
+    args = parser.parse_args(argv)
+
     run_scan(args.p_min, args.p_max, args.eps_min, args.eps_max, args.n_eps)
+
+
+if __name__ == "__main__":
+    main()

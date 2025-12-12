@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import argparse
+
 import numpy as np
 
 
@@ -127,13 +129,28 @@ def analyze_low_shells(
     print("\nToy low-N magic numbers (from largest early gaps):", toy_magic)
 
 
-def main():
+def main(argv=None) -> None:
+    parser = argparse.ArgumentParser(
+        description="Toy low-shell analysis for a simple radial well."
+    )
+    parser.add_argument("--R-max", type=float, default=12.0, help="Maximal radius.")
+    parser.add_argument("--R-well", type=float, default=5.0, help="Well radius.")
+    parser.add_argument("--V0", type=float, default=40.0, help="Well depth.")
+    parser.add_argument("--N-grid", type=int, default=220, help="Number of radial grid points.")
+    parser.add_argument("--L-max", type=int, default=5, help="Maximum orbital quantum number ℓ.")
+    parser.add_argument(
+        "--print-levels",
+        action="store_true",
+        help="If set, prints detailed level table (default behavior).",
+    )
+    args = parser.parse_args(argv)
+
     analyze_low_shells(
-        R_max=12.0,
-        R_well=5.0,
-        V0=40.0,
-        N_grid=220,
-        L_max=5,
+        R_max=args.R_max,
+        R_well=args.R_well,
+        V0=args.V0,
+        N_grid=args.N_grid,
+        L_max=args.L_max,
         levels_per_l=10,
         energy_cut=0.0,
         n_prefix=25,
@@ -143,4 +160,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

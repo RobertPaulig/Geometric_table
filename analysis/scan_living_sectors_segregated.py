@@ -1,15 +1,17 @@
+import argparse
 
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from pathlib import Path
-from core.geom_atoms import get_atom, SPECTRAL_MODE_V4, SPECTRAL_MODE, compute_element_indices
-import core.geom_atoms as geom_atoms
+
+from analysis.io_utils import data_path, results_path
+from core import geom_atoms
+from core.geom_atoms import SPECTRAL_MODE_V4
 from core.grower import GrowthParams, grow_molecule_christmas_tree
 from core.complexity import compute_complexity_features
 
 # Ensure V4 mode
-geom_atoms.SPECTRAL_MODE = geom_atoms.SPECTRAL_MODE_V4
+geom_atoms.SPECTRAL_MODE = SPECTRAL_MODE_V4
 
 # Define element sets
 DONORS = ["Li", "Na", "K", "Be", "Mg", "Ca"]
@@ -61,7 +63,7 @@ def run_scenario(scenario_name, element_pool, seeds, params, n_trials=50):
     
     return results
 
-def run_all_scenarios():
+def run_all_scenarios(n_trials: int = 50) -> None:
     params = GrowthParams(max_depth=4, max_atoms=25)
     
     all_results = []
@@ -71,7 +73,8 @@ def run_all_scenarios():
         "Donor-only",
         DONORS,
         DONORS,
-        params
+        params,
+        n_trials=n_trials,
     ))
     
     # Scenario 2: Acceptor-only
@@ -79,7 +82,8 @@ def run_all_scenarios():
         "Acceptor-only",
         ACCEPTORS,
         ACCEPTORS,
-        params
+        params,
+        n_trials=n_trials,
     ))
     
     # Scenario 3: Mixed (baseline)
@@ -88,18 +92,14 @@ def run_all_scenarios():
         "Mixed",
         MIXED,
         mixed_seeds,
-        params
+        params,
+        n_trials=n_trials,
     ))
     
     df = pd.DataFrame(all_results)
 
-    data_dir = Path("data")
-    results_dir = Path("results")
-    data_dir.mkdir(exist_ok=True)
-    results_dir.mkdir(exist_ok=True)
-
     # Export CSV into data/
-    out_csv = data_dir / "segregated_stats.csv"
+    out_csv = data_path("segregated_stats.csv")
     df.to_csv(out_csv, index=False)
     print(f"\nExported {out_csv}")
     
@@ -122,8 +122,8 @@ def run_all_scenarios():
         ax.grid(True, alpha=0.3)
     
     plt.tight_layout()
-    out_png = results_dir / "segregated_comparison.png"
-    plt.savefig(out_png)
+    out_png = results_path("segregated_comparison.png")
+    plt.savefig(out_png, dpi=150, bbox_inches="tight")
     print(f"Saved {out_png}")
     
     # Summary statistics
@@ -137,4 +137,14 @@ def run_segregated_scan() -> None:
 
 
 if __name__ == "__main__":
-    run_all_scenarios()
+    parser = argparse.ArgumentParser(
+        description="Scan living sectors in segregated donor/acceptor/mixed scenarios."
+    )
+    parser.add_argument(
+        "--trials",
+        type=int,
+        default=50,
+        help="Number of growth trials per seed in each scenario.",
+    )
+    args = parser.parse_args()
+    run_all_scenarios(n_trials=args.trials)

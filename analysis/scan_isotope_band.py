@@ -6,6 +6,7 @@ from typing import Any, Dict, List
 
 from core.geom_atoms import compute_element_indices
 from core.nuclear_bands import scan_isotope_band_for_Z
+from analysis.io_utils import data_path
 from analysis.nuclear_cli import apply_nuclear_config_if_provided
 
 
@@ -78,13 +79,15 @@ def scan_isotope_bands(
     return results
 
 
-def save_isotope_bands_csv(path: str = "data/geom_isotope_bands.csv", **kwargs) -> List[Dict[str, Any]]:
+def save_isotope_bands_csv(path: str | None = None, **kwargs) -> List[Dict[str, Any]]:
     rows = scan_isotope_bands(**kwargs)
     if not rows:
         print("No rows produced.")
         return rows
 
     fieldnames = list(rows[0].keys())
+    if path is None:
+        path = data_path("geom_isotope_bands.csv")
     with open(path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()

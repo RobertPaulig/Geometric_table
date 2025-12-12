@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import argparse
 from collections import defaultdict
-from typing import Dict, List, Any
+from typing import Any, Dict, List
 
-from scan_isotope_band import scan_isotope_bands
+from analysis.scan_isotope_band import scan_isotope_bands
 
 
 def to_float(row: Dict[str, Any], key: str, default: float = 0.0) -> float:
@@ -103,12 +104,33 @@ def run_for_deltaF(
     )
 
 
-def main() -> None:
-    # Набор порогов энергии для скана
-    deltas = [2.0, 3.0, 5.0, 8.0, 10.0]
+def main(argv=None) -> None:
+    parser = argparse.ArgumentParser(
+        description="Scan isotope band widths vs delta_F threshold."
+    )
+    parser.add_argument(
+        "--deltaF",
+        type=float,
+        nargs="*",
+        default=[2.0, 3.0, 5.0, 8.0, 10.0],
+        help="List of delta_F thresholds to scan.",
+    )
+    parser.add_argument(
+        "--Z-min",
+        type=int,
+        default=10,
+        help="Minimal Z to include in scan.",
+    )
+    parser.add_argument(
+        "--Z-max",
+        type=int,
+        default=40,
+        help="Maximal Z to include in scan.",
+    )
+    args = parser.parse_args(argv)
 
-    for dF in deltas:
-        run_for_deltaF(dF, Z_min=10, Z_max=40)
+    for dF in args.deltaF:
+        run_for_deltaF(dF, Z_min=args.Z_min, Z_max=args.Z_max)
 
 
 if __name__ == "__main__":

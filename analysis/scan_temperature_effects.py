@@ -7,28 +7,27 @@ scan_temperature_effects.py — TEMP-1:
 
 import argparse
 from dataclasses import replace
-from pathlib import Path
 from typing import Dict, List
 
 import numpy as np
 import pandas as pd
 
+from analysis.growth_cli import make_growth_params_from_config_path
+from analysis.io_utils import results_path
 from analysis.seeds import GROWTH_SEEDS
-from core.growth_config import load_growth_config
-from core.grower import grow_molecule_christmas_tree
 from core.complexity import compute_complexity_features, compute_complexity_features_v2
-
-
-RESULTS_DIR = Path("results")
+from core.grower import grow_molecule_christmas_tree
 
 
 def main(argv=None) -> None:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="TEMP-1: scan temperature effects on growth and cycles."
+    )
     parser.add_argument(
         "--config",
         type=str,
-        required=True,
-        help="Path to growth config (YAML/JSON) to use as baseline",
+        default=None,
+        help="Path to growth config YAML (CY-1-A/B, baseline, etc.).",
     )
     parser.add_argument(
         "--num-runs",
@@ -38,14 +37,11 @@ def main(argv=None) -> None:
     )
     args = parser.parse_args(argv)
 
-    base_cfg = load_growth_config(args.config)
-    base_params = base_cfg.to_growth_params()
+    base_params = make_growth_params_from_config_path(args.config)
 
     T_grid = [0.5, 1.0, 2.0, 3.0]
     seeds = [s for s in GROWTH_SEEDS if s in ["C", "Si", "O", "S"]]
     num_runs = args.num_runs
-
-    RESULTS_DIR.mkdir(exist_ok=True)
     rng = np.random.default_rng(123456)
 
     rows: List[Dict] = []
@@ -98,8 +94,8 @@ def main(argv=None) -> None:
             )
 
     df = pd.DataFrame(rows)
-    csv_path = RESULTS_DIR / "temperature_scan_growth.csv"
-    txt_path = RESULTS_DIR / "temperature_scan_growth.txt"
+    csv_path = results_path("temperature_scan_growth.csv")
+    txt_path = results_path("temperature_scan_growth.txt")
     df.to_csv(csv_path, index=False)
 
     lines: List[str] = []

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from pathlib import Path
+import argparse
 import csv
 
 import numpy as np
 
+from analysis.io_utils import results_path
 from core.spectral_lab_1d import (
     make_lattice_1d,
     build_H_1d,
@@ -12,9 +14,6 @@ from core.spectral_lab_1d import (
     potential_harmonic,
 )
 from core.f_levels_1d import compute_f_levels_from_spectrum, estimate_f_levels_fdm_naive
-
-
-RESULTS_DIR = Path("results")
 
 
 def weight_fn_gaussian(energies: np.ndarray) -> np.ndarray:
@@ -25,8 +24,20 @@ def weight_fn_gaussian(energies: np.ndarray) -> np.ndarray:
     return np.exp(-0.5 * (energies / sigma) ** 2)
 
 
-def main() -> None:
-    Ns = [100, 200, 400, 800]
+def main(argv=None) -> None:
+    parser = argparse.ArgumentParser(
+        description="Scan 1D spectral lab resolution vs F_levels FDM proxy."
+    )
+    parser.add_argument(
+        "--N",
+        type=int,
+        nargs="*",
+        default=[100, 200, 400, 800],
+        help="Grid sizes (number of points) to scan.",
+    )
+    args = parser.parse_args(argv)
+
+    Ns = args.N
     mass = 1.0
     x_min, x_max = -5.0, 5.0
 
@@ -57,9 +68,8 @@ def main() -> None:
 
         rows.append((n_points, f_spec, f_fdm, rel_error))
 
-    RESULTS_DIR.mkdir(exist_ok=True)
-    txt_path = RESULTS_DIR / "spectral_lab_1d_resolution.txt"
-    csv_path = RESULTS_DIR / "spectral_lab_1d_resolution.csv"
+    txt_path = results_path("spectral_lab_1d_resolution.txt")
+    csv_path = results_path("spectral_lab_1d_resolution.csv")
 
     lines = ["# N, F_spec, F_fdm, rel_error"]
     for n_points, f_spec, f_fdm, rel_error in rows:

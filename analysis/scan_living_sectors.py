@@ -1,18 +1,20 @@
+import argparse
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from math import log2
-from pathlib import Path
 
-from core.geom_atoms import get_atom, SPECTRAL_MODE_V4, SPECTRAL_MODE, compute_element_indices
-import core.geom_atoms as geom_atoms
+from analysis.io_utils import data_path, results_path
+from core import geom_atoms
+from core.geom_atoms import SPECTRAL_MODE_V4, compute_element_indices
 from core.grower import GrowthParams, grow_molecule_christmas_tree
 from core.complexity import compute_complexity_features, compute_complexity_features_v2
 
 # Ensure V4 mode
-geom_atoms.SPECTRAL_MODE = geom_atoms.SPECTRAL_MODE_V4
+geom_atoms.SPECTRAL_MODE = SPECTRAL_MODE_V4
 
-def run_living_sectors_scan():
+
+def run_living_sectors_scan(n_trials: int = 20) -> None:
     print("Starting Living Sectors Scan (Complexity vs D/A)...")
     
     # 1. Map existing elements to D/A
@@ -40,7 +42,6 @@ def run_living_sectors_scan():
     
     # Params
     params = GrowthParams(max_depth=4, max_atoms=25)
-    n_trials = 20
 
     results = []
 
@@ -147,9 +148,7 @@ def run_living_sectors_scan():
     print(df.sort_values("Max_Complexity", ascending=False).head(10))
 
     # Save complexity summary for downstream analysis
-    data_dir = Path("data")
-    data_dir.mkdir(exist_ok=True)
-    out_csv = data_dir / "complexity_summary.csv"
+    out_csv = data_path("complexity_summary.csv")
     df.to_csv(out_csv, index=False)
     print(f"Saved complexity summary to {out_csv}")
     
@@ -183,14 +182,25 @@ def run_living_sectors_scan():
     plt.xlabel("Donor Index D")
     plt.ylabel("Acceptor Index A")
     plt.grid(True, linestyle='--', alpha=0.5)
-    
-    # Highlight Sectors
-    # Donor Plateau: D ~ 0.2-0.3, A ~ 0
-    # Acceptor Plateau: A ~ 1.2, D ~ 0
-    # Amphoteric: A ~ 0.1, D ~ 0
-    
-    plt.savefig("living_sectors_scan.png")
-    print("Saved living_sectors_scan.png")
+
+    out_png = results_path("living_sectors_scan.png")
+    plt.savefig(out_png, dpi=150, bbox_inches="tight")
+    print(f"Saved {out_png}")
+
+
+def main(argv=None) -> None:
+    parser = argparse.ArgumentParser(
+        description="Scan living sectors: complexity vs D/A indices."
+    )
+    parser.add_argument(
+        "--trials",
+        type=int,
+        default=20,
+        help="Number of growth trials per element.",
+    )
+    args = parser.parse_args(argv)
+    run_living_sectors_scan(n_trials=args.trials)
+
 
 if __name__ == "__main__":
-    run_living_sectors_scan()
+    main()
