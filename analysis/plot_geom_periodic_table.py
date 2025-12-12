@@ -5,13 +5,11 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import pandas as pd
 
+from analysis.io_utils import results_path
+
 
 def main() -> None:
-    base = Path(".")
-    results_dir = base / "results"
-    results_dir.mkdir(exist_ok=True)
-
-    csv_path = results_dir / "geom_periodic_table_v1.csv"
+    csv_path = results_path("geom_periodic_table_v1.csv")
     if not csv_path.exists():
         raise SystemExit(
             "geom_periodic_table_v1.csv not found in results/. "
@@ -85,11 +83,10 @@ def main() -> None:
     ax.set_ylabel("period")
     fig.tight_layout()
 
-    out_path = results_dir / "geom_periodic_table_v1.png"
+    out_path = results_path("geom_periodic_table_v1.png")
     fig.savefig(out_path, dpi=200)
     print(f"Saved {out_path}")
 
 
 if __name__ == "__main__":
     main()
-

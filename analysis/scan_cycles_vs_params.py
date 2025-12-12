@@ -22,12 +22,10 @@ import numpy as np
 import pandas as pd
 
 from analysis.growth_cli import make_growth_params_from_config_path
+from analysis.io_utils import results_path
 from analysis.seeds import GROWTH_SEEDS
 from core.complexity import compute_complexity_features
 from core.grower import GrowthParams, grow_molecule_christmas_tree
-
-
-RESULTS_DIR = Path("results")
 
 
 def iter_param_grid(base: GrowthParams) -> Iterable[Tuple[GrowthParams, dict]]:
@@ -144,8 +142,6 @@ def main(argv=None) -> None:
     seeds = GROWTH_SEEDS
     num_runs = 200  # R&D: достаточно для первого скана
 
-    RESULTS_DIR.mkdir(exist_ok=True)
-
     rng = np.random.default_rng(12345)
     base_params = make_growth_params_from_config_path(args.config)
 
@@ -159,8 +155,8 @@ def main(argv=None) -> None:
         rows.append(row)
 
     df = pd.DataFrame(rows)
-    csv_path = RESULTS_DIR / "cycle_param_scan.csv"
-    txt_path = RESULTS_DIR / "cycle_param_scan.txt"
+    csv_path = results_path("cycle_param_scan.csv")
+    txt_path = results_path("cycle_param_scan.txt")
 
     df.to_csv(csv_path, index=False)
 

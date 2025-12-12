@@ -9,6 +9,7 @@ try:
 except ImportError:
     MATPLOTLIB_AVAILABLE = False
 
+from analysis.io_utils import data_path, results_path
 from core.geom_atoms import compute_element_indices, PERIODIC_TABLE
 
 def get_element_indices():
@@ -87,28 +88,31 @@ def analyze_DA_plateaus():
     
     print("") # spacer
 
-def dump_element_indices_to_csv(path: str = "element_indices_v4.csv"):
+def dump_element_indices_to_csv(path: str | None = None):
     """
     Сохраняет таблицу индексов (Z,El,role,period,chi_spec,E_port,D_index,A_index)
     в CSV с заголовком. Разделитель — запятая, кодировка UTF-8.
     """
+    if path is None:
+        path = data_path("element_indices_v4.csv")
+
     indices = get_element_indices()
     # Sort by Z
     indices.sort(key=lambda x: x['Z'])
-    
+
     headers = ["Z", "El", "role", "period", "chi_spec", "E_port", "D_index", "A_index"]
-    
+
     try:
         with open(path, mode='w', newline='', encoding='utf-8') as f:
             writer = csv.DictWriter(f, fieldnames=headers, extrasaction='ignore')
             writer.writeheader()
             for row in indices:
                 writer.writerow(row)
-        print(f"Successfully saved CSV to: {os.path.abspath(path)}")
+        print(f"Successfully saved CSV to: {os.path.abspath(str(path))}")
     except Exception as e:
         print(f"Error saving CSV: {e}")
 
-def plot_DA_scatter(outfile: str = "DA_scatter.png"):
+def plot_DA_scatter(outfile: str | None = None):
     """
     Рисует диаграмму рассеяния D_index vs A_index для Z=1..18,
     подписи — символы элементов. Цвет можно кодировать по роли (role).
@@ -154,9 +158,12 @@ def plot_DA_scatter(outfile: str = "DA_scatter.png"):
                        for r, c in role_color_map.items()]
     plt.legend(handles=legend_elements, title="Role")
     
+    if outfile is None:
+        outfile = results_path("DA_scatter.png")
+
     try:
         plt.savefig(outfile, dpi=150)
-        print(f"Successfully saved scatter plot to: {os.path.abspath(outfile)}")
+        print(f"Successfully saved scatter plot to: {os.path.abspath(str(outfile))}")
     except Exception as e:
         print(f"Error saving plot: {e}")
     finally:

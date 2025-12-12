@@ -10,7 +10,7 @@ def main() -> None:
     df = read_data_csv(
         "element_indices_with_dblock.csv",
         required=True,
-        # expected_columns=["Z", "symbol", "is_d_block"],
+        expected_columns=["Z", "El", "role", "chi_spec", "D_index", "A_index"],
     )
 
     d_block = df[(df["Z"] >= 21) & (df["Z"] <= 30)].copy()

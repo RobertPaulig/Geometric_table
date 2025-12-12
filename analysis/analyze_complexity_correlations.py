@@ -20,7 +20,15 @@ def load_complexity_summary() -> pd.DataFrame:
     return read_data_csv(
         "complexity_summary.csv",
         required=True,
-        # expected_columns=["element", "role", "D", "A", "C_avg", "C_max"],
+        expected_columns=[
+            "Element",
+            "Role",
+            "D",
+            "A",
+            "Avg_Complexity",
+            "Max_Complexity",
+            "Avg_Size",
+        ],
     )
 
 def analyze_correlations(df):

@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 import numpy as np
 
+from analysis.io_utils import results_path
 from core.spectral_lab_1d import (
     make_lattice_1d,
     build_H_1d,
@@ -15,9 +14,6 @@ from core.spectral_hardness_1d import (
     chi_avg_k,
     chi_tail_power,
 )
-
-
-RESULTS_DIR = Path("results")
 
 
 def weight_fn_gaussian(energies: np.ndarray) -> np.ndarray:
@@ -74,9 +70,8 @@ def main() -> None:
             )
         )
 
-    RESULTS_DIR.mkdir(exist_ok=True)
-    txt_path = RESULTS_DIR / "toy_chi_spec_1d_harmonic.txt"
-    csv_path = RESULTS_DIR / "toy_chi_spec_1d_harmonic.csv"
+    txt_path = results_path("toy_chi_spec_1d_harmonic.txt")
+    csv_path = results_path("toy_chi_spec_1d_harmonic.csv")
 
     # Текстовый отчёт
     lines = []
@@ -125,4 +120,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

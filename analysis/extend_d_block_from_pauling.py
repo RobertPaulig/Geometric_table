@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 import pandas as pd
 
+from analysis.io_utils import data_path, ensure_data_dir
+
 # Pauling electronegativities for first-row d-block (approximate)
 PAULING_D_BLOCK = {
     21: ("Sc", 1.36),
@@ -51,7 +53,7 @@ def classify_role(d_index: float, a_index: float) -> str:
 
 def main(indices_path: str | None = None) -> None:
     if indices_path is None:
-        indices_path = "data/element_indices_v4.csv"
+        indices_path = data_path("element_indices_v4.csv")
     df = pd.read_csv(indices_path)
 
     rows = []
@@ -76,7 +78,8 @@ def main(indices_path: str | None = None) -> None:
     df_no_d = df[~df["Z"].isin(df_d["Z"])]
     df_all = pd.concat([df_no_d, df_d], ignore_index=True).sort_values("Z")
 
-    out_path = Path("data") / "element_indices_with_dblock.csv"
+    ensure_data_dir()
+    out_path = data_path("element_indices_with_dblock.csv")
     df_all.to_csv(out_path, index=False)
 
     print(f"Saved extended table with d-block to {out_path}\n")

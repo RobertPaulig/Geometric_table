@@ -7,18 +7,15 @@ analyze_loopy_modes.py — CY-1/step2: анализ режимов loopy-growth.
 для двух эталонных режимов CY-1-A и CY-1-B.
 """
 
-from pathlib import Path
 from typing import Iterable, List
 
 import numpy as np
 
+from analysis.io_utils import results_path
 from core.grower import GrowthParams, grow_molecule_christmas_tree
 from analysis.seeds import GROWTH_SEEDS
 from core.complexity import compute_complexity_features
 from core.growth_config import load_growth_config
-
-
-RESULTS_DIR = Path("results")
 
 
 def run_regime(name: str, params: GrowthParams, seeds: Iterable[str], num_runs: int = 500) -> None:
@@ -54,8 +51,7 @@ def run_regime(name: str, params: GrowthParams, seeds: Iterable[str], num_runs: 
             f"cycle_load_mean={cycle_load_mean:.3f}"
         )
 
-    RESULTS_DIR.mkdir(exist_ok=True)
-    out_path = RESULTS_DIR / f"loopy_modes_{name}.txt"
+    out_path = results_path(f"loopy_modes_{name}.txt")
     out_path.write_text("\n".join(lines), encoding="utf-8")
     print(f"Wrote {out_path}")
 

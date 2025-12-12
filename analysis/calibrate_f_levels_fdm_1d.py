@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 import numpy as np
 
+from analysis.io_utils import results_path
 from core.spectral_lab_1d import (
     make_lattice_1d,
     build_H_1d,
@@ -14,9 +13,6 @@ from core.f_levels_1d import (
     compute_f_levels_from_spectrum,
     estimate_f_levels_fdm_naive,
 )
-
-
-RESULTS_DIR = Path("results")
 
 
 def weight_fn_gaussian(energies: np.ndarray) -> np.ndarray:
@@ -69,8 +65,7 @@ def main() -> None:
     mse = float(np.mean(residuals**2))
     rmse = float(np.sqrt(mse))
 
-    RESULTS_DIR.mkdir(exist_ok=True)
-    out_path = RESULTS_DIR / "f_levels_fdm_1d_calibration.txt"
+    out_path = results_path("f_levels_fdm_1d_calibration.txt")
     with out_path.open("w", encoding="utf-8") as f:
         f.write("Calibration of linear FDM proxy for F_levels (1D harmonic potential)\n")
         f.write("===============================================================\n\n")
@@ -93,4 +88,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

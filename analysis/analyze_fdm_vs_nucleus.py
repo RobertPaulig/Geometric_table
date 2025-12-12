@@ -16,6 +16,7 @@ def main() -> None:
         df = read_data_csv(
             "geom_nuclear_complexity_summary.csv",
             required=True,
+            expected_columns=["Z", "symbol", "C_norm_fdm_mean"],
         )
     except MissingDataError as e:
         raise SystemExit(str(e))

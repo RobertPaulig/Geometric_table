@@ -1,17 +1,13 @@
 from __future__ import annotations
 
-from math import log1p
-from pathlib import Path
-
 import numpy as np
 import pandas as pd
 
-
-RESULTS_DIR = Path("results")
+from analysis.io_utils import results_path
 
 
 def main() -> None:
-    stats_path = RESULTS_DIR / "tree_growth_law_fdm_stats.txt"
+    stats_path = results_path("tree_growth_law_fdm_stats.txt")
     if not stats_path.exists():
         raise SystemExit(
             f"{stats_path} not found. Run analysis.test_tree_growth_law_fdm first."
@@ -35,7 +31,7 @@ def main() -> None:
     alpha_v1 = float(np.sum(C1) / denom)
     alpha_fdm = float(np.sum(C2) / denom)
 
-    out_path = RESULTS_DIR / "tree_capacity_fit.txt"
+    out_path = results_path("tree_capacity_fit.txt")
     with out_path.open("w", encoding="utf-8") as f:
         f.write("Tree capacity fit (C ~ alpha * n log(1+n))\n")
         f.write("=========================================\n\n")

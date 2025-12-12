@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 import numpy as np
 
+from analysis.io_utils import results_path
 from core.spectral_lab_1d import (
     make_lattice_1d,
     build_H_1d,
@@ -16,9 +15,6 @@ from core.f_levels_1d import (
     estimate_f_levels_fdm_naive,
     estimate_f_levels_fdm_linear,
 )
-
-
-RESULTS_DIR = Path("results")
 
 
 def weight_fn_gaussian(energies: np.ndarray) -> np.ndarray:
@@ -92,9 +88,8 @@ def main() -> None:
                 )
             )
 
-    RESULTS_DIR.mkdir(exist_ok=True)
-    txt_path = RESULTS_DIR / "f_levels_fdm_variants_1d.txt"
-    csv_path = RESULTS_DIR / "f_levels_fdm_variants_1d.csv"
+    txt_path = results_path("f_levels_fdm_variants_1d.txt")
+    csv_path = results_path("f_levels_fdm_variants_1d.csv")
 
     lines = []
     lines.append(
@@ -145,4 +140,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

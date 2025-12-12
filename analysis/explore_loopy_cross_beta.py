@@ -5,20 +5,18 @@ explore_loopy_cross_beta.py — CY-1/step5:
 скан по β_cross для crossing-aware штрафа поверх уже посчитанных proxy.
 """
 
-from pathlib import Path
 from typing import Iterable, List
 
 import numpy as np
 import pandas as pd
 
-
-RESULTS_DIR = Path("results")
+from analysis.io_utils import results_path
 
 
 def load_crossing_data() -> pd.DataFrame:
     paths = [
-        RESULTS_DIR / "crossing_proxy_CY1A.csv",
-        RESULTS_DIR / "crossing_proxy_CY1B.csv",
+        results_path("crossing_proxy_CY1A.csv"),
+        results_path("crossing_proxy_CY1B.csv"),
     ]
     frames: List[pd.DataFrame] = []
     for p in paths:
@@ -67,11 +65,10 @@ def main() -> None:
     df = load_crossing_data()
     beta_grid = np.linspace(0.0, 3.0, 31)  # 0.0, 0.1, ..., 3.0
     lines = scan_beta_cross(df, beta_grid)
-    out_txt = RESULTS_DIR / "loopy_cross_beta_scan.txt"
+    out_txt = results_path("loopy_cross_beta_scan.txt")
     out_txt.write_text("\n".join(lines), encoding="utf-8")
     print(f"Wrote {out_txt}")
 
 
 if __name__ == "__main__":
     main()
-

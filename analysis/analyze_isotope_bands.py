@@ -6,22 +6,21 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any, Dict, List
 
-from analysis.io_utils import data_path
+from analysis.io_utils import read_data_csv
 from analysis.nuclear_cli import apply_nuclear_config_if_provided
 
 
 def load_bands(path: str | None = None) -> List[Dict[str, Any]]:
     if path is None:
-        csv_path = data_path("geom_isotope_bands.csv")
+        df = read_data_csv(
+            "geom_isotope_bands.csv",
+            required=True,
+            # expected_columns=[...],
+        )
     else:
-        csv_path = Path(path)
+        df = read_data_csv(path, required=True)
 
-    rows: List[Dict[str, Any]] = []
-    with csv_path.open(newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        for r in reader:
-            rows.append(r)
-    return rows
+    return df.to_dict(orient="records")
 
 
 def to_float(row: Dict[str, Any], key: str, default: float = 0.0) -> float:
@@ -106,7 +105,15 @@ def main(argv=None) -> None:
         summarize_group(f"role={role or 'unknown'}", rlist)
 
     # Живые хабы
-    living = [r for r in rows if (r.get("living_hub") or "").lower() == "true"]
+    living = []
+    for r in rows:
+        val = r.get("living_hub")
+        if isinstance(val, bool):
+            if val:
+                living.append(r)
+        else:
+            if (str(val or "")).lower() == "true":
+                living.append(r)
     summarize_group("living_hubs", living)
 
     # Доноры (D_index > 0)

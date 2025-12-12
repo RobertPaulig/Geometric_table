@@ -571,3 +571,47 @@
   без новых флагов поведение остаётся в границах v5.0.
 - Настройка ядра и magic-режима теперь сосредоточена в analysis-уровне
   и не протекает в core.
+
+## [ANALYSIS-IO-1] Введение слоя IO для analysis-скриптов
+
+**Дата:** 2025-12-12  
+**Статус:** реализовано  
+
+**Решение.**  
+Введён модуль `analysis/io_utils.py` с единым слоем доступа к:
+- каталогу `data/` (`PROJECT_ROOT/data`),
+- каталогу `results/` (`PROJECT_ROOT/results`),
+- вспомогательным функциям:
+  - `read_data_csv(...)` с валидацией схемы,
+  - `write_result_csv(...)`,
+  - `write_text_result(...)`,
+  - `data_path(...)`, `results_path(...)`.
+
+Ключевые analysis-скрипты переведены на IO-слой:
+- `analyze_complexity_correlations.py`,
+- `analyze_geom_nuclear_complexity.py`,
+- `analyze_fdm_vs_nucleus.py`,
+- `analyze_d_block_plateau.py`,
+- `analyze_plateaus_with_dblock.py`,
+- `analyze_isotope_bands.py`,
+- `analyze_crossing_proxy.py`,
+- `analyze_cycle_stats.py`,
+- `analyze_loopy_modes.py`,
+- `calibrate_f_levels_fdm_1d.py`,
+- `compare_f_levels_fdm_variants_1d.py`,
+- `explore_loopy_cross_beta.py`,
+- `explore_toy_chi_spec_1d.py`,
+- `fit_tree_capacity.py`,
+- `scan_cycles_vs_params.py`,
+- `plot_DA_with_dblock.py`,
+- `plot_geom_periodic_table.py`,
+- `check_heavy_sp_pauling.py`,
+- `extend_d_block_from_pauling.py`,
+- `export_atoms_db.py`,
+- `analyze_geom_table.py`.
+
+**Инварианты.**
+- Формат существующих CSV в `data/` не меняется.
+- Путь по умолчанию всегда `PROJECT_ROOT/data/...` и `PROJECT_ROOT/results/...`.
+- При падении по отсутствию файла или колонок поднимается `MissingDataError`
+  с понятным сообщением, а не молчаливый NaN.

@@ -11,7 +11,7 @@ def main() -> None:
     df = read_data_csv(
         "element_indices_with_dblock.csv",
         required=True,
-        # expected_columns=[...],
+        expected_columns=["Z", "El", "role", "D_index", "A_index"],
     )
 
     donors = df[(df["D_index"] > 1e-6) & (df["A_index"].abs() < 1e-6)].copy()

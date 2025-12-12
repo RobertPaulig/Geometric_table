@@ -12,14 +12,12 @@ from typing import Iterable, List
 import numpy as np
 import pandas as pd
 
+from analysis.io_utils import results_path
 from analysis.seeds import GROWTH_SEEDS
 from core.grower import GrowthParams, grow_molecule_christmas_tree
 from core.complexity import compute_complexity_features, compute_complexity_features_v2
 from core.crossing import estimate_crossing_number_circle
 from core.growth_config import load_growth_config
-
-
-RESULTS_DIR = Path("results")
 SEEDS = GROWTH_SEEDS
 
 
@@ -84,8 +82,7 @@ def _collect_for_mode(label: str, params: GrowthParams, num_runs: int = 300) -> 
                 }
             )
 
-    out_csv = RESULTS_DIR / f"crossing_proxy_{label}.csv"
-    RESULTS_DIR.mkdir(exist_ok=True)
+    out_csv = results_path(f"crossing_proxy_{label}.csv")
     pd.DataFrame(rows).to_csv(out_csv, index=False)
     return out_csv
 
@@ -137,7 +134,7 @@ def summarize_crossing(csv_paths: Iterable[Path]) -> None:
                 f"Frac(crossing>0 | cyclomatic={mu}) over loopy graphs: {frac:.3f}"
             )
 
-    out_txt = RESULTS_DIR / "crossing_proxy_summary.txt"
+    out_txt = results_path("crossing_proxy_summary.txt")
     out_txt.write_text("\n".join(lines), encoding="utf-8")
     print(f"Wrote {out_txt}")
 
