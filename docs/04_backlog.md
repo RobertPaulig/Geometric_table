@@ -51,3 +51,23 @@
 Задачи:
 - расширить d-слой (при необходимости) в `geom_atoms.py`;
 - написать анализ-скрипт, сравнивающий D/A и сложности по периодам внутри `d_octa`.
+
+- [DATA-CLEAN-ROOT-1] Принять решение по CSV в корне (`geom_nuclear_map.csv`, `periodic_after.csv`):
+  - Вариант A: перенести в `data/` и обновить чтение/пайплайн.
+  - Вариант B: оставить legacy в корне и зафиксировать fallback-логику как инвариант.
+  - Результат зафиксировать в `docs/05_decision_log.md`.
+
+- [SPECTRAL-SEMICL-1] Добавить semiclassical (phase-space) оценку F_levels:
+  - Реализовать estimator в `core/f_levels_1d.py`.
+  - Сравнить с exact-spectrum и текущими FDM-proxy в `analysis/spectral1d/*`.
+  - Выгрузить CSV в `results/` и добавить короткий отчёт.
+
+- [CLEAN-ROOT-ARTIFACTS-1] Перенести артефакты из корня (PNG/TXT) в `results/` и обновить ссылки в analysis-скриптах.
+- [DEV-TESTS-1] Добавить `requirements-dev.txt` (pytest) и секцию в README для запуска тестов.
+- [DEV-TESTS-2] Починить запуск `pytest -q` без `ModuleNotFoundError`:
+  - добавить `tests/conftest.py` для bootstrap PYTHONPATH,
+  - зафиксировать, какие тесты реально падают после устранения импорт-ошибок.
+- [DEPS-1] Зафиксировать runtime/dev зависимости:
+  - добавить `requirements.txt` (PyYAML как runtime),
+  - сделать `requirements-dev.txt` надстройкой над runtime,
+  - обновить `pytest.ini` для регистрации `@pytest.mark.slow`.
