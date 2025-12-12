@@ -67,6 +67,12 @@ def add_thermo_args(parser) -> None:
         help="Override coupling_density_shape (WS density mixing).",
     )
     parser.add_argument(
+        "--coupling-port-geometry",
+        type=float,
+        default=None,
+        help="Override coupling_port_geometry (spectral port geometry).",
+    )
+    parser.add_argument(
         "--density-model",
         type=str,
         default=None,
@@ -127,6 +133,50 @@ def add_thermo_args(parser) -> None:
         default=None,
         help="WS bound-state index within given ell (0-based).",
     )
+    parser.add_argument(
+        "--port-geometry-source",
+        type=str,
+        choices=["legacy", "ws_sp_gap"],
+        default=None,
+        help="Source for port geometry: legacy | ws_sp_gap.",
+    )
+    parser.add_argument(
+        "--port-geometry-blend",
+        type=str,
+        choices=["linear", "log"],
+        default=None,
+        help="Blend mode for spectral port geometry: linear | log.",
+    )
+    parser.add_argument(
+        "--ws-geom-r-max",
+        type=float,
+        default=None,
+        help="WS geom R_max for spectral s-p gap.",
+    )
+    parser.add_argument(
+        "--ws-geom-r-well",
+        type=float,
+        default=None,
+        help="WS geom R_well (R0) for spectral s-p gap.",
+    )
+    parser.add_argument(
+        "--ws-geom-v0",
+        type=float,
+        default=None,
+        help="WS geom potential depth V0 (>0) for spectral s-p gap.",
+    )
+    parser.add_argument(
+        "--ws-geom-n-grid",
+        type=int,
+        default=None,
+        help="WS geom radial grid size N_grid for spectral s-p gap.",
+    )
+    parser.add_argument(
+        "--ws-geom-gap-scale",
+        type=float,
+        default=None,
+        help="Scale parameter for mapping WS s-p gap to hybrid strength.",
+    )
 
 
 def apply_thermo_from_args(args, fallback_config_path: Optional[str] = None) -> None:
@@ -150,6 +200,10 @@ def apply_thermo_from_args(args, fallback_config_path: Optional[str] = None) -> 
         cfg = replace(cfg, coupling_density=float(args.coupling_density))
     if getattr(args, "coupling_density_shape", None) is not None:
         cfg = replace(cfg, coupling_density_shape=float(args.coupling_density_shape))
+    if getattr(args, "coupling_port_geometry", None) is not None:
+        cfg = replace(
+            cfg, coupling_port_geometry=float(args.coupling_port_geometry)
+        )
     if getattr(args, "density_model", None):
         cfg = replace(cfg, density_model=str(args.density_model))
     if getattr(args, "density_blend", None):
@@ -170,5 +224,19 @@ def apply_thermo_from_args(args, fallback_config_path: Optional[str] = None) -> 
         cfg = replace(cfg, ws_ell=int(args.ws_ell))
     if getattr(args, "ws_state_index", None) is not None:
         cfg = replace(cfg, ws_state_index=int(args.ws_state_index))
+    if getattr(args, "port_geometry_source", None):
+        cfg = replace(cfg, port_geometry_source=str(args.port_geometry_source))
+    if getattr(args, "port_geometry_blend", None):
+        cfg = replace(cfg, port_geometry_blend=str(args.port_geometry_blend))
+    if getattr(args, "ws_geom_r_max", None) is not None:
+        cfg = replace(cfg, ws_geom_R_max=float(args.ws_geom_r_max))
+    if getattr(args, "ws_geom_r_well", None) is not None:
+        cfg = replace(cfg, ws_geom_R_well=float(args.ws_geom_r_well))
+    if getattr(args, "ws_geom_v0", None) is not None:
+        cfg = replace(cfg, ws_geom_V0=float(args.ws_geom_v0))
+    if getattr(args, "ws_geom_n_grid", None) is not None:
+        cfg = replace(cfg, ws_geom_N_grid=int(args.ws_geom_n_grid))
+    if getattr(args, "ws_geom_gap_scale", None) is not None:
+        cfg = replace(cfg, ws_geom_gap_scale=float(args.ws_geom_gap_scale))
 
     set_current_thermo_config(cfg)

@@ -27,6 +27,7 @@ class ThermoConfig:
     coupling_softness: float = 0.0
     coupling_density: float = 0.0
     coupling_density_shape: float = 0.0
+    coupling_port_geometry: float = 0.0
 
     density_model: str = "tf_radius"
     density_blend: str = "linear"
@@ -40,6 +41,15 @@ class ThermoConfig:
     ws_N_grid: int = 220
     ws_ell: int = 0
     ws_state_index: int = 0
+
+    # Port geometry controls (R&D)
+    port_geometry_source: str = "legacy"  # legacy | ws_sp_gap
+    port_geometry_blend: str = "linear"  # linear | log
+    ws_geom_R_max: float = 25.0
+    ws_geom_R_well: float = 6.0
+    ws_geom_V0: float = 45.0
+    ws_geom_N_grid: int = 800
+    ws_geom_gap_scale: float = 1.0
 
     experiment_name: str = "default_thermo"
 
@@ -90,6 +100,9 @@ def _strict_from_mapping(d: Mapping[str, Any]) -> ThermoConfig:
         coupling_density_shape=float(
             d.get("coupling_density_shape", base.coupling_density_shape)
         ),
+        coupling_port_geometry=float(
+            d.get("coupling_port_geometry", base.coupling_port_geometry)
+        ),
         density_model=str(d.get("density_model", base.density_model)),
         density_blend=str(d.get("density_blend", base.density_blend)),
         density_Z_ref=float(d.get("density_Z_ref", base.density_Z_ref)),
@@ -100,6 +113,19 @@ def _strict_from_mapping(d: Mapping[str, Any]) -> ThermoConfig:
         ws_N_grid=int(d.get("ws_N_grid", base.ws_N_grid)),
         ws_ell=int(d.get("ws_ell", base.ws_ell)),
         ws_state_index=int(d.get("ws_state_index", base.ws_state_index)),
+        port_geometry_source=str(
+            d.get("port_geometry_source", base.port_geometry_source)
+        ),
+        port_geometry_blend=str(
+            d.get("port_geometry_blend", base.port_geometry_blend)
+        ),
+        ws_geom_R_max=float(d.get("ws_geom_R_max", base.ws_geom_R_max)),
+        ws_geom_R_well=float(d.get("ws_geom_R_well", base.ws_geom_R_well)),
+        ws_geom_V0=float(d.get("ws_geom_V0", base.ws_geom_V0)),
+        ws_geom_N_grid=int(d.get("ws_geom_N_grid", base.ws_geom_N_grid)),
+        ws_geom_gap_scale=float(
+            d.get("ws_geom_gap_scale", base.ws_geom_gap_scale)
+        ),
         experiment_name=str(d.get("experiment_name", base.experiment_name)),
     )
 
