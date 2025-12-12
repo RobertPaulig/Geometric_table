@@ -122,9 +122,11 @@ def grow_molecule_christmas_tree(
     if root_atom_data is None:
         return mol  # Should not happen if symbol is valid
 
-    # QSG v5.0: softness of the seed globally damps branching
-    seed_softness = getattr(root_atom_data, "softness", 0.0)
-    seed_softness = max(0.0, min(float(seed_softness), 0.95))
+    # QSG v5.0 / THERMO-2C: softness of the seed globally damps branching
+    from core.thermo_config import get_current_thermo_config
+
+    thermo = get_current_thermo_config()
+    seed_softness = root_atom_data.effective_softness(thermo)
 
     # 2. Initialize Frontier
     frontier = [

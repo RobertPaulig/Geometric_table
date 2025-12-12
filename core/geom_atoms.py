@@ -168,11 +168,22 @@ FIT_ELEMENTS = [
     "Cl",
 ]
 
-# Weight for complexity in F_geom
-W_COMPLEXITY = 0.3
+from core.thermo_config import get_current_thermo_config
 
 # Weight for complexity in F_geom
 W_COMPLEXITY = 0.3
+
+
+def compute_W_complexity_eff(
+    W_base: float, coupling: float, temperature: float
+) -> float:
+    """
+    Legacy: coupling<=0 -> W_base.
+    Physics: coupling in (0..1] -> blend between W_base и W_base*T.
+    """
+    c = max(0.0, min(float(coupling), 1.0))
+    T = max(float(temperature), 1e-9)
+    return W_base * (1.0 - c) + (W_base * T) * c
 
 @dataclass
 class AtomGraph:
@@ -223,6 +234,37 @@ class AtomGraph:
             return 4
         else:
             return 5
+
+    def epsilon_spec(self) -> float:
+        """
+        Игрушечный спектральный параметр жёсткости/связности (λ1 Лапласиана).
+
+        Для R&D-целей используем простую прокси через среднюю степень вершины.
+        Более плотные графы считаются "жёстче".
+        """
+        n = max(self.nodes, 1)
+        avg_degree = 2.0 * float(self.edges) / float(n)
+        return float(1.0 / (1.0 + np.exp(-avg_degree + 2.0)))
+
+    def effective_softness(self, thermo) -> float:
+        """
+        Legacy: coupling_softness<=0 -> softness из atoms_db.
+        Physics: при coupling_softness>0 подмешиваем оценку мягкости
+        из (period, epsilon_spec).
+        """
+        base = max(0.0, min(float(getattr(self, "softness", 0.0)), 0.95))
+        c = max(0.0, min(float(getattr(thermo, "coupling_softness", 0.0)), 1.0))
+
+        if c <= 0.0:
+            return base
+
+        eps = float(self.epsilon_spec())
+        per = int(self.period)
+
+        spec_soft = (per - 1) / (per + 1) * (1.0 / (1.0 + eps))
+        spec_soft = max(0.0, min(float(spec_soft), 0.95))
+
+        return base * (1.0 - c) + spec_soft * c
 
     def cyclomatic_number(self) -> int:
         """
@@ -399,7 +441,13 @@ class AtomGraph:
             adj = self.adjacency_matrix()
             # If C_complex fails for some reason (empty graph), we handle inside
             C_complex = atom_complexity_from_adjacency(adj)
-            base_val += W_COMPLEXITY * C_complex
+            thermo = get_current_thermo_config()
+            W_eff = compute_W_complexity_eff(
+                W_base=W_COMPLEXITY,
+                coupling=getattr(thermo, "coupling_complexity", 0.0),
+                temperature=thermo.temperature,
+            )
+            base_val += W_eff * C_complex
             
         return base_val
 

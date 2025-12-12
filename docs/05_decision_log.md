@@ -761,6 +761,42 @@
 - Включение температурного coupling'а (`coupling_delta_F > 0.0` или явный thermo-конфиг)
   происходит только по явному запросу и не влияет на существующие скрипты/tests.
 
+## [THERMO-2B] W_COMPLEXITY как функция температуры (энтропийный член)
+
+**Решение.**
+- В геометрическом функционале `F_geom` вес сложности `W_COMPLEXITY` переведён
+  в управляемый термодинамикой параметр через helper
+  `compute_W_complexity_eff(W_base, coupling, temperature)`:
+  - при `coupling_complexity = 0.0` используется чистый `W_base` (legacy v5/v6);
+  - при `coupling_complexity > 0.0` линейно смешиваются `W_base` и `W_base * T_thermo`.
+- `AtomGraph.F_geom(...)` читает текущий `ThermoConfig` через
+  `get_current_thermo_config()` и использует `W_eff` вместо фиксированного
+  `W_COMPLEXITY` при добавлении `C_complex`.
+
+**Инварианты.**
+- При `ThermoConfig.coupling_complexity = 0.0` поведение идентично v5/v6, так как
+  `W_eff == W_COMPLEXITY`.
+- Изменение локализовано в `core/geom_atoms.py` и не требует правок R&D-скриптов,
+  которые используют `F_geom`/`F_mol` как «чёрный ящик».
+
+## [THERMO-2C] Spectral/period softness при включённом coupling_softness
+
+**Решение.**
+- Введён метод `AtomGraph.effective_softness(thermo)` с логикой:
+  - при `coupling_softness = 0.0` возвращается softness из atoms_db (legacy);
+  - при `coupling_softness > 0.0` подмешивается «физическая» мягкость,
+    зависящая от периода элемента и грубой оценки жёсткости графа `epsilon_spec`.
+- В grower (`core/grower.py`) seed-softness теперь вычисляется через
+  `root_atom_data.effective_softness(get_current_thermo_config())`, а
+  дальнейшее применение демпфера `p_continue *= (1 - seed_softness)` остаётся прежним.
+
+**Инварианты.**
+- При `ThermoConfig.coupling_softness = 0.0` рост деревьев воспроизводит v5/v6,
+  так как seed-softness берётся напрямую из atoms_db.
+- При включённом coupling_softness R&D-режим получает более интерпретируемую
+  связь между спектральной/периодной структурой атома и глобальным демпфром
+  ветвления, не ломая интерфейс grower'а.
+
 ## [DATA-CLEAN-ROOT-1] Канонические CSV не должны жить в корне репозитория
 
 Решение:
