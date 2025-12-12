@@ -19,6 +19,8 @@ class NuclearShellConfig:
     sigma_p: float = 6.0
     sigma_n: float = 8.0
     a_p: float = 12.0
+    # Базовая ширина изотопной полосы delta_F для scan_isotope_band (legacy 5.0).
+    delta_F_base: float = 5.0
 
 
 @dataclass
@@ -68,6 +70,7 @@ def load_nuclear_config(path_str: str) -> NuclearConfig:
         sigma_p=float(shell_raw.get("sigma_p", defaults.sigma_p)),
         sigma_n=float(shell_raw.get("sigma_n", defaults.sigma_n)),
         a_p=float(shell_raw.get("a_p", defaults.a_p)),
+        delta_F_base=float(shell_raw.get("delta_F_base", defaults.delta_F_base)),
     )
 
     return NuclearConfig(shell=shell)

@@ -735,6 +735,32 @@
   не меняется, couplings по умолчанию равны 0.0, а доменные модули ещё не используют
   `ThermoConfig` в расчётах.
 
+## [THERMO-2A] delta_F как функция температуры (через coupling)
+
+**Контекст.**
+- В `analysis/nuclear/scan_isotope_band.py` ширина изотопной полосы задавалась
+  магической константой/параметром `delta_F` (по умолчанию 5.0), которая не была
+  связана с термодинамикой среды.
+
+**Решение.**
+- В `core/nuclear_config.py` добавлено поле `delta_F_base` (default 5.0) в
+  `NuclearShellConfig` как источник legacy-поведения для ширины полосы.
+- В `scan_isotope_band.py` введён расчёт эффективной ширины `delta_F_eff` через helper
+  `compute_delta_F(args_deltaF, delta_F_base, coupling_delta_F, temperature)`:
+  - если задан `--deltaF`, используется он (явный override);
+  - иначе `delta_F_eff = delta_F_base` при `ThermoConfig.coupling_delta_F == 0.0`
+    (legacy);
+  - иначе `delta_F_eff = delta_F_base * ThermoConfig.temperature` при
+    `ThermoConfig.coupling_delta_F > 0.0`.
+- В CLI `scan_isotope_band` добавлены термо-аргументы (через `analysis.thermo_cli`)
+  и опциональный override `--deltaF` для сохранения старого интерфейса.
+
+**Инварианты.**
+- При `coupling_delta_F == 0.0` поведение полностью совпадает с v5/v6 (delta_F_eff
+  равен 5.0, если `delta_F_base` не переопределён в конфиге).
+- Включение температурного coupling'а (`coupling_delta_F > 0.0` или явный thermo-конфиг)
+  происходит только по явному запросу и не влияет на существующие скрипты/tests.
+
 ## [DATA-CLEAN-ROOT-1] Канонические CSV не должны жить в корне репозитория
 
 Решение:

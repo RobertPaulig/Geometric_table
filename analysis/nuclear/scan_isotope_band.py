@@ -5,10 +5,34 @@ import csv
 from typing import Any, Dict, List
 
 from analysis.cli_common import script_banner
+from analysis.thermo_cli import add_thermo_args, apply_thermo_from_args
 from core.geom_atoms import compute_element_indices
 from core.nuclear_bands import scan_isotope_band_for_Z, make_default_corridor
+from core.nuclear_config import get_current_nuclear_config
+from core.thermo_config import get_current_thermo_config
 from analysis.io_utils import data_path
 from analysis.nuclear_cli import apply_nuclear_config_if_provided
+
+
+def compute_delta_F(
+    args_deltaF: float | None,
+    delta_F_base: float,
+    coupling_delta_F: float,
+    temperature: float,
+) -> float:
+    """
+    Вычисляет эффективную ширину полосы delta_F с учётом ThermoConfig.
+
+    Приоритеты:
+    - если args_deltaF задан явно, используется он;
+    - иначе, если coupling_delta_F <= 0, используется delta_F_base (legacy);
+    - иначе delta_F_eff = delta_F_base * temperature.
+    """
+    if args_deltaF is not None:
+        return float(args_deltaF)
+    if coupling_delta_F <= 0.0:
+        return float(delta_F_base)
+    return float(delta_F_base) * float(temperature)
 
 
 def scan_isotope_bands(
@@ -156,16 +180,34 @@ def main(argv=None) -> None:
         default=40,
         help="Maximum Z to include in isotope band scan.",
     )
+    parser.add_argument(
+        "--deltaF",
+        type=float,
+        default=None,
+        help="Override for delta_F width (legacy behaviour if set).",
+    )
+    add_thermo_args(parser)
+
     args = parser.parse_args(argv)
 
     apply_nuclear_config_if_provided(args.nuclear_config)
+    apply_thermo_from_args(args, fallback_config_path=args.nuclear_config)
+
+    nuc_cfg = get_current_nuclear_config()
+    thermo_cfg = get_current_thermo_config()
+    delta_F_eff = compute_delta_F(
+        args_deltaF=args.deltaF,
+        delta_F_base=getattr(nuc_cfg.shell, "delta_F_base", 5.0),
+        coupling_delta_F=thermo_cfg.coupling_delta_F,
+        temperature=thermo_cfg.temperature,
+    )
 
     with script_banner("scan_isotope_band"):
         rows = save_isotope_bands_csv(
             path="data/geom_isotope_bands.csv",
             Z_min=args.z_min,
             Z_max=args.z_max,
-            delta_F=5.0,
+            delta_F=delta_F_eff,
             N_corridor_factor=1.8,
         )
         if rows:
