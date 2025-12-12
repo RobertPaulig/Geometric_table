@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable, List
+from typing import Iterable, List, Tuple
 
 from core.nuclear_island import nuclear_functional
 
@@ -12,6 +12,18 @@ class IsotopeBandPoint:
     N: int
     A: int
     F: float
+
+
+def default_N_corridor(Z: int, factor: float = 1.7) -> tuple[int, int]:
+    """
+    Стандартный коридор по N для поиска стабильного изотопа.
+
+    Z      — протонное число.
+    factor — множитель для верхней границы (по умолчанию 1.7).
+    """
+    N_min = max(Z, 1)
+    N_max = max(int(factor * Z), N_min + 1)
+    return N_min, N_max
 
 
 def scan_isotope_band_for_Z(Z: int, N_min: int, N_max: int) -> List[IsotopeBandPoint]:

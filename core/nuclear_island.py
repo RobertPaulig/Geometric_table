@@ -47,6 +47,15 @@ def set_magic_mode(mode: str) -> None:
 set_magic_mode("legacy")
 
 
+def get_magic_numbers() -> tuple[tuple[int, ...], tuple[int, ...]]:
+    """
+    Возвращает текущие списки MAGIC_Z, MAGIC_N в виде кортежей.
+
+    Используется analysis-слоем, чтобы не дублировать WS/legacy magic.
+    """
+    return tuple(MAGIC_Z), tuple(MAGIC_N)
+
+
 def _min_sq_distance(x: int, magic_list, sigma: float) -> float:
     """Minimal squared (x - magic)/sigma over given magic_list."""
     return min(((x - m) / sigma) ** 2 for m in magic_list)

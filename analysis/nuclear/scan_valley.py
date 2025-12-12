@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 
 from analysis.nuclear_cli import apply_nuclear_config_if_provided
-from core.nuclear_bands import find_best_N_for_Z
+from core.nuclear_bands import find_best_N_for_Z, default_N_corridor
 
 
 def main(argv=None) -> None:
@@ -30,10 +30,8 @@ def main(argv=None) -> None:
 
     apply_nuclear_config_if_provided(args.nuclear_config)
 
-    # лёгкие и средние ядра: от O до Pb
     for Z in range(args.z_min, args.z_max + 1):
-        N_min = Z
-        N_max = int(Z * 1.7)
+        N_min, N_max = default_N_corridor(Z, factor=1.7)
         N_best, F_best = find_best_N_for_Z(Z, N_min, N_max)
         A = Z + N_best
         ratio = N_best / Z

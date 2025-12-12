@@ -6,10 +6,8 @@ from typing import Dict, List, Tuple
 
 from analysis.nuclear_cli import apply_nuclear_config_if_provided
 from core.geom_atoms import compute_element_indices
-from core.nuclear_bands import find_best_N_for_Z
-
-# Woods–Saxon toy magic neutron numbers (from tune_ws_magic.py scan)
-WS_MAGIC_N = [8, 20, 40, 112, 142, 184]
+from core.nuclear_bands import find_best_N_for_Z, default_N_corridor
+from core.nuclear_island import get_magic_numbers
 
 # "Living hubs" in geom table
 LIVING_HUBS = {"C", "N", "Si", "P", "Ge", "As"}
@@ -35,6 +33,7 @@ def main(argv=None) -> None:
     args = parser.parse_args(argv)
 
     apply_nuclear_config_if_provided(args.nuclear_config)
+    _, magic_N = get_magic_numbers()
     rows = compute_element_indices()
 
     records: List[Tuple[int, str, str, int, int, int]] = []
@@ -46,11 +45,10 @@ def main(argv=None) -> None:
         if Z < 2 or Z > 60:
             continue
 
-        N_min = max(Z, 1)
-        N_max = max(int(1.7 * Z), N_min)
+        N_min, N_max = default_N_corridor(Z, factor=1.7)
         N_best, F_best = find_best_N_for_Z(Z, N_min, N_max)
 
-        N_magic, dN = nearest_magic_N(N_best, WS_MAGIC_N)
+        N_magic, dN = nearest_magic_N(N_best, list(magic_N))
 
         if el in LIVING_HUBS:
             group = "living_hub"
