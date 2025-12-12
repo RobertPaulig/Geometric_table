@@ -13,6 +13,7 @@ from typing import Iterable, List
 import numpy as np
 
 from core.grower import GrowthParams, grow_molecule_christmas_tree
+from analysis.seeds import GROWTH_SEEDS
 from core.complexity import compute_complexity_features
 from core.growth_config import load_growth_config
 
@@ -60,14 +61,12 @@ def run_regime(name: str, params: GrowthParams, seeds: Iterable[str], num_runs: 
 
 
 def main() -> None:
-    seeds = ["Li", "Na", "K", "Be", "Mg", "Ca", "C", "N", "O", "Si", "P", "S"]
-
     # Режимы CY-1-A и CY-1-B берутся из конфигов growth_cy1a/growth_cy1b.
     params_A = load_growth_config("configs/growth_cy1a.yaml").to_growth_params()
     params_B = load_growth_config("configs/growth_cy1b.yaml").to_growth_params()
 
-    run_regime("CY1A", params_A, seeds)
-    run_regime("CY1B", params_B, seeds)
+    run_regime("CY1A", params_A, GROWTH_SEEDS)
+    run_regime("CY1B", params_B, GROWTH_SEEDS)
 
 
 if __name__ == "__main__":

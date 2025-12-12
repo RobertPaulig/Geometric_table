@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import argparse
 import csv
 from collections import defaultdict
-from typing import Dict, List, Any
+from typing import Any, Dict, List
+
+from analysis.nuclear_cli import apply_nuclear_config_if_provided
 
 
 def load_bands(path: str = "data/geom_isotope_bands.csv") -> List[Dict[str, Any]]:
@@ -71,7 +74,18 @@ def summarize_group(name: str, rows: List[Dict[str, Any]]) -> None:
     print(f"  avg N/Z        = {avg([Ns[i] / Zs[i] for i in range(len(Zs))]):.2f}")
 
 
-def main() -> None:
+def main(argv=None) -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--nuclear-config",
+        type=str,
+        default=None,
+        help="Path to nuclear config (YAML/JSON); baseline used if omitted.",
+    )
+    args = parser.parse_args(argv)
+
+    apply_nuclear_config_if_provided(args.nuclear_config)
+
     rows = load_bands()
 
     # Группы по роли

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import argparse
 from collections import defaultdict
 from typing import Dict, List, Tuple
 
+from analysis.nuclear_cli import apply_nuclear_config_if_provided
 from core.geom_atoms import compute_element_indices
 from core.nuclear_island import nuclear_functional
 
@@ -20,10 +22,6 @@ def find_best_N_for_Z(
     Z: int,
     N_min: int | None = None,
     N_max: int | None = None,
-    lambda_shell: float = 30.0,
-    sigma_p: float = 6.0,
-    sigma_n: float = 8.0,
-    a_p: float = 12.0,
 ) -> Tuple[int | None, float | None]:
     if N_min is None:
         N_min = max(Z, 1)
@@ -36,14 +34,7 @@ def find_best_N_for_Z(
     for N in range(N_min, N_max + 1):
         if (Z + N) % 2 != 0:
             continue
-        F = nuclear_functional(
-            Z,
-            N,
-            lambda_shell=lambda_shell,
-            sigma_p=sigma_p,
-            sigma_n=sigma_n,
-            a_p=a_p,
-        )
+        F = nuclear_functional(Z, N)
         if F < best_F:
             best_F = F
             best_N = N
@@ -59,7 +50,17 @@ def nearest_magic_N(N_best: int, magic_list: List[int]) -> Tuple[int, int]:
     return N_magic, dN
 
 
-def main() -> None:
+def main(argv=None) -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--nuclear-config",
+        type=str,
+        default=None,
+        help="Path to nuclear config (YAML/JSON); baseline used if omitted.",
+    )
+    args = parser.parse_args(argv)
+
+    apply_nuclear_config_if_provided(args.nuclear_config)
     rows = compute_element_indices()
 
     records: List[Tuple[int, str, str, int, int, int]] = []

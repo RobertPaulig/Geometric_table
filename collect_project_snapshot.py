@@ -67,6 +67,11 @@ def iter_project_files(root: Path, output_file: Path) -> Iterable[Path]:
             # Directory-level exclusions are handled via the traversal in build_tree;
             # here we only yield files.
             continue
+        # Всегда пропускаем файлы внутри каталога results/
+        parts = path.relative_to(root).parts
+        if parts and parts[0] == "results":
+            continue
+
         if should_exclude_file(path, output_file):
             continue
         # Also skip files in excluded directories
@@ -109,7 +114,7 @@ def build_tree(root: Path) -> str:
     return "\n".join(lines)
 
 
-def create_snapshot(root: Path, output_file: Path) -> None:
+def build_snapshot(root: Path, output_file: Path) -> str:
     sections: List[str] = []
 
     # Дата и время формирования снапшота
@@ -143,7 +148,13 @@ def create_snapshot(root: Path, output_file: Path) -> None:
             continue
         sections.append(text)
 
-    output_file.write_text("".join(sections), encoding="utf-8")
+    return "".join(sections)
+
+
+def create_snapshot(root: Path, output_file: Path) -> None:
+    """Собирает снапшот и записывает его в файл output_file."""
+    snapshot_text = build_snapshot(root, output_file)
+    output_file.write_text(snapshot_text, encoding="utf-8")
 
 
 def parse_args() -> argparse.Namespace:
@@ -173,6 +184,9 @@ def main() -> None:
     args = parse_args()
     root = Path(args.root).resolve()
     output_file = Path(args.output).resolve()
+
+    # По умолчанию всегда пишем снапшот в файл output_file,
+    # не раздувая stdout.
     create_snapshot(root, output_file)
     print(f"Snapshot written to: {output_file}")
 

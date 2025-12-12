@@ -1,37 +1,24 @@
 from __future__ import annotations
 
+import argparse
 import csv
-from typing import Dict, Any, List, Tuple
+from typing import Any, Dict, List, Tuple
 
+from analysis.nuclear_cli import apply_nuclear_config_if_provided
 from core.geom_atoms import compute_element_indices
 from core.nuclear_island import nuclear_functional
 
 
-def find_best_N_for_Z(
-    Z: int,
-    N_min: int,
-    N_max: int,
-    lambda_shell: float = 30.0,
-    sigma_p: float = 6.0,
-    sigma_n: float = 8.0,
-    a_p: float = 12.0,
-) -> Tuple[int, float]:
+def find_best_N_for_Z(Z: int, N_min: int, N_max: int) -> Tuple[int, float]:
     """
     По заданному Z минимизируем F_nuc(Z,N) по коридору N.
     Возвращает (N_best, F_min).
     """
     best_N: int = N_min
-    best_F: float = None  # type: ignore[assignment]
+    best_F: float | None = None
 
     for N in range(N_min, N_max + 1):
-        F = nuclear_functional(
-            Z,
-            N,
-            lambda_shell=lambda_shell,
-            sigma_p=sigma_p,
-            sigma_n=sigma_n,
-            a_p=a_p,
-        )
+        F = nuclear_functional(Z, N)
         if best_F is None or F < best_F:
             best_F = F
             best_N = N
@@ -42,10 +29,6 @@ def find_best_N_for_Z(
 def map_geom_to_valley(
     Z_min: int = 1,
     Z_max: int = 40,
-    lambda_shell: float = 30.0,
-    sigma_p: float = 6.0,
-    sigma_n: float = 8.0,
-    a_p: float = 12.0,
     N_corridor_factor: float = 1.8,
 ) -> List[Dict[str, Any]]:
     """
@@ -70,15 +53,7 @@ def map_geom_to_valley(
         N_min = Z
         N_max = max(Z + 1, int(N_corridor_factor * Z))
 
-        N_best, F_min = find_best_N_for_Z(
-            Z,
-            N_min,
-            N_max,
-            lambda_shell=lambda_shell,
-            sigma_p=sigma_p,
-            sigma_n=sigma_n,
-            a_p=a_p,
-        )
+        N_best, F_min = find_best_N_for_Z(Z, N_min, N_max)
 
         A_best = Z + N_best
         N_over_Z = float(N_best) / float(Z)
@@ -173,11 +148,37 @@ def print_summary(rows: List[Dict[str, Any]]) -> None:
             )
 
 
-def main() -> None:
+def main(argv=None) -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--nuclear-config",
+        type=str,
+        default=None,
+        help=(
+            "Path to nuclear shell config (YAML/JSON). "
+            "If omitted, baseline NuclearConfig is used."
+        ),
+    )
+    parser.add_argument(
+        "--z-min",
+        type=int,
+        default=1,
+        help="Minimal Z for geom–nuclear mapping (default: 1).",
+    )
+    parser.add_argument(
+        "--z-max",
+        type=int,
+        default=40,
+        help="Maximum Z for geom–nuclear mapping (default: 40).",
+    )
+    args = parser.parse_args(argv)
+
+    apply_nuclear_config_if_provided(args.nuclear_config)
+
     rows = save_geom_valley_csv(
         path="geom_nuclear_map.csv",
-        Z_min=1,
-        Z_max=40,  # H–Zr кора геометрической Таблицы; можно расширить
+        Z_min=args.z_min,
+        Z_max=args.z_max,
     )
     if rows:
         print_summary(rows)
@@ -185,4 +186,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

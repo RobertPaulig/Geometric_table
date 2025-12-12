@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import argparse
 from collections import defaultdict
-from typing import List, Tuple, Dict, Any
+from typing import Any, Dict, List, Tuple
 
+from analysis.nuclear_cli import apply_nuclear_config_if_provided
 from core.geom_atoms import compute_element_indices
 from core.nuclear_island import nuclear_functional
 
@@ -14,10 +16,6 @@ DONORS = {"Li", "Na", "K", "Be", "Mg", "Ca", "Rb", "Sr"}
 def compute_isotope_band(
     Z: int,
     delta_F: float = 5.0,
-    lambda_shell: float = 30.0,
-    sigma_p: float = 6.0,
-    sigma_n: float = 8.0,
-    a_p: float = 12.0,
 ) -> Tuple[int, int, int]:
     N_min_scan = max(Z, 1)
     N_max_scan = max(int(1.7 * Z), N_min_scan)
@@ -27,14 +25,7 @@ def compute_isotope_band(
     values: List[Tuple[int, float]] = []
 
     for N in range(N_min_scan, N_max_scan + 1):
-        F = nuclear_functional(
-            Z,
-            N,
-            lambda_shell=lambda_shell,
-            sigma_p=sigma_p,
-            sigma_n=sigma_n,
-            a_p=a_p,
-        )
+        F = nuclear_functional(Z, N)
         values.append((N, F))
         if F < F_min:
             F_min = F
@@ -49,7 +40,17 @@ def compute_isotope_band(
     return band_N_min, band_N_max, N_best
 
 
-def main() -> None:
+def main(argv=None) -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--nuclear-config",
+        type=str,
+        default=None,
+        help="Path to nuclear config (YAML/JSON); baseline used if omitted.",
+    )
+    args = parser.parse_args(argv)
+
+    apply_nuclear_config_if_provided(args.nuclear_config)
     rows = compute_element_indices()
     delta_F = 5.0
 

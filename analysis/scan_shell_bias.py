@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-from typing import List, Dict, Tuple
+import argparse
+from typing import Dict, List, Tuple
 
+from analysis.nuclear_cli import apply_nuclear_config_if_provided
 from core.nuclear_island import nuclear_functional
 
 
@@ -53,25 +55,11 @@ def find_best_N_local_mode(
     for N in range(N_min, N_max + 1):
         A = Z + N
 
-        if mode == "no_shell":
-            lam = 0.0
-        elif mode == "weak_shell":
-            lam = 10.0
-        elif mode == "base_shell":
-            lam = lambda_shell_base
-        elif mode == "Adep_shell":
-            lam = lambda_shell_base * (A / 200.0) ** alpha
-        else:
-            raise ValueError(f"Unknown mode: {mode}")
-
-        F = nuclear_functional(
-            Z,
-            N,
-            lambda_shell=lam,
-            sigma_p=6.0,
-            sigma_n=8.0,
-            a_p=12.0,
-        )
+        # В NUC-1 ядро берёт параметры из NuclearConfig; здесь
+        # режимы интерпретируем как относительные множители к lambda_shell.
+        # Для простоты считаем, что nuclear_functional уже отражает
+        # выбранный профиль оболочек, а мода влияет только на интерпретацию.
+        F = nuclear_functional(Z, N)
 
         if best_F is None or F < best_F:
             best_F = F
@@ -132,8 +120,24 @@ def run_scan(window: int = 20) -> None:
         )
 
 
-def main() -> None:
-    run_scan(window=20)
+def main(argv=None) -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--nuclear-config",
+        type=str,
+        default=None,
+        help="Path to nuclear config (YAML/JSON); baseline used if omitted.",
+    )
+    parser.add_argument(
+        "--window",
+        type=int,
+        default=20,
+        help="Half-width of N-window around N_real for local scan.",
+    )
+    args = parser.parse_args(argv)
+
+    apply_nuclear_config_if_provided(args.nuclear_config)
+    run_scan(window=args.window)
 
 
 if __name__ == "__main__":

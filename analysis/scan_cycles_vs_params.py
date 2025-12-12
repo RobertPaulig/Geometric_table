@@ -13,17 +13,18 @@ scan_cycles_vs_params.py — CY-1 / QSG v6.x R&D стенд циклов.
 - results/cycle_param_scan.txt
 """
 
+import argparse
 from dataclasses import asdict
 from pathlib import Path
 from typing import Iterable, List, Tuple
-import argparse
 
 import numpy as np
 import pandas as pd
 
+from analysis.growth_cli import make_growth_params_from_config_path
+from analysis.seeds import GROWTH_SEEDS
 from core.complexity import compute_complexity_features
 from core.grower import GrowthParams, grow_molecule_christmas_tree
-from core.growth_config import load_growth_config
 
 
 RESULTS_DIR = Path("results")
@@ -140,18 +141,13 @@ def main(argv=None) -> None:
     )
     args = parser.parse_args(argv)
 
-    seeds = ["Li", "Na", "K", "Be", "Mg", "Ca", "C", "N", "O", "Si", "P", "S"]
+    seeds = GROWTH_SEEDS
     num_runs = 200  # R&D: достаточно для первого скана
 
     RESULTS_DIR.mkdir(exist_ok=True)
 
     rng = np.random.default_rng(12345)
-
-    if args.config:
-        cfg = load_growth_config(args.config)
-        base_params = cfg.to_growth_params()
-    else:
-        base_params = GrowthParams(max_depth=4, max_atoms=25)
+    base_params = make_growth_params_from_config_path(args.config)
 
     rows = []
     for params, meta in iter_param_grid(base_params):

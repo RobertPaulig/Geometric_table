@@ -12,13 +12,15 @@ from typing import Iterable, List
 import numpy as np
 import pandas as pd
 
+from analysis.seeds import GROWTH_SEEDS
 from core.grower import GrowthParams, grow_molecule_christmas_tree
 from core.complexity import compute_complexity_features, compute_complexity_features_v2
 from core.crossing import estimate_crossing_number_circle
+from core.growth_config import load_growth_config
 
 
 RESULTS_DIR = Path("results")
-SEEDS = ["Li", "Na", "K", "Be", "Mg", "Ca", "C", "N", "O", "Si", "P", "S"]
+SEEDS = GROWTH_SEEDS
 
 
 def norm_C(total: float, n: int) -> float:
@@ -28,33 +30,11 @@ def norm_C(total: float, n: int) -> float:
 
 
 def make_params_cy1a() -> GrowthParams:
-    return GrowthParams(
-        max_depth=4,
-        max_atoms=25,
-        p_continue_base=0.5,
-        chi_sensitivity=0.3,
-        role_bonus_hub=0.4,
-        role_penalty_terminator=-0.6,
-        temperature=1.0,
-        allow_cycles=True,
-        max_extra_bonds=3,
-        p_extra_bond=0.3,
-    )
+    return load_growth_config("configs/growth_cy1a.yaml").to_growth_params()
 
 
 def make_params_cy1b() -> GrowthParams:
-    return GrowthParams(
-        max_depth=4,
-        max_atoms=25,
-        p_continue_base=0.9,
-        chi_sensitivity=0.3,
-        role_bonus_hub=0.2,
-        role_penalty_terminator=-0.6,
-        temperature=1.0,
-        allow_cycles=True,
-        max_extra_bonds=3,
-        p_extra_bond=0.3,
-    )
+    return load_growth_config("configs/growth_cy1b.yaml").to_growth_params()
 
 
 def _collect_for_mode(label: str, params: GrowthParams, num_runs: int = 300) -> Path:
@@ -170,4 +150,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

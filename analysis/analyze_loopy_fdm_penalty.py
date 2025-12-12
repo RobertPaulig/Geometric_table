@@ -5,14 +5,15 @@ analyze_loopy_fdm_penalty.py — CY-1/step3:
 сравнение FDM и FDM_loopy в режимах с циклами.
 """
 
+import argparse
 import math
 from pathlib import Path
 from typing import Iterable, List
-import argparse
 
 import numpy as np
 import pandas as pd
 
+from analysis.seeds import GROWTH_SEEDS
 from core.grower import GrowthParams, grow_molecule_christmas_tree
 from core.complexity import compute_complexity_features, compute_complexity_features_v2
 from core.growth_config import load_growth_config
@@ -20,7 +21,7 @@ from core.complexity_config import load_complexity_penalties, set_current_penalt
 
 
 RESULTS_DIR = Path("results")
-SEEDS = ["Li", "Na", "K", "Be", "Mg", "Ca", "C", "N", "O", "Si", "P", "S"]
+SEEDS = GROWTH_SEEDS
 
 
 def norm_C(total: float, n: int) -> float:

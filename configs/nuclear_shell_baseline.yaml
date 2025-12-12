@@ -1,0 +1,9 @@
+experiment_name: "nuclear_shell_baseline"
+version: "6.x"
+
+shell:
+  lambda_shell: 30.0
+  sigma_p: 6.0
+  sigma_n: 8.0
+  a_p: 12.0
+

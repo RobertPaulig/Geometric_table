@@ -8,11 +8,12 @@ scan_temperature_effects.py — TEMP-1:
 import argparse
 from dataclasses import replace
 from pathlib import Path
-from typing import List, Dict
+from typing import Dict, List
 
 import numpy as np
 import pandas as pd
 
+from analysis.seeds import GROWTH_SEEDS
 from core.growth_config import load_growth_config
 from core.grower import grow_molecule_christmas_tree
 from core.complexity import compute_complexity_features, compute_complexity_features_v2
@@ -41,7 +42,7 @@ def main(argv=None) -> None:
     base_params = base_cfg.to_growth_params()
 
     T_grid = [0.5, 1.0, 2.0, 3.0]
-    seeds = ["C", "Si", "O", "S"]
+    seeds = [s for s in GROWTH_SEEDS if s in ["C", "Si", "O", "S"]]
     num_runs = args.num_runs
 
     RESULTS_DIR.mkdir(exist_ok=True)
@@ -125,4 +126,3 @@ def main(argv=None) -> None:
 
 if __name__ == "__main__":
     main()
-

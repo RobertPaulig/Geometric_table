@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-from typing import List, Dict, Tuple
+import argparse
+from typing import Dict, List, Tuple
 
+from analysis.nuclear_cli import apply_nuclear_config_if_provided
 from core.nuclear_island import nuclear_functional
 
 
@@ -35,10 +37,6 @@ def find_best_N_local(
     Z: int,
     N_center: int,
     window: int = 20,
-    lambda_shell: float = 30.0,
-    sigma_p: float = 6.0,
-    sigma_n: float = 8.0,
-    a_p: float = 12.0,
 ) -> Tuple[int, float]:
     """
     Локальный поиск минимума F_nuc по N в окне [N_center-window, N_center+window].
@@ -51,14 +49,7 @@ def find_best_N_local(
     best_F: float | None = None
 
     for N in range(N_min, N_max + 1):
-        F = nuclear_functional(
-            Z,
-            N,
-            lambda_shell=lambda_shell,
-            sigma_p=sigma_p,
-            sigma_n=sigma_n,
-            a_p=a_p,
-        )
+        F = nuclear_functional(Z, N)
         if best_F is None or F < best_F:
             best_F = F
             best_N = N
@@ -67,7 +58,18 @@ def find_best_N_local(
     return best_N, float(best_F)
 
 
-def main() -> None:
+def main(argv=None) -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--nuclear-config",
+        type=str,
+        default=None,
+        help="Path to nuclear config (YAML/JSON); baseline used if omitted.",
+    )
+    args = parser.parse_args(argv)
+
+    apply_nuclear_config_if_provided(args.nuclear_config)
+
     print("Comparing nuclear_functional v0.2 to a set of stable nuclides\n")
 
     rows: List[Dict[str, float]] = []

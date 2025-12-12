@@ -1,54 +1,12 @@
 from __future__ import annotations
 
+import argparse
 import csv
-from typing import Dict, Any, List, Tuple
+from typing import Any, Dict, List
 
 from core.geom_atoms import compute_element_indices
-from core.nuclear_island import nuclear_functional
-
-
-def scan_isotope_band_for_Z(
-    Z: int,
-    N_min: int,
-    N_max: int,
-    delta_F: float = 5.0,
-    lambda_shell: float = 30.0,
-    sigma_p: float = 6.0,
-    sigma_n: float = 8.0,
-    a_p: float = 12.0,
-) -> Tuple[int, float, List[int]]:
-    """
-    Для фиксированного Z:
-      - ищем минимум F_nuc по N в [N_min, N_max]
-      - считаем все N, у которых F_nuc <= F_min + delta_F
-
-    Возвращает:
-      (N_best, F_min, allowed_N_list)
-    """
-    best_N = N_min
-    best_F: float | None = None
-    values: Dict[int, float] = {}
-
-    for N in range(N_min, N_max + 1):
-        F = nuclear_functional(
-            Z,
-            N,
-            lambda_shell=lambda_shell,
-            sigma_p=sigma_p,
-            sigma_n=sigma_n,
-            a_p=a_p,
-        )
-        values[N] = F
-        if best_F is None or F < best_F:
-            best_F = F
-            best_N = N
-
-    assert best_F is not None
-    threshold = best_F + delta_F
-
-    allowed_N = [N for N, F in values.items() if F <= threshold]
-    allowed_N.sort()
-    return best_N, float(best_F), allowed_N
+from core.nuclear_bands import scan_isotope_band_for_Z
+from analysis.nuclear_cli import apply_nuclear_config_if_provided
 
 
 def scan_isotope_bands(
@@ -56,15 +14,11 @@ def scan_isotope_bands(
     Z_max: int = 40,
     delta_F: float = 5.0,
     N_corridor_factor: float = 1.8,
-    lambda_shell: float = 30.0,
-    sigma_p: float = 6.0,
-    sigma_n: float = 8.0,
-    a_p: float = 12.0,
 ) -> List[Dict[str, Any]]:
     """
     Для каждого элемента (Z) из compute_element_indices() в диапазоне
     [Z_min, Z_max] считаем:
-      - N_best, F_min (как в map_geom_to_valley)
+      - N_best, F_min
       - список 'почти стабильных' N (F <= F_min + delta_F)
       - ширину полосы: count_N = len(allowed_N)
     """
@@ -79,16 +33,17 @@ def scan_isotope_bands(
         N_min = Z
         N_max = max(Z + 1, int(N_corridor_factor * Z))
 
-        N_best, F_min, allowed_N = scan_isotope_band_for_Z(
-            Z,
-            N_min,
-            N_max,
-            delta_F=delta_F,
-            lambda_shell=lambda_shell,
-            sigma_p=sigma_p,
-            sigma_n=sigma_n,
-            a_p=a_p,
-        )
+        # базовый скан по F_nuc для данного Z
+        band_points = scan_isotope_band_for_Z(Z, N_min, N_max)
+        if not band_points:
+            continue
+
+        # ищем минимум и допустимую полосу по delta_F
+        F_values = {p.N: p.F for p in band_points}
+        N_best = min(F_values, key=F_values.get)
+        F_min = F_values[N_best]
+        threshold = F_min + delta_F
+        allowed_N = sorted(N for N, F in F_values.items() if F <= threshold)
 
         A_best = Z + N_best
         N_over_Z = float(N_best) / float(Z)
@@ -123,10 +78,7 @@ def scan_isotope_bands(
     return results
 
 
-def save_isotope_bands_csv(
-    path: str = "data/geom_isotope_bands.csv",
-    **kwargs,
-) -> List[Dict[str, Any]]:
+def save_isotope_bands_csv(path: str = "data/geom_isotope_bands.csv", **kwargs) -> List[Dict[str, Any]]:
     rows = scan_isotope_bands(**kwargs)
     if not rows:
         print("No rows produced.")
@@ -181,12 +133,35 @@ def print_band_summary(rows: List[Dict[str, Any]]) -> None:
             )
 
 
-def main() -> None:
+def main(argv=None) -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--nuclear-config",
+        type=str,
+        default=None,
+        help="Path to nuclear-shell config (YAML/JSON); baseline used if omitted.",
+    )
+    parser.add_argument(
+        "--z-min",
+        type=int,
+        default=1,
+        help="Minimal Z to include in isotope band scan.",
+    )
+    parser.add_argument(
+        "--z-max",
+        type=int,
+        default=40,
+        help="Maximum Z to include in isotope band scan.",
+    )
+    args = parser.parse_args(argv)
+
+    apply_nuclear_config_if_provided(args.nuclear_config)
+
     rows = save_isotope_bands_csv(
         path="data/geom_isotope_bands.csv",
-        Z_min=1,
-        Z_max=40,
-        delta_F=5.0,       # порог 'почти стабильных' по F
+        Z_min=args.z_min,
+        Z_max=args.z_max,
+        delta_F=5.0,
         N_corridor_factor=1.8,
     )
     if rows:

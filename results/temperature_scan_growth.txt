@@ -1,0 +1,25 @@
+# TEMP-1: temperature_scan_growth
+
+Seed: C
+  T=0.50: n_mean=12.58, frac_cycles=0.965, cycle_load_mean=0.254, C_norm_fdm_mean=0.156
+  T=1.00: n_mean=16.15, frac_cycles=0.995, cycle_load_mean=0.213, C_norm_fdm_mean=0.116
+  T=2.00: n_mean=18.22, frac_cycles=0.975, cycle_load_mean=0.182, C_norm_fdm_mean=0.100
+  T=3.00: n_mean=20.21, frac_cycles=0.980, cycle_load_mean=0.160, C_norm_fdm_mean=0.087
+
+Seed: O
+  T=0.50: n_mean=2.87, frac_cycles=0.200, cycle_load_mean=0.062, C_norm_fdm_mean=0.170
+  T=1.00: n_mean=4.75, frac_cycles=0.465, cycle_load_mean=0.158, C_norm_fdm_mean=0.258
+  T=2.00: n_mean=9.61, frac_cycles=0.770, cycle_load_mean=0.217, C_norm_fdm_mean=0.229
+  T=3.00: n_mean=9.00, frac_cycles=0.820, cycle_load_mean=0.253, C_norm_fdm_mean=0.239
+
+Seed: Si
+  T=0.50: n_mean=3.80, frac_cycles=0.625, cycle_load_mean=0.279, C_norm_fdm_mean=0.329
+  T=1.00: n_mean=8.41, frac_cycles=0.945, cycle_load_mean=0.345, C_norm_fdm_mean=0.216
+  T=2.00: n_mean=13.62, frac_cycles=0.955, cycle_load_mean=0.237, C_norm_fdm_mean=0.147
+  T=3.00: n_mean=16.11, frac_cycles=0.980, cycle_load_mean=0.207, C_norm_fdm_mean=0.118
+
+Seed: S
+  T=0.50: n_mean=2.60, frac_cycles=0.250, cycle_load_mean=0.089, C_norm_fdm_mean=0.146
+  T=1.00: n_mean=5.71, frac_cycles=0.535, cycle_load_mean=0.174, C_norm_fdm_mean=0.281
+  T=2.00: n_mean=8.80, frac_cycles=0.725, cycle_load_mean=0.210, C_norm_fdm_mean=0.224
+  T=3.00: n_mean=10.10, frac_cycles=0.850, cycle_load_mean=0.244, C_norm_fdm_mean=0.232
