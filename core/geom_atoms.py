@@ -10,7 +10,8 @@ import numpy as np
 from .fdm import IFS, FDMIntegrator, make_tensor_grid_ifs
 from .complexity import atom_complexity_from_adjacency, compute_complexity_features
 from core.density_models import beta_effective
-from core.thermo_config import get_current_thermo_config
+from core.thermo_config import get_current_thermo_config, ThermoConfig
+from core.spectral_density_ws import WSRadialParams, make_ws_rho3d_interpolator
 # We import grower inside the report function to avoid circular imports
 
 # ============================================================
@@ -43,6 +44,17 @@ def cube_to_ball(u: np.ndarray, R: float = 4.0) -> np.ndarray:
     return (u - 0.5) * (2.0 * R)
 
 
+def _ws_params_from_thermo(cfg: ThermoConfig) -> WSRadialParams:
+    return WSRadialParams(
+        R_max=float(getattr(cfg, "ws_R_max", 12.0)),
+        R_well=float(getattr(cfg, "ws_R_well", 5.0)),
+        V0=float(getattr(cfg, "ws_V0", 40.0)),
+        N_grid=int(getattr(cfg, "ws_N_grid", 220)),
+        ell=int(getattr(cfg, "ws_ell", 0)),
+        state_index=int(getattr(cfg, "ws_state_index", 0)),
+    )
+
+
 def estimate_atom_energy_fdm(atom_z: int, e_port: float) -> float:
     """
     Оценка 'спектральной энергии' атома через FDM-интеграл по 3D-ядру.
@@ -64,15 +76,51 @@ def estimate_atom_energy_fdm(atom_z: int, e_port: float) -> float:
         blend=getattr(thermo, "density_blend", "linear"),
         Z_ref=getattr(thermo, "density_Z_ref", 10.0),
     )
-    
+
     dim = 3
     # Use standard tensor grid IFS for covering the space
     ifs = make_tensor_grid_ifs(dim=dim, base=2)
     fdm = FDMIntegrator(ifs)
-    
+
     # Define closure for integration
-    def integrand(r):
-        return toy_ldos_radial(r, beta)
+    def integrand(r: np.ndarray) -> np.ndarray:
+        # Gaussian proxy
+        rho_gauss = toy_ldos_radial(r, beta)
+
+        # Optional WS-based radial density (scaled to Gaussian integral)
+        c_shape = float(getattr(thermo, "coupling_density_shape", 0.0))
+        use_ws = (
+            getattr(thermo, "density_source", "gaussian") == "ws_radial"
+            and c_shape > 0.0
+        )
+        if not use_ws:
+            return rho_gauss
+
+        params = _ws_params_from_thermo(thermo)
+        rho_ws_fn = make_ws_rho3d_interpolator(int(atom_z), params)
+
+        # radii from 3D points
+        radii = np.sqrt(np.sum(r * r, axis=1))
+        rho_ws = rho_ws_fn(radii)
+
+        # Scale WS density to match analytic Gaussian integral (3D)
+        I_target = (math.pi / float(beta)) ** 1.5 if beta > 0.0 else 0.0
+        rho_ws_scaled = rho_ws * I_target
+
+        c = max(0.0, min(c_shape, 1.0))
+        blend_mode = getattr(thermo, "density_blend", "linear")
+        rho_gauss = np.maximum(rho_gauss, 1e-30)
+        rho_ws_scaled = np.maximum(rho_ws_scaled, 1e-30)
+
+        if c <= 0.0:
+            return rho_gauss
+        if blend_mode == "log":
+            # Геометрическое смешивание по логарифмам
+            return np.exp(
+                (1.0 - c) * np.log(rho_gauss) + c * np.log(rho_ws_scaled)
+            )
+        # Линейная смесь по плотностям
+        return (1.0 - c) * rho_gauss + c * rho_ws_scaled
     
     # Depth 4 -> 2^(3*4) = 4096 points
     val = fdm.integrate(integrand, depth=4, dim=dim, transform=cube_to_ball)

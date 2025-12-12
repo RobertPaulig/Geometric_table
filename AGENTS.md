@@ -30,7 +30,9 @@ You are the **coding agent (Исполнитель)** for the project *Geometric
 - Коммит-сообщения делай содержательными, например:
   - `Add heavy sp clones Cs/Ba/Tl/Pb in geom_atoms`
   - `Rescan segregated living sectors and update stats`
-- Не выполняй `git push`, если пользователь не просил.
+- По умолчанию не выполняй `git push`, если пользователь не просил.
+- Если Архитектор явно запросил автозаливку, после каждого логически завершённого патча
+  (группы правок) делай `git add/commit` и `git push` с осмысленным сообщением.
 
 ## Ограничения и инварианты
 

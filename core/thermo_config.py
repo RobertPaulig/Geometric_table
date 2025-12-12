@@ -26,10 +26,20 @@ class ThermoConfig:
     coupling_complexity: float = 0.0
     coupling_softness: float = 0.0
     coupling_density: float = 0.0
+    coupling_density_shape: float = 0.0
 
     density_model: str = "tf_radius"
     density_blend: str = "linear"
     density_Z_ref: float = 10.0
+    density_source: str = "gaussian"  # gaussian | ws_radial
+
+    # WS radial density params (R&D defaults)
+    ws_R_max: float = 12.0
+    ws_R_well: float = 5.0
+    ws_V0: float = 40.0
+    ws_N_grid: int = 220
+    ws_ell: int = 0
+    ws_state_index: int = 0
 
     experiment_name: str = "default_thermo"
 
@@ -77,9 +87,19 @@ def _strict_from_mapping(d: Mapping[str, Any]) -> ThermoConfig:
         ),
         coupling_softness=float(d.get("coupling_softness", base.coupling_softness)),
         coupling_density=float(d.get("coupling_density", base.coupling_density)),
+        coupling_density_shape=float(
+            d.get("coupling_density_shape", base.coupling_density_shape)
+        ),
         density_model=str(d.get("density_model", base.density_model)),
         density_blend=str(d.get("density_blend", base.density_blend)),
         density_Z_ref=float(d.get("density_Z_ref", base.density_Z_ref)),
+        density_source=str(d.get("density_source", base.density_source)),
+        ws_R_max=float(d.get("ws_R_max", base.ws_R_max)),
+        ws_R_well=float(d.get("ws_R_well", base.ws_R_well)),
+        ws_V0=float(d.get("ws_V0", base.ws_V0)),
+        ws_N_grid=int(d.get("ws_N_grid", base.ws_N_grid)),
+        ws_ell=int(d.get("ws_ell", base.ws_ell)),
+        ws_state_index=int(d.get("ws_state_index", base.ws_state_index)),
         experiment_name=str(d.get("experiment_name", base.experiment_name)),
     )
 

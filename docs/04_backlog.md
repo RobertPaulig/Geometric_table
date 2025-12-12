@@ -74,3 +74,8 @@
 - [DEV-TESTS-3] Довести `pytest -q` до “содержательных” падений для роста:
   - Molecule: восстановить совместимый API (nodes/depth) через shim в `core/geom_atoms.Molecule`,
   - growth-сканы: синхронизировать тесты с текущим CLI (`tests/test_growth_scans_small.py`).
+
+- [SPECTRAL-DENSITY-1] WS_Spectrum -> rho(r) -> FDM: подключить радиальную плотность из nuclear_spectrum_ws в estimate_atom_energy_fdm через ThermoConfig.density_source и coupling_density (с кешированием и масштабированием).
+- [SPECTRAL-DENSITY-2] Следующий шаг: угловая часть (Y_lm) и вывод port_geometry из интерференции (не из JSON).
+- [TOPO-3D-1] Добавить 3D force-directed layout и 3D-оценку пересечений/запутанности как альтернативу circle-proxy.
+- [DBLOCK-SPEC-1] Вывести d-block свойства из заполнения d-уровней спектра без Pauling.

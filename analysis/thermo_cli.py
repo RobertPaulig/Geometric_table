@@ -61,6 +61,12 @@ def add_thermo_args(parser) -> None:
         help="Override coupling_density.",
     )
     parser.add_argument(
+        "--coupling-density-shape",
+        type=float,
+        default=None,
+        help="Override coupling_density_shape (WS density mixing).",
+    )
+    parser.add_argument(
         "--density-model",
         type=str,
         default=None,
@@ -77,6 +83,49 @@ def add_thermo_args(parser) -> None:
         type=float,
         default=None,
         help="Reference Z for matching beta_legacy in physical model.",
+    )
+    parser.add_argument(
+        "--density-source",
+        type=str,
+        choices=["gaussian", "ws_radial"],
+        default=None,
+        help="Source for 3D density in FDM: gaussian | ws_radial.",
+    )
+    parser.add_argument(
+        "--ws-r-max",
+        type=float,
+        default=None,
+        help="WS radial grid R_max (fm-like units, R&D).",
+    )
+    parser.add_argument(
+        "--ws-r-well",
+        type=float,
+        default=None,
+        help="WS potential radius R_well (R0).",
+    )
+    parser.add_argument(
+        "--ws-v0",
+        type=float,
+        default=None,
+        help="WS potential depth V0 (>0).",
+    )
+    parser.add_argument(
+        "--ws-n-grid",
+        type=int,
+        default=None,
+        help="WS radial grid size N_grid.",
+    )
+    parser.add_argument(
+        "--ws-ell",
+        type=int,
+        default=None,
+        help="WS orbital angular momentum ell.",
+    )
+    parser.add_argument(
+        "--ws-state-index",
+        type=int,
+        default=None,
+        help="WS bound-state index within given ell (0-based).",
     )
 
 
@@ -99,11 +148,27 @@ def apply_thermo_from_args(args, fallback_config_path: Optional[str] = None) -> 
         cfg = replace(cfg, coupling_softness=float(args.coupling_softness))
     if getattr(args, "coupling_density", None) is not None:
         cfg = replace(cfg, coupling_density=float(args.coupling_density))
+    if getattr(args, "coupling_density_shape", None) is not None:
+        cfg = replace(cfg, coupling_density_shape=float(args.coupling_density_shape))
     if getattr(args, "density_model", None):
         cfg = replace(cfg, density_model=str(args.density_model))
     if getattr(args, "density_blend", None):
         cfg = replace(cfg, density_blend=str(args.density_blend))
     if getattr(args, "density_z_ref", None) is not None:
         cfg = replace(cfg, density_Z_ref=float(args.density_z_ref))
+    if getattr(args, "density_source", None):
+        cfg = replace(cfg, density_source=str(args.density_source))
+    if getattr(args, "ws_r_max", None) is not None:
+        cfg = replace(cfg, ws_R_max=float(args.ws_r_max))
+    if getattr(args, "ws_r_well", None) is not None:
+        cfg = replace(cfg, ws_R_well=float(args.ws_r_well))
+    if getattr(args, "ws_v0", None) is not None:
+        cfg = replace(cfg, ws_V0=float(args.ws_v0))
+    if getattr(args, "ws_n_grid", None) is not None:
+        cfg = replace(cfg, ws_N_grid=int(args.ws_n_grid))
+    if getattr(args, "ws_ell", None) is not None:
+        cfg = replace(cfg, ws_ell=int(args.ws_ell))
+    if getattr(args, "ws_state_index", None) is not None:
+        cfg = replace(cfg, ws_state_index=int(args.ws_state_index))
 
     set_current_thermo_config(cfg)

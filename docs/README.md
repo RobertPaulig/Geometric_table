@@ -10,9 +10,24 @@ This directory contains Python scripts to visualize and validate the geometric-s
 - **Dependencies**: `numpy`, `pandas`, `matplotlib`, `scipy`
 - **Local modules**: `geom_atoms.py`, `grower.py`, `complexity.py`, `analyze_geom_table.py`
 
+For development and tests:
+
+- Install runtime deps: `pip install -r requirements.txt`
+- Install dev tools (pytest, etc.): `pip install -r requirements-dev.txt`
+
 Install dependencies:
 ```bash
 pip install numpy pandas matplotlib scipy
+```
+or, for full dev environment:
+```bash
+pip install -r requirements.txt
+pip install -r requirements-dev.txt
+```
+
+To run tests locally:
+```bash
+pytest -q
 ```
 
 ## Scripts
