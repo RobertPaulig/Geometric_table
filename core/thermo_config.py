@@ -27,6 +27,10 @@ class ThermoConfig:
     coupling_softness: float = 0.0
     coupling_density: float = 0.0
 
+    density_model: str = "tf_radius"
+    density_blend: str = "linear"
+    density_Z_ref: float = 10.0
+
     experiment_name: str = "default_thermo"
 
 
@@ -73,6 +77,9 @@ def _strict_from_mapping(d: Mapping[str, Any]) -> ThermoConfig:
         ),
         coupling_softness=float(d.get("coupling_softness", base.coupling_softness)),
         coupling_density=float(d.get("coupling_density", base.coupling_density)),
+        density_model=str(d.get("density_model", base.density_model)),
+        density_blend=str(d.get("density_blend", base.density_blend)),
+        density_Z_ref=float(d.get("density_Z_ref", base.density_Z_ref)),
         experiment_name=str(d.get("experiment_name", base.experiment_name)),
     )
 

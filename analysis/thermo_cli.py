@@ -60,6 +60,24 @@ def add_thermo_args(parser) -> None:
         default=None,
         help="Override coupling_density.",
     )
+    parser.add_argument(
+        "--density-model",
+        type=str,
+        default=None,
+        help="Density model for beta(Z): tf_radius | tf_energy | hydrogenic.",
+    )
+    parser.add_argument(
+        "--density-blend",
+        type=str,
+        default=None,
+        help="Blend mode for beta(Z): linear | log.",
+    )
+    parser.add_argument(
+        "--density-z-ref",
+        type=float,
+        default=None,
+        help="Reference Z for matching beta_legacy in physical model.",
+    )
 
 
 def apply_thermo_from_args(args, fallback_config_path: Optional[str] = None) -> None:
@@ -81,5 +99,11 @@ def apply_thermo_from_args(args, fallback_config_path: Optional[str] = None) -> 
         cfg = replace(cfg, coupling_softness=float(args.coupling_softness))
     if getattr(args, "coupling_density", None) is not None:
         cfg = replace(cfg, coupling_density=float(args.coupling_density))
+    if getattr(args, "density_model", None):
+        cfg = replace(cfg, density_model=str(args.density_model))
+    if getattr(args, "density_blend", None):
+        cfg = replace(cfg, density_blend=str(args.density_blend))
+    if getattr(args, "density_z_ref", None) is not None:
+        cfg = replace(cfg, density_Z_ref=float(args.density_z_ref))
 
     set_current_thermo_config(cfg)

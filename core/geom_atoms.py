@@ -60,7 +60,9 @@ def estimate_atom_energy_fdm(atom_z: int, e_port: float) -> float:
     beta = beta_effective(
         atom_z,
         getattr(thermo, "coupling_density", 0.0),
-        model="tf",
+        model=getattr(thermo, "density_model", "tf_radius"),
+        blend=getattr(thermo, "density_blend", "linear"),
+        Z_ref=getattr(thermo, "density_Z_ref", 10.0),
     )
     
     dim = 3
