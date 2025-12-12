@@ -3,7 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import List, Tuple
 import math
-import argparse
+
+from core.nuclear_config import get_current_nuclear_config
 
 
 # --- Magic numbers for protons / neutrons (incl. superheavy region) ---
@@ -11,36 +12,39 @@ import argparse
 MAGIC_Z_LEGACY = [2, 8, 20, 28, 50, 82, 114]
 MAGIC_N_LEGACY = [2, 8, 20, 28, 50, 82, 126, 184]
 
-# By default we try to import spectral magic numbers from the
-# Woods–Saxon operator implemented in nuclear_spectrum_ws.py.
-USE_SPECTRAL_MAGIC_N = False
+USE_SPECTRAL_MAGIC_N: bool = False
 
 try:
     from .nuclear_spectrum_ws import get_magic_numbers_ws_cached
-except ImportError:
+except ImportError:  # на всякий случай
     get_magic_numbers_ws_cached = None  # type: ignore[assignment]
 
-
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--magic",
-        choices=["legacy", "ws"],
-        default="legacy",
-        help="which set of neutron magic numbers to use in shell_penalty",
-    )
-    return parser.parse_args()
+MAGIC_Z = MAGIC_Z_LEGACY
+MAGIC_N = MAGIC_N_LEGACY
 
 
-_args = parse_args()
-USE_SPECTRAL_MAGIC_N = (_args.magic == "ws") and (get_magic_numbers_ws_cached is not None)
+def set_magic_mode(mode: str) -> None:
+    """
+    Выбрать набор нейтронных magic-чисел для shell_penalty.
 
-if USE_SPECTRAL_MAGIC_N:
-    MAGIC_Z = MAGIC_Z_LEGACY
-    MAGIC_N = get_magic_numbers_ws_cached()  # type: ignore[operator]
-else:
-    MAGIC_Z = MAGIC_Z_LEGACY
-    MAGIC_N = MAGIC_N_LEGACY
+    mode = "legacy" — использовать MAGIC_N_LEGACY.
+    mode = "ws"     — использовать спектральные WS-числа, если доступны,
+                      иначе fallback к legacy.
+    """
+    global USE_SPECTRAL_MAGIC_N, MAGIC_Z, MAGIC_N
+
+    if mode == "ws" and get_magic_numbers_ws_cached is not None:
+        USE_SPECTRAL_MAGIC_N = True
+        MAGIC_Z = MAGIC_Z_LEGACY
+        MAGIC_N = get_magic_numbers_ws_cached()  # type: ignore[operator]
+    else:
+        USE_SPECTRAL_MAGIC_N = False
+        MAGIC_Z = MAGIC_Z_LEGACY
+        MAGIC_N = MAGIC_N_LEGACY
+
+
+# дефолт: старый режим
+set_magic_mode("legacy")
 
 
 def _min_sq_distance(x: int, magic_list, sigma: float) -> float:
@@ -124,14 +128,7 @@ def liquid_drop_binding(Z: int, N: int) -> float:
     return volume + surface + coulomb + asym
 
 
-def nuclear_functional(
-    Z: int,
-    N: int,
-    lambda_shell: float = 30.0,
-    sigma_p: float = 6.0,
-    sigma_n: float = 8.0,
-    a_p: float = 12.0,
-) -> float:
+def nuclear_functional(Z: int, N: int) -> float:
     """
     Toy nuclear functional:
 
@@ -140,19 +137,18 @@ def nuclear_functional(
     Spherical approximation, no deformation.
     Minima of F correspond to 'more stable' configurations.
     """
+    cfg = get_current_nuclear_config()
+    shell_cfg = cfg.shell
+
     B = liquid_drop_binding(Z, N)
-    shell = shell_penalty(Z, N, sigma_p=sigma_p, sigma_n=sigma_n)
-    pair = pairing_penalty(Z, N, a_p=a_p)
-    return -B + lambda_shell * shell + pair
+    shell = shell_penalty(Z, N, sigma_p=shell_cfg.sigma_p, sigma_n=shell_cfg.sigma_n)
+    pair = pairing_penalty(Z, N, a_p=shell_cfg.a_p)
+    return -B + shell_cfg.lambda_shell * shell + pair
 
 
 def scan_island(
     Z_range: Tuple[int, int] = (80, 130),
     N_range: Tuple[int, int] = (120, 210),
-    lambda_shell: float = 30.0,
-    sigma_p: float = 6.0,
-    sigma_n: float = 8.0,
-    a_p: float = 12.0,
     only_even_even: bool = True,
     top_k: int = 10,
 ) -> List[Tuple[int, int, float]]:
@@ -171,27 +167,9 @@ def scan_island(
             if only_even_even and ((Z % 2 == 1) or (N % 2 == 1)):
                 continue
 
-            F = nuclear_functional(
-                Z,
-                N,
-                lambda_shell=lambda_shell,
-                sigma_p=sigma_p,
-                sigma_n=sigma_n,
-                a_p=a_p,
-            )
+            F = nuclear_functional(Z, N)
 
             best.append((Z, N, F))
 
     best.sort(key=lambda t: t[2])
     return best[:top_k]
-
-
-if __name__ == "__main__":
-    print("MAGIC mode:", "WS" if USE_SPECTRAL_MAGIC_N else "LEGACY")
-    print("MAGIC_Z =", MAGIC_Z)
-    print("MAGIC_N =", MAGIC_N)
-    best = scan_island()
-    print("Top candidates (even-even):")
-    for Z, N, F in best:
-        A = Z + N
-        print(f"  Z={Z:3d}, N={N:3d}, A={A:3d}, F={F:8.2f}")

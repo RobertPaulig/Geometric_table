@@ -1,0 +1,6 @@
+shell:
+  lambda_shell: 15.0   # слабее оболочечный штраф
+  sigma_p: 7.0
+  sigma_n: 9.0
+  a_p: 10.0
+

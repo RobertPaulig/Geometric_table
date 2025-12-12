@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import argparse
+
 import numpy as np
 
+from analysis.nuclear_cli import apply_nuclear_config_if_provided
+from core.nuclear_island import set_magic_mode
 from core.nuclear_spectrum_ws import collect_levels_ws
 
 
@@ -64,7 +68,29 @@ def cost_magic(toy_magic, target=None, n_compare: int = 4) -> float:
     return float(np.sum((tm - tg) ** 2))
 
 
-def main():
+def main(argv=None) -> None:
+    parser = argparse.ArgumentParser(
+        description="Scan WS spectrum and tune magic numbers."
+    )
+    parser.add_argument(
+        "--nuclear-config",
+        type=str,
+        default=None,
+        help="Path to nuclear shell config (YAML/JSON).",
+    )
+    parser.add_argument(
+        "--magic",
+        type=str,
+        choices=["legacy", "ws"],
+        default="ws",
+        help="Magic-number mode for nuclear_island: legacy or ws.",
+    )
+
+    args = parser.parse_args(argv)
+
+    apply_nuclear_config_if_provided(args.nuclear_config)
+    set_magic_mode(args.magic)
+
     R0_grid = np.linspace(4.0, 7.0, 4)
     a_grid = np.linspace(0.4, 1.0, 4)
     V0_grid = np.linspace(40.0, 80.0, 5)
@@ -108,4 +134,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

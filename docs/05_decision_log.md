@@ -424,6 +424,30 @@
 - Зеленая зона v5.0 и пайплайн `run_pipeline.py` сохраняют прежнее
   поведение; анализы по d-блоку, изотопным полосам и ядерным сканам
   продолжают работать с обновлёнными путями.
+
+## [DATA-1] Экспорт и загрузка базы атомов из JSON
+
+**Решение.**
+
+- Добавлен скрипт `analysis/export_atoms_db.py`, который экспортирует
+  текущую базу атомов (`AtomGraph`) из `core/geom_atoms._make_base_atoms`
+  в файл `data/atoms_db_v1.json` (одноразовый снимок базы v1).
+- В `core/geom_atoms.py` введена вспомогательная функция
+  `_load_atoms_from_json(path)`, а конструктор базы атомов разделён на
+  `_make_base_atoms_legacy()` (старый код, оставленный как fallback) и
+  `_make_base_atoms()`, который сначала пытается загрузить
+  `data/atoms_db_v1.json`, а при ошибке или отсутствии файла
+  возвращается к legacy-реализации.
+
+**Статус.**
+
+- При наличии `data/atoms_db_v1.json` база атомов создаётся из JSON,
+  при этом экспорт таблицы элементов (CLI `python -m core.geom_atoms
+  --export-periodic`) воспроизводит прежний набор данных (с точностью
+  до порядка строк, если в CSV нет явной сортировки).
+- Legacy-реализация `_make_base_atoms_legacy` помечена как обратное
+  совместимое fallback-хранилище; любые будущие расширения базы атомов
+  (новые элементы, 4d/5d-слой и т.п.) должны вноситься через JSON.
 =======
 ## [CY-1] Loopy-growth и первые режимы с циклами (QSG v6.x)
 
@@ -493,3 +517,57 @@
    плотностью пересечений при умеренном росте среднего penalty для
    hubs и terminators/bridges, но окончательный выбор β\_cross оставлен
    на дальнейшее R\&D.
+
+## [CLEAN-2] Централизация семян роста и CLI-обёртки
+
+**Решение.**
+
+- Введён модуль `analysis/seeds.py` с базовым набором семян `GROWTH_SEEDS`, используемым во всех ростовых скриптах (CY-1, TEMP-1 и др.).
+- Введён helper `analysis/growth_cli.py::make_growth_params_from_config_path`, унифицирующий обработку флага `--config` и базового режима v5.0.
+- Скрипт `analysis/analyze_crossing_proxy.py` теперь берёт параметры режимов CY-1-A/B из конфигов `configs/growth_cy1a.yaml` / `configs/growth_cy1b.yaml`, а не из захардкоженных чисел.
+
+**Статус.**
+
+- При отсутствии `--config` все ростовые и калибровочные скрипты воспроизводят прежнее поведение v5.0.
+- Режимы CY-1-A/B целиком определяются конфигами и не расходятся между анализ-скриптами.
+
+## [NUC-1] Конфиги ядра и единый ядерный слой
+
+**Решение.**
+- Введён `core/nuclear_config.py` с `NuclearShellConfig` / `NuclearConfig`,
+  глобальным `get_current_nuclear_config` / `set_current_nuclear_config`
+  и контекстным менеджером `override_nuclear_config`.
+- Параметры ядра (λ_shell, σ_p, σ_n, a_p) больше не прокидываются в
+  `nuclear_functional` явными аргументами; они читаются только из `NuclearConfig`.
+- Основные ядерные скрипты (`scan_isotope_band`, `analyze_isotope_bands`,
+  `compare_nuclear_v02_to_experiment`, `geom_vs_ws_magic`,
+  `geom_band_vs_ws_magic`, `scan_shell_bias`, `scan_valley`,
+  `map_geom_to_valley`) принимают флаг `--nuclear-config` и
+  используют `analysis.nuclear_cli.apply_nuclear_config_if_provided`.
+- Добавлены профили ядра `configs/nuclear_shell_baseline.yaml`,
+  `configs/nuclear_shell_soft.yaml`, `configs/nuclear_shell_strong.yaml`.
+
+**Статус.**
+- При отсутствии `--nuclear-config` все ядерные скрипты воспроизводят
+  прежнее поведение baseline v5.0.
+- Режим ядра теперь задаётся только конфигами; захардкоженные λ/σ/a
+  убраны из analysis-скриптов.
+
+## [CORE-CLI-1] Вынос ядерного CLI из ядра
+
+**Решение.**
+- Из `core/nuclear_island.py` удалён разбор `argv` и флаг `--magic`.
+  Ядро больше не зависит от `argparse`.
+- Введён чистый интерфейс `core.nuclear_island.set_magic_mode(mode: str)`,
+  управляющий выбором neutron magic чисел (`legacy` vs `ws`).
+- Добавлен CLI-скрипт `analysis/nuclear_magic_cli.py`, который объединяет
+  выбор профиля ядра (`--nuclear-config`) и режима magic (`--magic`).
+- Скрипт `analysis/tune_ws_magic.py` переведён на новый ядерный слой:
+  использует `apply_nuclear_config_if_provided` и `set_magic_mode`
+  вместо ручной настройки ядра.
+
+**Статус.**
+- Все изменения совместимы с существующим пайплайном; при запуске
+  без новых флагов поведение остаётся в границах v5.0.
+- Настройка ядра и magic-режима теперь сосредоточена в analysis-уровне
+  и не протекает в core.
