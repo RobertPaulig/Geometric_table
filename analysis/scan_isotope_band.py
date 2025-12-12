@@ -124,7 +124,7 @@ def scan_isotope_bands(
 
 
 def save_isotope_bands_csv(
-    path: str = "geom_isotope_bands.csv",
+    path: str = "data/geom_isotope_bands.csv",
     **kwargs,
 ) -> List[Dict[str, Any]]:
     rows = scan_isotope_bands(**kwargs)
@@ -183,7 +183,7 @@ def print_band_summary(rows: List[Dict[str, Any]]) -> None:
 
 def main() -> None:
     rows = save_isotope_bands_csv(
-        path="geom_isotope_bands.csv",
+        path="data/geom_isotope_bands.csv",
         Z_min=1,
         Z_max=40,
         delta_F=5.0,       # порог 'почти стабильных' по F
@@ -195,4 +195,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

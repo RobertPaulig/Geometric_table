@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 import pandas as pd
 
 # Pauling electronegativities for first-row d-block (approximate)
@@ -75,14 +76,13 @@ def main(indices_path: str | None = None) -> None:
     df_no_d = df[~df["Z"].isin(df_d["Z"])]
     df_all = pd.concat([df_no_d, df_d], ignore_index=True).sort_values("Z")
 
-    out_name = "element_indices_with_dblock.csv"
-    df_all.to_csv(out_name, index=False)
+    out_path = Path("data") / "element_indices_with_dblock.csv"
+    df_all.to_csv(out_path, index=False)
 
-    print(f"Saved extended table with d-block to {out_name}\n")
+    print(f"Saved extended table with d-block to {out_path}\n")
     print("[D-BLOCK SUMMARY]")
     print(df_d[["Z", "El", "role", "chi_spec", "D_index", "A_index"]])
 
 
 if __name__ == "__main__":
     main()
-

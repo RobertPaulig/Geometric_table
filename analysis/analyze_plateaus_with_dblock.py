@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from pathlib import Path
 import numpy as np
 import pandas as pd
 
 
 def main() -> None:
-    df = pd.read_csv("element_indices_with_dblock.csv")
+    path = Path("data") / "element_indices_with_dblock.csv"
+    df = pd.read_csv(path)
 
     donors = df[(df["D_index"] > 1e-6) & (df["A_index"].abs() < 1e-6)].copy()
     donor_groups = donors.groupby("D_index")
@@ -52,4 +54,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

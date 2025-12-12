@@ -4,7 +4,7 @@ from collections import defaultdict
 from typing import List, Tuple, Dict, Any
 
 from core.geom_atoms import compute_element_indices
-from nuclear_island import nuclear_functional
+from core.nuclear_island import nuclear_functional
 
 WS_MAGIC_N = [8, 20, 40, 112, 142, 184]
 LIVING_HUBS = {"C", "N", "Si", "P", "Ge", "As"}
@@ -128,4 +128,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

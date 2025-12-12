@@ -6,6 +6,14 @@ docs/name3.aux
 docs/name3.out
 docs/name3.toc
 project_snapshot.txt
+element_indices_with_dblock.csv
+geom_isotope_bands.csv
+geom_nuclear_map.csv
+segregated_stats.csv
+nuclear_spectrum_toy_levels.csv
+tuned_nuclear_magic_scan.csv
+results/*.png
+results/*.pdf
 name3.aux
 name3.log
 name3.out

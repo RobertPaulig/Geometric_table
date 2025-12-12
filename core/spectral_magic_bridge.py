@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from nuclear_island import nuclear_functional
+from core.nuclear_island import nuclear_functional
 
 
 def build_radial_hamiltonian(
@@ -162,4 +162,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

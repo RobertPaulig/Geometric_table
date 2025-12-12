@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from pathlib import Path
 import pandas as pd
 import matplotlib.pyplot as plt
 
 
 def main() -> None:
-    df = pd.read_csv("element_indices_with_dblock.csv")
+    path = Path("data") / "element_indices_with_dblock.csv"
+    df = pd.read_csv(path)
 
     donors = df[(df["D_index"] > 1e-6) & (df["A_index"].abs() < 1e-6)]
     strong_acc = df[(df["A_index"] > 0.8)]
@@ -66,10 +68,13 @@ def main() -> None:
     plt.title("D/A map with d-block metallic plateau")
     plt.legend()
     plt.tight_layout()
-    plt.savefig("DA_scatter_with_dblock.png", dpi=200)
-    print("Saved DA_scatter_with_dblock.png")
+
+    results_dir = Path("results")
+    results_dir.mkdir(exist_ok=True)
+    out_path = results_dir / "DA_scatter_with_dblock.png"
+    plt.savefig(out_path, dpi=200)
+    print(f"Saved {out_path}")
 
 
 if __name__ == "__main__":
     main()
-

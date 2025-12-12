@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from nuclear_island import nuclear_functional
+from core.nuclear_island import nuclear_functional
 
 
 def find_best_N_for_Z(
@@ -35,4 +35,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

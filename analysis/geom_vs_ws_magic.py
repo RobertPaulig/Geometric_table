@@ -4,7 +4,7 @@ from collections import defaultdict
 from typing import Dict, List, Tuple
 
 from core.geom_atoms import compute_element_indices
-from nuclear_island import nuclear_functional
+from core.nuclear_island import nuclear_functional
 
 # Woods–Saxon toy magic neutron numbers (from tune_ws_magic.py scan)
 WS_MAGIC_N = [8, 20, 40, 112, 142, 184]
@@ -110,4 +110,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

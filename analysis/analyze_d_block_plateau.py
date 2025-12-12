@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from pathlib import Path
 import pandas as pd
 
 
 def main() -> None:
-    df = pd.read_csv("element_indices_with_dblock.csv")
+    path = Path("data") / "element_indices_with_dblock.csv"
+    df = pd.read_csv(path)
 
     d_block = df[(df["Z"] >= 21) & (df["Z"] <= 30)].copy()
     donors = df[df["role"] == "donor"]
@@ -43,4 +45,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

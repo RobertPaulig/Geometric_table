@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import List, Dict, Tuple
 
-from nuclear_island import nuclear_functional
+from core.nuclear_island import nuclear_functional
 
 
 # Тот же набор стабильных ядер, что и в compare_nuclear_v02_to_experiment.py
@@ -138,4 +138,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

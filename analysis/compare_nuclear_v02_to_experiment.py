@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import List, Dict, Tuple
 
-from nuclear_island import nuclear_functional
+from core.nuclear_island import nuclear_functional
 
 
 # Набор реально стабильных (или очень долгоживущих) ядер
@@ -128,4 +128,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

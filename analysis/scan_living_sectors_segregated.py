@@ -2,6 +2,7 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from pathlib import Path
 from core.geom_atoms import get_atom, SPECTRAL_MODE_V4, SPECTRAL_MODE, compute_element_indices
 import core.geom_atoms as geom_atoms
 from core.grower import GrowthParams, grow_molecule_christmas_tree
@@ -91,10 +92,16 @@ def run_all_scenarios():
     ))
     
     df = pd.DataFrame(all_results)
-    
-    # Export CSV
-    df.to_csv("segregated_stats.csv", index=False)
-    print(f"\nExported segregated_stats.csv")
+
+    data_dir = Path("data")
+    results_dir = Path("results")
+    data_dir.mkdir(exist_ok=True)
+    results_dir.mkdir(exist_ok=True)
+
+    # Export CSV into data/
+    out_csv = data_dir / "segregated_stats.csv"
+    df.to_csv(out_csv, index=False)
+    print(f"\nExported {out_csv}")
     
     # Plot comparison
     fig, axes = plt.subplots(1, 3, figsize=(18, 5))
@@ -115,8 +122,9 @@ def run_all_scenarios():
         ax.grid(True, alpha=0.3)
     
     plt.tight_layout()
-    plt.savefig("segregated_comparison.png")
-    print("Saved segregated_comparison.png")
+    out_png = results_dir / "segregated_comparison.png"
+    plt.savefig(out_png)
+    print(f"Saved {out_png}")
     
     # Summary statistics
     print("\n[SUMMARY STATISTICS]")
