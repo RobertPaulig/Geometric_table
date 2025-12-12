@@ -1233,20 +1233,28 @@ def _make_base_atoms_legacy() -> List[AtomGraph]:
 
 def _make_base_atoms() -> List[AtomGraph]:
     """
-    Основной вход для получения базы атомов.
+    Создаёт базовый список атомов.
 
-    Порядок приоритета:
-      1. Если существует data/atoms_db_v1.json — грузим его.
-      2. Иначе — используем legacy-версию (_make_base_atoms_legacy).
+    Единственный источник правды — data/atoms_db_v1.json.
+    Если файла нет или он битый, падаем с осмысленной ошибкой.
     """
     base = Path(__file__).resolve().parents[1]
     json_path = base / "data" / "atoms_db_v1.json"
-    if json_path.exists():
-        try:
-            return _load_atoms_from_json(json_path)
-        except Exception as e:
-            print(f"[geom_atoms] Failed to load {json_path}, fallback to legacy: {e}")
-    return _make_base_atoms_legacy()
+
+    if not json_path.exists():
+        raise RuntimeError(
+            f"atoms_db_v1.json not found at {json_path}. "
+            "Сгенерируй его скриптом "
+            "`python -m analysis.data_tools.export_atoms_db` "
+            "или восстанови из git."
+        )
+
+    try:
+        return _load_atoms_from_json(json_path)
+    except Exception as exc:
+        raise RuntimeError(
+            f"Failed to load atoms DB from {json_path}: {exc}"
+        ) from exc
 
 
 base_atoms: List[AtomGraph] = _make_base_atoms()

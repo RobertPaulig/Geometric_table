@@ -3,14 +3,14 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from analysis.analyze_geom_table import compute_element_indices
+from analysis.geom.analyze_geom_table import compute_element_indices
 from analysis.extend_d_block_from_pauling import main as extend_d_block_main
-from analysis.scan_living_sectors import run_living_sectors_scan
-from analysis.scan_living_sectors_segregated import run_segregated_scan
+from analysis.growth.scan_living_sectors import run_living_sectors_scan
+from analysis.growth.scan_living_sectors_segregated import run_segregated_scan
 from analysis.scan_dblock_complexity import scan_dblock_complexity
-from analysis.scan_isotope_band import main as scan_isotope_band_main
+from analysis.nuclear.scan_isotope_band import main as scan_isotope_band_main
 from analysis.map_geom_to_valley import main as map_geom_to_valley_main
-from analysis.analyze_geom_nuclear_complexity import main as analyze_geom_nuclear_complexity_main
+from analysis.nuclear.analyze_geom_nuclear_complexity import main as analyze_geom_nuclear_complexity_main
 
 
 ROOT = Path(__file__).parent

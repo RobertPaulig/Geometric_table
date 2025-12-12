@@ -33,3 +33,20 @@ def scan_isotope_bands(
         all_points.extend(scan_isotope_band_for_Z(Z, N_min, N_max))
     return all_points
 
+
+def find_best_N_for_Z(Z: int, N_min: int, N_max: int) -> tuple[int, float]:
+    """
+    Вернуть (N_best, F_min) для данного Z на отрезке [N_min, N_max]
+    по текущему NuclearConfig / режиму magic.
+    """
+    best_N = N_min
+    best_F: float | None = None
+
+    for N in range(N_min, N_max + 1):
+        F = nuclear_functional(Z, N)
+        if best_F is None or F < best_F:
+            best_F = F
+            best_N = N
+
+    # best_F не может остаться None, так как диапазон включает хотя бы одно N
+    return best_N, float(best_F if best_F is not None else 0.0)

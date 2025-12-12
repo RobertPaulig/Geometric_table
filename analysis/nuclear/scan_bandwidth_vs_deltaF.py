@@ -4,7 +4,7 @@ import argparse
 from collections import defaultdict
 from typing import Any, Dict, List
 
-from analysis.scan_isotope_band import scan_isotope_bands
+from analysis.nuclear.scan_isotope_band import scan_isotope_bands
 
 
 def to_float(row: Dict[str, Any], key: str, default: float = 0.0) -> float:

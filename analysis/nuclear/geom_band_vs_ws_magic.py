@@ -32,6 +32,7 @@ def compute_isotope_band(
             N_best = N
 
     allowed = [N for (N, F) in values if F <= F_min + delta_F]
+
     if not allowed:
         return N_best, N_best, N_best
 

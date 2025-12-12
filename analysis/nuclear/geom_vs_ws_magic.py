@@ -6,7 +6,7 @@ from typing import Dict, List, Tuple
 
 from analysis.nuclear_cli import apply_nuclear_config_if_provided
 from core.geom_atoms import compute_element_indices
-from core.nuclear_island import nuclear_functional
+from core.nuclear_bands import find_best_N_for_Z
 
 # Woods–Saxon toy magic neutron numbers (from tune_ws_magic.py scan)
 WS_MAGIC_N = [8, 20, 40, 112, 142, 184]
@@ -16,32 +16,6 @@ LIVING_HUBS = {"C", "N", "Si", "P", "Ge", "As"}
 
 # Donor sector (terminators + bridges on donor plateau)
 DONORS = {"Li", "Na", "K", "Be", "Mg", "Ca", "Rb", "Sr"}
-
-
-def find_best_N_for_Z(
-    Z: int,
-    N_min: int | None = None,
-    N_max: int | None = None,
-) -> Tuple[int | None, float | None]:
-    if N_min is None:
-        N_min = max(Z, 1)
-    if N_max is None:
-        N_max = max(int(1.7 * Z), N_min)
-
-    best_N = None
-    best_F = float("inf")
-
-    for N in range(N_min, N_max + 1):
-        if (Z + N) % 2 != 0:
-            continue
-        F = nuclear_functional(Z, N)
-        if F < best_F:
-            best_F = F
-            best_N = N
-
-    if best_N is None:
-        return None, None
-    return best_N, best_F
 
 
 def nearest_magic_N(N_best: int, magic_list: List[int]) -> Tuple[int, int]:
@@ -72,9 +46,9 @@ def main(argv=None) -> None:
         if Z < 2 or Z > 60:
             continue
 
-        N_best, F_best = find_best_N_for_Z(Z)
-        if N_best is None:
-            continue
+        N_min = max(Z, 1)
+        N_max = max(int(1.7 * Z), N_min)
+        N_best, F_best = find_best_N_for_Z(Z, N_min, N_max)
 
         N_magic, dN = nearest_magic_N(N_best, WS_MAGIC_N)
 

@@ -19,7 +19,7 @@ You are the **coding agent (Исполнитель)** for the project *Geometric
 4. После логически завершённого блока:
    - запусти нужный скрипт проверки:
      - для всего пайплайна: `python run_pipeline.py`,
-     - или отдельный тест/скрипт из `analysis/` (например, `python -m analysis.scan_living_sectors_segregated`),
+     - или отдельный тест/скрипт из `analysis/` (например, `python -m analysis.growth.scan_living_sectors_segregated`),
    - проверь, что команда завершилась без ошибок,
    - укажи, какие файлы обновились (`data/...`, `results/...`, PNG/CSV).
 
@@ -63,7 +63,7 @@ You are the **coding agent (Исполнитель)** for the project *Geometric
   для параметризации R&D-скриптов (например, режимов роста деревьев и
   циклов), при условии что дефолтное поведение зелёной зоны и базовых
   скриптов без явного указания конфига не меняется. В частности,
-  `analysis/analyze_cycle_stats.py`, `analysis/calibrate_fdm_params.py`
+  `analysis/growth/analyze_cycle_stats.py`, `analysis/growth/calibrate_fdm_params.py`
   и `analysis/scan_cycles_vs_params.py` принимают `--config=...` для
   задания GrowthParams, но при запуске без этого параметра работают
   строго в прежнем v5.0-бейзлайне. Топологические штрафы FDM

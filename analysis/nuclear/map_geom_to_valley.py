@@ -2,28 +2,11 @@ from __future__ import annotations
 
 import argparse
 import csv
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
 
 from analysis.nuclear_cli import apply_nuclear_config_if_provided
 from core.geom_atoms import compute_element_indices
-from core.nuclear_island import nuclear_functional
-
-
-def find_best_N_for_Z(Z: int, N_min: int, N_max: int) -> Tuple[int, float]:
-    """
-    По заданному Z минимизируем F_nuc(Z,N) по коридору N.
-    Возвращает (N_best, F_min).
-    """
-    best_N: int = N_min
-    best_F: float | None = None
-
-    for N in range(N_min, N_max + 1):
-        F = nuclear_functional(Z, N)
-        if best_F is None or F < best_F:
-            best_F = F
-            best_N = N
-
-    return best_N, float(best_F)
+from core.nuclear_bands import find_best_N_for_Z
 
 
 def map_geom_to_valley(
