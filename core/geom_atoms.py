@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 from collections import defaultdict
+from pathlib import Path
+import json
 
 import numpy as np
 from .fdm import IFS, FDMIntegrator, make_tensor_grid_ifs
@@ -559,7 +561,16 @@ class AtomGraph:
         return sign * (s * chi_abs)
 
 
-def _make_base_atoms() -> List[AtomGraph]:
+def _load_atoms_from_json(path: Path) -> List[AtomGraph]:
+    with path.open("r", encoding="utf-8") as f:
+        raw = json.load(f)
+    atoms: List[AtomGraph] = []
+    for row in raw:
+        atoms.append(AtomGraph(**row))
+    return atoms
+
+
+def _make_base_atoms_legacy() -> List[AtomGraph]:
     """
     Прототипы геометрической таблицы для H–Ne.
 
@@ -1218,6 +1229,24 @@ def _make_base_atoms() -> List[AtomGraph]:
         ),
         # --- конец 5-го/6-го периода -------------------------------------------
     ]
+
+
+def _make_base_atoms() -> List[AtomGraph]:
+    """
+    Основной вход для получения базы атомов.
+
+    Порядок приоритета:
+      1. Если существует data/atoms_db_v1.json — грузим его.
+      2. Иначе — используем legacy-версию (_make_base_atoms_legacy).
+    """
+    base = Path(__file__).resolve().parents[1]
+    json_path = base / "data" / "atoms_db_v1.json"
+    if json_path.exists():
+        try:
+            return _load_atoms_from_json(json_path)
+        except Exception as e:
+            print(f"[geom_atoms] Failed to load {json_path}, fallback to legacy: {e}")
+    return _make_base_atoms_legacy()
 
 
 base_atoms: List[AtomGraph] = _make_base_atoms()
