@@ -12,6 +12,12 @@ from .complexity import atom_complexity_from_adjacency, compute_complexity_featu
 from core.density_models import beta_effective
 from core.thermo_config import get_current_thermo_config, ThermoConfig
 from core.spectral_density_ws import WSRadialParams, make_ws_rho3d_interpolator
+from core.port_geometry_spectral import (
+    ws_sp_gap,
+    hybrid_strength,
+    infer_port_geometry,
+    canonical_port_vectors,
+)
 # We import grower inside the report function to avoid circular imports
 
 # ============================================================
@@ -257,6 +263,50 @@ class AtomGraph:
     epsilon: float = 0.0    # игрушечное положение уровня ε_Z относительно Среды
     notes: str = ""         # произвольный комментарий
     softness: float = 0.0   # мягкость в росте деревьев (penalty factor)
+
+    def effective_port_geometry(self, thermo: Optional[ThermoConfig] = None) -> str:
+        """
+        Опционально скорректированная геометрия портов с учётом спектрального признака.
+        При coupling_port_geometry == 0 или legacy-режиме возвращает исходный ярлык.
+        """
+        base = self.port_geometry
+        if thermo is None:
+            thermo = get_current_thermo_config()
+        c = max(0.0, min(float(getattr(thermo, "coupling_port_geometry", 0.0)), 1.0))
+        if c <= 0.0 or getattr(thermo, "port_geometry_source", "legacy") == "legacy":
+            return base
+
+        params = WSRadialParams(
+            R_max=float(getattr(thermo, "ws_geom_R_max", 25.0)),
+            R_well=float(getattr(thermo, "ws_geom_R_well", 6.0)),
+            V0=float(getattr(thermo, "ws_geom_V0", 45.0)),
+            N_grid=int(getattr(thermo, "ws_geom_N_grid", 800)),
+            ell=0,
+            state_index=0,
+        )
+        gap = ws_sp_gap(self.Z, params)
+        h_raw = hybrid_strength(gap, float(getattr(thermo, "ws_geom_gap_scale", 1.0)))
+
+        # Лёгкий blend по h, если задан портовый blend режим
+        mode = getattr(thermo, "port_geometry_blend", "linear")
+        if mode == "log":
+            # лог-бленд по odds(h), но здесь хватит линейного
+            h_eff = h_raw
+        else:
+            h_eff = h_raw
+
+        inferred = infer_port_geometry(base, self.ports, self.symmetry_score, h_eff)
+        # Пока что делаем ступенчатый выбор: c<0.5 -> legacy, c>=0.5 -> spectral
+        return inferred if c >= 0.5 else base
+
+    def port_vectors(self, thermo: Optional[ThermoConfig] = None) -> np.ndarray:
+        """
+        Вернуть набор портовых направлений (ports,3) в зависимости от эффективной геометрии.
+        """
+        if thermo is None:
+            thermo = get_current_thermo_config()
+        label = self.effective_port_geometry(thermo)
+        return canonical_port_vectors(label, self.ports)
 
     def adjacency_matrix(self) -> np.ndarray:
         """
