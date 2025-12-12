@@ -1,0 +1,16 @@
+experiment_name: "growth_env_hot"
+version: "6.x"
+
+growth:
+  max_atoms: 25
+  max_depth: 4
+  p_continue_base: 0.5
+  role_bonus_hub: 0.4
+  role_penalty_terminator: -0.6
+  temperature: 2.0
+
+loops:
+  allow_cycles: true
+  max_extra_bonds: 3
+  p_extra_bond: 0.3
+

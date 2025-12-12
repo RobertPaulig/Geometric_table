@@ -26,11 +26,14 @@ class CrossingPenaltyConfig:
 
 @dataclass
 class ComplexityPenaltyConfig:
-    loopy: LoopyPenaltyConfig = LoopyPenaltyConfig()
-    crossing: CrossingPenaltyConfig = CrossingPenaltyConfig()
+    loopy: LoopyPenaltyConfig
+    crossing: CrossingPenaltyConfig
 
 
-_CURRENT_PENALTIES = ComplexityPenaltyConfig()
+_CURRENT_PENALTIES = ComplexityPenaltyConfig(
+    loopy=LoopyPenaltyConfig(),
+    crossing=CrossingPenaltyConfig(),
+)
 
 
 def get_current_penalties() -> ComplexityPenaltyConfig:
@@ -77,4 +80,3 @@ def load_complexity_penalties(path: str | Path) -> ComplexityPenaltyConfig:
         raise ValueError(f"Config {p} must contain a mapping at top level")
 
     return _from_dict(data)
-

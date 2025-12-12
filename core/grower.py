@@ -169,9 +169,11 @@ def grow_molecule_christmas_tree(
         # Apply global softness penalty if the seed is soft (e.g. Si)
         if seed_softness > 0.0:
             p_continue *= (1.0 - seed_softness)
-        
-        # Clamp probability
+
+        # Temperature deformation: T=1 keeps baseline, T<1 lengthens trees, T>1 shortens
+        T = max(params.temperature, 1e-6)
         p_continue = max(0.0, min(1.0, p_continue))
+        p_continue_eff = max(0.0, min(1.0, p_continue ** (1.0 / T)))
 
         # Try to grow on each free port
         # Note: In a real geometric builder, we should track specific ports.
@@ -183,7 +185,7 @@ def grow_molecule_christmas_tree(
                 break
                 
             # Roll dice
-            if rng.random() > p_continue:
+            if rng.random() > p_continue_eff:
                 # Decide NOT to grow on this port -> connection to 'Nothing'?
                 # Or just leave it open (radical)? 
                 # In standard chemistry, open ports are radicals.
