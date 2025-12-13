@@ -1,0 +1,6 @@
+TOPO-3D-1 comparison: 2D crossing proxy vs 3D entanglement
+
+     name  n_atoms  n_bonds  crossing_proxy_2d  entanglement_3d
+ chain_C3        3        2           0.000000            0.000
+cycle_CON        3        3           0.000000            0.000
+     K4_C        4        6           0.166667            0.651

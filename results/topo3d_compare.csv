@@ -1,0 +1,4 @@
+name,n_atoms,n_bonds,crossing_proxy_2d,entanglement_3d
+chain_C3,3,2,0.0,0.0
+cycle_CON,3,3,0.0,0.0
+K4_C,4,6,0.16666666666666666,0.6509999628434933
