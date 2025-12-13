@@ -5,7 +5,7 @@
   "coupling_density_shape": 0.0,
   "coupling_port_geometry": 1.0,
   "coupling_softness": 0.0,
-  "coupling_ws_Z": 0.0,
+  "coupling_ws_Z": 1.0,
   "density_Z_ref": 10.0,
   "density_blend": "linear",
   "density_model": "tf_radius",
