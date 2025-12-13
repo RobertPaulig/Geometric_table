@@ -286,7 +286,11 @@ class AtomGraph:
             state_index=0,
         )
         gap = ws_sp_gap(self.Z, params)
-        h_raw = hybrid_strength(gap, float(getattr(thermo, "ws_geom_gap_scale", 1.0)))
+        h_raw = hybrid_strength(
+            gap,
+            float(getattr(thermo, "ws_geom_gap_ref", 1.0)),
+            float(getattr(thermo, "ws_geom_gap_scale", 1.0)),
+        )
 
         # Лёгкий blend по h, если задан портовый blend режим
         mode = getattr(thermo, "port_geometry_blend", "linear")

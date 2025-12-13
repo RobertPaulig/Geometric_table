@@ -33,9 +33,16 @@ def compare_for_elements(names):
             matches += 1
 
         # спектральные признаки для отладки
-        params = WSRadialParams()
+        params = WSRadialParams(
+            R_max=cfg_spectral.ws_geom_R_max,
+            R_well=cfg_spectral.ws_geom_R_well,
+            V0=cfg_spectral.ws_geom_V0,
+            N_grid=cfg_spectral.ws_geom_N_grid,
+            ell=0,
+            state_index=0,
+        )
         gap = ws_sp_gap(atom.Z, params)
-        h = hybrid_strength(gap, cfg_spectral.ws_geom_gap_scale)
+        h = hybrid_strength(gap, cfg_spectral.ws_geom_gap_ref, cfg_spectral.ws_geom_gap_scale)
 
         rows.append((name, base_label, inferred_label, vecs, gap, h))
 

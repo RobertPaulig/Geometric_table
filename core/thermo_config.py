@@ -50,6 +50,7 @@ class ThermoConfig:
     ws_geom_V0: float = 45.0
     ws_geom_N_grid: int = 800
     ws_geom_gap_scale: float = 1.0
+    ws_geom_gap_ref: float = 1.0
 
     experiment_name: str = "default_thermo"
 
@@ -126,6 +127,7 @@ def _strict_from_mapping(d: Mapping[str, Any]) -> ThermoConfig:
         ws_geom_gap_scale=float(
             d.get("ws_geom_gap_scale", base.ws_geom_gap_scale)
         ),
+        ws_geom_gap_ref=float(d.get("ws_geom_gap_ref", base.ws_geom_gap_ref)),
         experiment_name=str(d.get("experiment_name", base.experiment_name)),
     )
 

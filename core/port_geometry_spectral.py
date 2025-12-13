@@ -36,13 +36,13 @@ def ws_sp_gap(Z: int, params: WSRadialParams) -> float:
     return float(E_p - E_s)
 
 
-def hybrid_strength(gap: float, scale: float) -> float:
+def hybrid_strength(gap: float, gap_ref: float, scale: float) -> float:
     """
-    Преобразование s-p разрыва в безразмерную "силу гибридизации" h∈(0,1).
-    Чем меньше разрыв (E_p≈E_s), тем ближе h к 1.
+    Центрированное преобразование s-p разрыва в безразмерную "силу гибридизации" h∈(0,1).
+    gap_ref задаёт точку, где h≈0.5, scale — ширину перехода.
     """
     s = max(float(scale), 1e-9)
-    x = -float(gap) / s
+    x = (float(gap_ref) - float(gap)) / s
     return float(1.0 / (1.0 + math.exp(-x)))
 
 
@@ -145,4 +145,3 @@ def canonical_port_vectors(label: str, ports: int) -> np.ndarray:
     v = np.array(vs, dtype=float)
     v /= np.linalg.norm(v, axis=1, keepdims=True)
     return v
-
