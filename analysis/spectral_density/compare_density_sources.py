@@ -26,6 +26,40 @@ from core.fdm import FDMIntegrator, make_tensor_grid_ifs
 from analysis.thermo_cli import add_thermo_args, apply_thermo_from_args
 
 
+def I_box(R: float, beta: float) -> float:
+    beta = max(float(beta), 1e-15)
+    R = max(float(R), 0.0)
+    t = math.sqrt(beta) * R
+    one = math.sqrt(math.pi / beta) * math.erf(t)
+    return one ** 3
+
+
+def r_rms_gaussian(beta: float) -> float:
+    beta = max(float(beta), 1e-15)
+    return math.sqrt(3.0 / (2.0 * beta))
+
+
+KURTOSIS_EXCESS_GAUSS_RADIAL = (
+    4.0 * (-96.0 - 3.0 * math.pi**2 + 40.0 * math.pi) / (-48.0 * math.pi + 64.0 + 9.0 * math.pi**2)
+)
+
+
+def radial_kurtosis_excess_from_rho3d(r: np.ndarray, rho3d: np.ndarray) -> float:
+    r = np.asarray(r, dtype=float)
+    rho3d = np.asarray(rho3d, dtype=float)
+    p = 4.0 * math.pi * (r**2) * rho3d
+    norm = np.trapz(p, r)
+    if not np.isfinite(norm) or norm <= 0:
+        return float("nan")
+    p = p / norm
+    mu = np.trapz(r * p, r)
+    var = np.trapz((r - mu) ** 2 * p, r)
+    if not np.isfinite(var) or var <= 0:
+        return float("nan")
+    mu4 = np.trapz((r - mu) ** 4 * p, r)
+    return float(mu4 / (var**2) - 3.0)
+
+
 def _make_gaussian_density_fn(Z: int, thermo: ThermoConfig):
     beta = beta_effective(
         Z,
@@ -60,15 +94,6 @@ def compare_for_Z(Z: int) -> None:
 
     I_target = (math.pi / beta) ** 1.5 if beta > 0.0 else 0.0
     rho_ws = rho_ws_fn(radii) * I_target
-
-    # Диагностика box-aware нормировки (без изменения основной логики энергий)
-    def I_box(R: float, beta_val: float) -> float:
-        if beta_val <= 0.0:
-            return 0.0
-        sqrt_term = math.sqrt(math.pi / float(beta_val))
-        erf_term = math.erf(math.sqrt(float(beta_val)) * float(R))
-        Ix = sqrt_term * erf_term
-        return Ix ** 3
 
     dim = 3
     ifs = make_tensor_grid_ifs(dim=dim, base=2)
@@ -115,11 +140,21 @@ def compare_for_Z(Z: int) -> None:
 
     ratio = e_ws / e_gauss if e_gauss != 0 else float("nan")
 
+    # Shape observables: r_rms и kurtosis (excess) — Gaussian vs WS
+    r_rms_g = r_rms_gaussian(beta)
+    kurt_g = KURTOSIS_EXCESS_GAUSS_RADIAL
+
+    r_rms_ws = float(diag.r_rms)
+    r_grid = np.linspace(0.0, float(params.R_max), 4096)
+    rho_grid = rho_ws_fn(r_grid) / max(I_target, 1e-30)
+    kurt_ws = radial_kurtosis_excess_from_rho3d(r_grid, rho_grid)
+
     print(
         f"Z={Z}: beta={beta:.4g}, "
         f"R_eff={R_eff:.3f}, r_mean={diag.r_mean:.3f}, r_rms={diag.r_rms:.3f}, r_99={diag.r_99:.3f}, "
         f"I_target={I_target:.4g}, I_box={I_box_val:.4g}, "
         f"M_ws_box_raw={M_ws_box_raw:.4g}, scale_ws={scale_ws:.4g}, mass_ratio_box={mass_ratio_box:.4g}, "
+        f"r_rms_g={r_rms_g:.4g}, r_rms_ws={r_rms_ws:.4g}, kurt_g={kurt_g:.4g}, kurt_ws={kurt_ws:.4g}, "
         f"E_fdm_gauss={e_gauss:.4g}, E_fdm_ws={e_ws:.4g}, ratio_E={ratio:.4g}"
     )
 
