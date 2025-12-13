@@ -5,6 +5,7 @@ from typing import List, Optional, Tuple
 from collections import defaultdict
 from pathlib import Path
 import json
+import math
 
 import numpy as np
 from .fdm import IFS, FDMIntegrator, make_tensor_grid_ifs
