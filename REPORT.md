@@ -1,6 +1,6 @@
 ## 1) Environment
 
-- `git rev-parse HEAD`: `85a4ba39488dfd47ccf9ab6b755a5c74d185335a`
+- `git rev-parse HEAD`: `345d8d28bb06ffb4d09734a478a16c350663b9bf`
 - `python -V`: `Python 3.11.9`
 - `python -c "import numpy, scipy, yaml; ..."`: `numpy 2.2.4 scipy 1.15.2 PyYAML 6.0.3`
 
@@ -14,7 +14,7 @@ python -m pytest -q
 
 Результат:
 
-- `33 passed in 21.20s`
+- `37 passed in 13.93s`
 
 Предупреждения:
 
@@ -37,7 +37,7 @@ python -m analysis.spectral_density.compare_density_sources
 | 14 | 1.2510 | 3.977  | 3.979 | 1.0000 | 1.0000 |
 | 26 | 1.8910 | 2.142  | 2.143 | 1.0000 | 1.0000 |
 
-ThermoConfig (для запуска SPECTRAL-DENSITY, ключевые поля):
+ThermoConfig (для запуска SPECTRAL-DENSITY, ключевые поля — см. также `results/thermo_config_spectral_density.json`):
 
 - `temperature=1.0`
 - `coupling_delta_F=0.0`
@@ -46,12 +46,14 @@ ThermoConfig (для запуска SPECTRAL-DENSITY, ключевые поля)
 - `coupling_density=1.0`
 - `coupling_density_shape=0.0`
 - `coupling_port_geometry=0.0`
+- `coupling_ws_Z=0.0`
 - `density_model="tf_radius"`
 - `density_blend="linear"`
 - `density_Z_ref=10.0`
 - `density_source="gaussian"`
 - `ws_R_max=12.0`, `ws_R_well=5.0`, `ws_V0=40.0`, `ws_N_grid=220`, `ws_ell=0`, `ws_state_index=0`
 - `ws_geom_R_max=25.0`, `ws_geom_R_well=6.0`, `ws_geom_V0=45.0`, `ws_geom_N_grid=800`, `ws_geom_gap_ref=1.0`, `ws_geom_gap_scale=1.0`
+- `ws_Z_ref=10.0`, `ws_Z_alpha=1.0/3.0`
 - `port_geometry_source="legacy"`, `port_geometry_blend="linear"`
 
 ## 4) SPECTRAL-GEOM
@@ -78,17 +80,19 @@ python -m analysis.geom.compare_port_geometry_sources
 
 - `Matches with legacy (B,C,N,O,Si,P,S): 3/7`
 
-ThermoConfig (для запуска SPECTRAL-GEOM, ключевые поля):
+ThermoConfig (для запуска SPECTRAL-GEOM — см. также `results/thermo_config_spectral_geom.json`):
 
 - `temperature=1.0`
 - `coupling_port_geometry=1.0`
 - `port_geometry_source="ws_sp_gap"`
 - `port_geometry_blend="linear"`
 - `coupling_density=0.0`, `coupling_density_shape=0.0`
+- `coupling_ws_Z=0.0`
 - `density_source="gaussian"`, `density_model="tf_radius"`, `density_blend="linear"`, `density_Z_ref=10.0`
 - `ws_R_max=12.0`, `ws_R_well=5.0`, `ws_V0=40.0`, `ws_N_grid=220`, `ws_ell=0`, `ws_state_index=0`
 - `ws_geom_R_max=25.0`, `ws_geom_R_well=6.0`, `ws_geom_V0=45.0`, `ws_geom_N_grid=800`
 - `ws_geom_gap_ref=1.0`, `ws_geom_gap_scale=1.0`
+- `ws_Z_ref=10.0`, `ws_Z_alpha=1.0/3.0`
 
 Скан по Z:
 
@@ -98,8 +102,9 @@ ThermoConfig (для запуска SPECTRAL-GEOM, ключевые поля):
 python -m analysis.geom.scan_ws_gap_vs_Z
 ```
 
-Summary по `results/ws_sp_gap_scan_Z1_30.csv`:
+Summary по `results/ws_sp_gap_scan_Z1_30.csv` (при `coupling_ws_Z=0`):
 
+- `nunique(gap_sp) = 1`
 - `gap_min ≈ 0.9822`
 - `gap_max ≈ 0.9822`
 - `gap(Z=1) ≈ 0.9822`
@@ -107,7 +112,7 @@ Summary по `results/ws_sp_gap_scan_Z1_30.csv`:
 - `gap(Z=20) ≈ 0.9822`
 - `gap(Z=30) ≈ 0.9822`
 
-Интерпретация: `gap_sp(Z)` сейчас практически константа по Z (ни монотонности, ни плато/ступенек — ровная линия).
+Интерпретация: в дефолтном режиме (`coupling_ws_Z=0`) `gap_sp(Z)` остаётся константой (ожидаемо, это legacy-профиль без Z-coupling). При включении `coupling_ws_Z>0` unit-тесты гарантируют, что `gap_sp(Z)` становится Z-чувствительным.
 
 ## 5) TOPO-3D
 
@@ -141,5 +146,8 @@ cycle_CON        3        3           0.000000            0.000
 
 ## 6) Delta vs previous
 
-- `previous: none (baseline)`
-
+- Tests: было `33 passed`, стало `37 passed` (добавлены тесты для WS Z-coupling и 3D блоков).
+- SPECTRAL-DENSITY: ratio_E и mass_ratio для Z=1,6,14,26 остались в том же коридоре (≈1.0–1.026), т.е. мост WS→FDM по масштабу стабилен.
+- SPECTRAL-GEOM: таблица base→inferred, gap, h по B/C/N/O/Si/P/S не изменилась (при дефолтном `coupling_ws_Z=0` spectral-признак ещё не использует Z).
+- WS-gap scan: при `coupling_ws_Z=0` gap_sp(Z) по-прежнему константа (это ожидаемый legacy baseline); теперь есть инфраструктура (coupling_ws_Z, ws_Z_ref, ws_Z_alpha), чтобы включить Z-coupling.
+- TOPO-3D: результаты по chain/cycle/K4 и метрике entanglement_3d не изменились, поведение метрики стабильное.
