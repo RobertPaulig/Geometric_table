@@ -23,11 +23,18 @@ from core.port_geometry_spectral import (
     infer_port_geometry,
     canonical_port_vectors,
 )
+from core.shape_observables import (
+    ShapeObs,
+    get_shape_observables,
+    thermo_fingerprint_for_shape,
+)
+
 # We import grower inside the report function to avoid circular imports
 
 # ============================================================
 # FDM / NUMERICAL ENGINE HELPERS
 # ============================================================
+
 
 def toy_ldos_radial(r: np.ndarray, beta: float) -> np.ndarray:
     """
@@ -47,8 +54,8 @@ def cube_to_ball(u: np.ndarray, R: float = 4.0) -> np.ndarray:
     """
     Простое отображение из [0,1]^3 в шар радиуса R (или просто масштабирование в ящик [-R, R]).
     Для FDM интеграла нам главное покрыть область, где функция не исчезает.
-    
-    Пусть будет линейное растяжение в куб [-R, R]^3 пока что, т.к. 
+
+    Пусть будет линейное растяжение в куб [-R, R]^3 пока что, т.к.
     гауссиана быстро падает.
     """
     # u in [0, 1] -> x in [-R, R]
@@ -73,19 +80,19 @@ def _I_box(R: float, beta: float) -> float:
     sqrt_term = math.sqrt(math.pi / float(beta))
     erf_term = math.erf(math.sqrt(float(beta)) * float(R))
     Ix = sqrt_term * erf_term
-    return Ix ** 3
+    return Ix**3
 
 
 def estimate_atom_energy_fdm(atom_z: int, e_port: float) -> float:
     """
     Оценка 'спектральной энергии' атома через FDM-интеграл по 3D-ядру.
-    
+
     Параметры скейлинга (beta) зависят от Z (или E_port).
-    
+
     Args:
         atom_z: Z атома
         e_port: E_port из модели v4
-        
+
     Returns:
         Integral[ exp(-beta * r^2) ] (approx)
     """
@@ -104,8 +111,10 @@ def estimate_atom_energy_fdm(atom_z: int, e_port: float) -> float:
     # Legacy Gaussian-only branch (density_source != ws_radial)
     def _integrate_gaussian(R: float) -> float:
         fdm = FDMIntegrator(ifs)
+
         def integrand(r: np.ndarray) -> np.ndarray:
             return toy_ldos_radial(r, beta)
+
         val = fdm.integrate(
             integrand, depth=4, dim=dim, transform=lambda u: cube_to_ball(u, R)
         )
@@ -115,8 +124,7 @@ def estimate_atom_energy_fdm(atom_z: int, e_port: float) -> float:
     # Check if WS-ветка включена
     c_shape = float(getattr(thermo, "coupling_density_shape", 0.0))
     use_ws = (
-        getattr(thermo, "density_source", "gaussian") == "ws_radial"
-        and c_shape > 0.0
+        getattr(thermo, "density_source", "gaussian") == "ws_radial" and c_shape > 0.0
     )
 
     R_default = 4.0
@@ -135,9 +143,11 @@ def estimate_atom_energy_fdm(atom_z: int, e_port: float) -> float:
 
     # Масса WS-плотности в кубе до масштабирования
     fdm_mass = FDMIntegrator(ifs)
+
     def integrand_ws(r: np.ndarray) -> np.ndarray:
         radii = np.sqrt(np.sum(r * r, axis=1))
         return rho_ws_fn(radii)
+
     mean_ws = fdm_mass.integrate(
         integrand_ws, depth=4, dim=dim, transform=lambda u: cube_to_ball(u, R_eff)
     )
@@ -147,6 +157,7 @@ def estimate_atom_energy_fdm(atom_z: int, e_port: float) -> float:
     scale_ws = I_box / max(M_ws_box, 1e-30) if I_box > 0.0 else 0.0
 
     fdm = FDMIntegrator(ifs)
+
     def integrand(r: np.ndarray) -> np.ndarray:
         rho_gauss = toy_ldos_radial(r, beta)
         radii = np.sqrt(np.sum(r * r, axis=1))
@@ -160,9 +171,7 @@ def estimate_atom_energy_fdm(atom_z: int, e_port: float) -> float:
         if c <= 0.0:
             return rho_gauss
         if blend_mode == "log":
-            return np.exp(
-                (1.0 - c) * np.log(rho_gauss) + c * np.log(rho_ws)
-            )
+            return np.exp((1.0 - c) * np.log(rho_gauss) + c * np.log(rho_ws))
         return (1.0 - c) * rho_gauss + c * rho_ws
 
     val = fdm.integrate(
@@ -170,7 +179,6 @@ def estimate_atom_energy_fdm(atom_z: int, e_port: float) -> float:
     )
     total_energy = val * volume_eff
     return total_energy
-
 
 
 PAULING = {
@@ -269,6 +277,7 @@ def compute_W_complexity_eff(
     T = max(float(temperature), 1e-9)
     return W_base * (1.0 - c) + (W_base * T) * c
 
+
 @dataclass
 class AtomGraph:
     """
@@ -279,17 +288,17 @@ class AtomGraph:
     игрушечным спектральным параметром epsilon.
     """
 
-    name: str               # символ элемента, например "C"
-    Z: int                  # атомный номер
-    nodes: int              # число вершин графа
-    edges: int              # число рёбер
-    ports: int              # число валентных "портов"
-    symmetry_score: float   # чем меньше, тем ближе к идеальной симметрии
-    port_geometry: str      # тип геометрии портов ('tetra', 'trigonal', ...)
-    role: str               # роль в сетях: 'inert', 'hub', 'bridge', 'terminator'
-    epsilon: float = 0.0    # игрушечное положение уровня ε_Z относительно Среды
-    notes: str = ""         # произвольный комментарий
-    softness: float = 0.0   # мягкость в росте деревьев (penalty factor)
+    name: str  # символ элемента, например "C"
+    Z: int  # атомный номер
+    nodes: int  # число вершин графа
+    edges: int  # число рёбер
+    ports: int  # число валентных "портов"
+    symmetry_score: float  # чем меньше, тем ближе к идеальной симметрии
+    port_geometry: str  # тип геометрии портов ('tetra', 'trigonal', ...)
+    role: str  # роль в сетях: 'inert', 'hub', 'bridge', 'terminator'
+    epsilon: float = 0.0  # игрушечное положение уровня ε_Z относительно Среды
+    notes: str = ""  # произвольный комментарий
+    softness: float = 0.0  # мягкость в росте деревьев (penalty factor)
 
     def effective_port_geometry(self, thermo: Optional[ThermoConfig] = None) -> str:
         """
@@ -377,17 +386,32 @@ class AtomGraph:
         c = max(0.0, min(float(getattr(thermo, "coupling_softness", 0.0)), 1.0))
 
         if c <= 0.0:
-            return base
+            out = base
+        else:
+            eps = float(self.epsilon_spec())
+            spec_soft = 1.0 / (1.0 + eps)
 
-        eps = float(self.epsilon_spec())
-        spec_soft = 1.0 / (1.0 + eps)
+            per = max(1.0, float(self.period))
+            per_factor = (per - 1.0) / (per + 1.0)
+            spec_soft = spec_soft * (0.5 + 0.5 * per_factor)
+            spec_soft = max(0.0, min(float(spec_soft), 0.95))
 
-        per = max(1.0, float(self.period))
-        per_factor = (per - 1.0) / (per + 1.0)
-        spec_soft = spec_soft * (0.5 + 0.5 * per_factor)
-        spec_soft = max(0.0, min(float(spec_soft), 0.95))
+            out = max(0.0, min(base * (1.0 - c) + spec_soft * c, 0.95))
 
-        return max(0.0, min(base * (1.0 - c) + spec_soft * c, 0.95))
+        # Shape-driven softness (R&D, optional)
+        c_shape = max(
+            0.0, min(float(getattr(thermo, "coupling_shape_softness", 0.0)), 1.0)
+        )
+        if c_shape > 0.0:
+            fp = thermo_fingerprint_for_shape(thermo)
+            obs: ShapeObs = get_shape_observables(int(self.Z), fp)
+            a_k = abs(obs.delta_k) / (abs(obs.delta_k) + float(thermo.shape_kurt_scale))
+            a_r = obs.r_rms_ws / (obs.r_rms_ws + float(thermo.shape_rrms_scale))
+            activity = max(0.0, min(0.5 * a_k + 0.5 * a_r, 1.0))
+            soft_shape = max(0.0, min(out + 0.35 * activity, 0.95))
+            out = max(0.0, min((1.0 - c_shape) * out + c_shape * soft_shape, 0.95))
+
+        return out
 
     def cyclomatic_number(self) -> int:
         """
@@ -501,7 +525,7 @@ class AtomGraph:
         rhos = np.zeros_like(omegas)
 
         for lam in vals:
-            rhos += (eta / np.pi) / ((omegas - lam) ** 2 + eta ** 2)
+            rhos += (eta / np.pi) / ((omegas - lam) ** 2 + eta**2)
 
         return omegas, rhos
 
@@ -546,7 +570,13 @@ class AtomGraph:
         F = np.trapezoid(integrand, omegas)
         return float(F)
 
-    def F_geom(self, a: float = 0.5, b: float = 1.0, c: float = 1.5, use_complexity: bool = True) -> float:
+    def F_geom(
+        self,
+        a: float = 0.5,
+        b: float = 1.0,
+        c: float = 1.5,
+        use_complexity: bool = True,
+    ) -> float:
         """
         Простейший геометрический функционал:
 
@@ -556,9 +586,7 @@ class AtomGraph:
                    + W_COMPLEXITY * C_complex (if enabled)
         """
         base_val = (
-            a * self.cyclomatic_number()
-            + b * self.symmetry_score
-            + c * self.ports
+            a * self.cyclomatic_number() + b * self.symmetry_score + c * self.ports
         )
         if use_complexity:
             adj = self.adjacency_matrix()
@@ -571,7 +599,7 @@ class AtomGraph:
                 temperature=thermo.temperature,
             )
             base_val += W_eff * C_complex
-            
+
         return base_val
 
     def per_port_energy(
@@ -627,7 +655,6 @@ class AtomGraph:
         if e is None:
             return None
         return alpha * e
-
 
     def chi_geom_signed(
         self,
@@ -729,7 +756,20 @@ class AtomGraph:
             else:
                 s = 1.0
 
-        return sign * (s * chi_abs)
+        chi_abs_eff = s * chi_abs
+
+        # Shape-driven усиление амплитуды χ (R&D)
+        thermo = get_current_thermo_config()
+        c_shape = max(0.0, min(float(getattr(thermo, "coupling_shape_chi", 0.0)), 1.0))
+        if c_shape > 0.0:
+            fp = thermo_fingerprint_for_shape(thermo)
+            obs: ShapeObs = get_shape_observables(int(self.Z), fp)
+            a_k = abs(obs.delta_k) / (abs(obs.delta_k) + float(thermo.shape_kurt_scale))
+            a_r = obs.r_rms_ws / (obs.r_rms_ws + float(thermo.shape_rrms_scale))
+            activity = max(0.0, min(0.5 * a_k + 0.5 * a_r, 1.0))
+            chi_abs_eff *= 1.0 + 0.40 * c_shape * activity
+
+        return sign * chi_abs_eff
 
 
 def _load_atoms_from_json(path: Path) -> List[AtomGraph]:
@@ -983,7 +1023,6 @@ def _make_base_atoms_legacy() -> List[AtomGraph]:
             epsilon=-3.0,
         ),
         # --- 4-й период: главные группы (черновой прототип) ---
-
         # K: геометрический аналог Li/Na (щёлочной донор 4-го периода)
         AtomGraph(
             name="K",
@@ -997,7 +1036,6 @@ def _make_base_atoms_legacy() -> List[AtomGraph]:
             notes="Геометрический аналог Li/Na: щёлочной донор 4-го периода",
             epsilon=2.0,
         ),
-
         # Ca: геометрический аналог Be/Mg (щёлочноземельный донор)
         AtomGraph(
             name="Ca",
@@ -1011,12 +1049,10 @@ def _make_base_atoms_legacy() -> List[AtomGraph]:
             notes="Геометрический аналог Be/Mg: двухпортовый донор 4-го периода",
             epsilon=1.0,
         ),
-
         # --- 4-й период: d-блок (Sc–Zn) как металлические хабы/inert ---
         # Для простоты все d-металлы моделируются как 6‑портовые
         # октаэдрические графы одинаковой сложности. Роли согласованы
         # с таблицей индексов element_indices_with_dblock.csv.
-
         # Sc: спектрально почти инертный центр d-блока
         AtomGraph(
             name="Sc",
@@ -1030,7 +1066,6 @@ def _make_base_atoms_legacy() -> List[AtomGraph]:
             notes="Прототип раннего d-металла: октаэдрическая 6‑портовая конфигурация",
             epsilon=-0.1,
         ),
-
         # Ti: слабый акцепторный центр, но по D/A близок к инертному сектору
         AtomGraph(
             name="Ti",
@@ -1044,7 +1079,6 @@ def _make_base_atoms_legacy() -> List[AtomGraph]:
             notes="Ранний d-металл: октаэдрическая 6‑портовая конфигурация",
             epsilon=0.26,
         ),
-
         # V: первый выраженный d‑hub
         AtomGraph(
             name="V",
@@ -1058,7 +1092,6 @@ def _make_base_atoms_legacy() -> List[AtomGraph]:
             notes="Ранний d-hub: октаэдрический металлический центр",
             epsilon=0.44,
         ),
-
         AtomGraph(
             name="Cr",
             Z=24,
@@ -1071,7 +1104,6 @@ def _make_base_atoms_legacy() -> List[AtomGraph]:
             notes="Cr: октаэдрический d-hub, χ_spec ~ 0.5",
             epsilon=0.50,
         ),
-
         AtomGraph(
             name="Mn",
             Z=25,
@@ -1084,7 +1116,6 @@ def _make_base_atoms_legacy() -> List[AtomGraph]:
             notes="Mn: геометрически похож на Sc/Ti, слабый акцептор",
             epsilon=0.28,
         ),
-
         AtomGraph(
             name="Fe",
             Z=26,
@@ -1097,7 +1128,6 @@ def _make_base_atoms_legacy() -> List[AtomGraph]:
             notes="Fe: классический d-hub (металлический центр)",
             epsilon=0.84,
         ),
-
         AtomGraph(
             name="Co",
             Z=27,
@@ -1110,7 +1140,6 @@ def _make_base_atoms_legacy() -> List[AtomGraph]:
             notes="Co: поздний d-hub с увеличенной χ_spec",
             epsilon=0.94,
         ),
-
         AtomGraph(
             name="Ni",
             Z=28,
@@ -1123,7 +1152,6 @@ def _make_base_atoms_legacy() -> List[AtomGraph]:
             notes="Ni: поздний d-hub, χ_spec ~ 1.0",
             epsilon=1.00,
         ),
-
         AtomGraph(
             name="Cu",
             Z=29,
@@ -1136,7 +1164,6 @@ def _make_base_atoms_legacy() -> List[AtomGraph]:
             notes="Cu: мягкий d-hub, близок к низкоакцепторному плато",
             epsilon=0.98,
         ),
-
         AtomGraph(
             name="Zn",
             Z=30,
@@ -1149,7 +1176,6 @@ def _make_base_atoms_legacy() -> List[AtomGraph]:
             notes="Zn: замыкающий d-hub, χ_spec ~ 0.48",
             epsilon=0.48,
         ),
-
         # Ga: геометрический аналог B/Al (слабый акцептор-хаб)
         AtomGraph(
             name="Ga",
@@ -1163,7 +1189,6 @@ def _make_base_atoms_legacy() -> List[AtomGraph]:
             notes="Геометрический аналог B/Al: тригональный слабый акцептор",
             epsilon=-0.1,
         ),
-
         # Ge: геометрический аналог C/Si (четырёхпортовый центр)
         AtomGraph(
             name="Ge",
@@ -1177,7 +1202,6 @@ def _make_base_atoms_legacy() -> List[AtomGraph]:
             notes="Геометрический аналог C/Si: слабый акцепторный центр 4-го периода",
             epsilon=0.0,
         ),
-
         # As: геометрический аналог N/P (сильный акцептор-хаб)
         AtomGraph(
             name="As",
@@ -1191,7 +1215,6 @@ def _make_base_atoms_legacy() -> List[AtomGraph]:
             notes="Геометрический аналог N/P: трёхпортовый акцептор 4-го периода",
             epsilon=-0.5,
         ),
-
         # Se: геометрический аналог O/S (акцепторный мост)
         AtomGraph(
             name="Se",
@@ -1205,7 +1228,6 @@ def _make_base_atoms_legacy() -> List[AtomGraph]:
             notes="Геометрический аналог O/S: двухпортовый акцепторный мост",
             epsilon=-1.0,
         ),
-
         # Br: геометрический аналог F/Cl (сильный одиночный порт)
         AtomGraph(
             name="Br",
@@ -1219,184 +1241,169 @@ def _make_base_atoms_legacy() -> List[AtomGraph]:
             notes="Геометрический аналог F/Cl: сильный одиночный порт 4-го периода",
             epsilon=-1.5,
         ),
-
-          # Kr: геометрический аналог Ne/Ar (инертная замкнутая конфигурация)
-          AtomGraph(
-              name="Kr",
-              Z=36,
-              nodes=12,
-              edges=13,
-              ports=0,
-              symmetry_score=0.1,
-              port_geometry="none",
-              role="inert",
-              notes="Геометрический аналог Ne/Ar: инертный газ 4-го периода",
-              epsilon=-3.0,
-          ),
-
+        # Kr: геометрический аналог Ne/Ar (инертная замкнутая конфигурация)
+        AtomGraph(
+            name="Kr",
+            Z=36,
+            nodes=12,
+            edges=13,
+            ports=0,
+            symmetry_score=0.1,
+            port_geometry="none",
+            role="inert",
+            notes="Геометрический аналог Ne/Ar: инертный газ 4-го периода",
+            epsilon=-3.0,
+        ),
         # --- 5-й период: Rb–Xe как клоны 4-го периода ---------------------
         # Здесь мы копируем геометрию и роли с K–Kr, меняем только name и Z.
-
         AtomGraph(
             name="Rb",
             Z=37,
-            nodes=3,              # как у K
-            edges=2,              # как у K
-            ports=1,              # как у K
-            symmetry_score=0.5,   # как у K
+            nodes=3,  # как у K
+            edges=2,  # как у K
+            ports=1,  # как у K
+            symmetry_score=0.5,  # как у K
             port_geometry="single",
             role="terminator",
             notes="Клон K (5-й период): щёлочной терминатор",
-            epsilon=2.0,          # как у K
+            epsilon=2.0,  # как у K
         ),
-
         AtomGraph(
             name="Sr",
             Z=38,
-            nodes=4,              # как у Ca
-            edges=3,              # как у Ca
-            ports=2,              # как у Ca
-            symmetry_score=0.4,   # как у Ca
+            nodes=4,  # как у Ca
+            edges=3,  # как у Ca
+            ports=2,  # как у Ca
+            symmetry_score=0.4,  # как у Ca
             port_geometry="linear",
             role="bridge",
             notes="Клон Ca (5-й период): щёлочноземельный мост",
-            epsilon=1.0,          # как у Ca
+            epsilon=1.0,  # как у Ca
         ),
-
         AtomGraph(
             name="In",
             Z=49,
-            nodes=5,              # как у Ga
-            edges=4,              # как у Ga
-            ports=3,              # как у Ga
-            symmetry_score=0.6,   # как у Ga
+            nodes=5,  # как у Ga
+            edges=4,  # как у Ga
+            ports=3,  # как у Ga
+            symmetry_score=0.6,  # как у Ga
             port_geometry="trigonal",
             role="hub",
             notes="Клон Ga (5-й период): мягкий p-hub",
-            epsilon=-0.1,         # как у Ga
+            epsilon=-0.1,  # как у Ga
         ),
-
         AtomGraph(
             name="Sn",
             Z=50,
-            nodes=6,              # как у Ge
-            edges=6,              # как у Ge
-            ports=4,              # как у Ge
-            symmetry_score=0.2,   # как у Ge
+            nodes=6,  # как у Ge
+            edges=6,  # как у Ge
+            ports=4,  # как у Ge
+            symmetry_score=0.2,  # как у Ge
             port_geometry="tetra",
             role="hub",
             notes="Клон Ge (5-й период): четырёхпортовый hub",
-            epsilon=0.0,          # как у Ge
+            epsilon=0.0,  # как у Ge
         ),
-
         AtomGraph(
             name="Sb",
             Z=51,
-            nodes=7,              # как у As
-            edges=7,              # как у As
-            ports=3,              # как у As
+            nodes=7,  # как у As
+            edges=7,  # как у As
+            ports=3,  # как у As
             symmetry_score=0.25,  # как у As
             port_geometry="pyramidal",
             role="hub",
             notes="Клон As (5-й период): трёхпортовый hub",
-            epsilon=-0.5,         # как у As
+            epsilon=-0.5,  # как у As
         ),
-
         AtomGraph(
             name="Te",
             Z=52,
-            nodes=8,              # как у Se
-            edges=8,              # как у Se
-            ports=2,              # как у Se
-            symmetry_score=0.3,   # как у Se
+            nodes=8,  # как у Se
+            edges=8,  # как у Se
+            ports=2,  # как у Se
+            symmetry_score=0.3,  # как у Se
             port_geometry="bent",
             role="bridge",
             notes="Клон Se (5-й период): мост-акцептор",
-            epsilon=-1.0,         # как у Se
+            epsilon=-1.0,  # как у Se
         ),
-
         AtomGraph(
             name="I",
             Z=53,
-            nodes=9,              # как у Br
-            edges=10,             # как у Br
-            ports=1,              # как у Br
+            nodes=9,  # как у Br
+            edges=10,  # как у Br
+            ports=1,  # как у Br
             symmetry_score=0.35,  # как у Br
             port_geometry="single",
             role="terminator",
             notes="Клон Br (5-й период): терминатор",
-            epsilon=-1.5,         # как у Br
+            epsilon=-1.5,  # как у Br
         ),
-
         AtomGraph(
             name="Xe",
             Z=54,
-            nodes=12,             # как у Kr
-            edges=13,             # как у Kr
-            ports=0,              # как у Kr
-            symmetry_score=0.1,   # как у Kr
+            nodes=12,  # как у Kr
+            edges=13,  # как у Kr
+            ports=0,  # как у Kr
+            symmetry_score=0.1,  # как у Kr
             port_geometry="none",
             role="inert",
             notes="Клон Kr (5-й период): инертный газ",
-            epsilon=-3.0,         # как у Kr
+            epsilon=-3.0,  # как у Kr
         ),
-
         # --- 6-й период: Cs/Ba/Tl/Pb как клоны 5-го периода (черновой прототип) ---
-
         # Cs: клон Rb (щелочной донор 6-го периода)
         AtomGraph(
             name="Cs",
             Z=55,
-            nodes=3,              # как у Rb
-            edges=2,              # как у Rb
-            ports=1,              # как у Rb
-            symmetry_score=0.5,   # как у Rb
+            nodes=3,  # как у Rb
+            edges=2,  # как у Rb
+            ports=1,  # как у Rb
+            symmetry_score=0.5,  # как у Rb
             port_geometry="single",
             role="terminator",
             notes="Клон Rb (6-й период): щелочной терминатор",
-            epsilon=2.0,          # как у Rb/K
+            epsilon=2.0,  # как у Rb/K
         ),
-
         # Ba: клон Sr (щелочноземельный мост 6-го периода)
         AtomGraph(
             name="Ba",
             Z=56,
-            nodes=4,              # как у Sr
-            edges=3,              # как у Sr
-            ports=2,              # как у Sr
-            symmetry_score=0.4,   # как у Sr
+            nodes=4,  # как у Sr
+            edges=3,  # как у Sr
+            ports=2,  # как у Sr
+            symmetry_score=0.4,  # как у Sr
             port_geometry="linear",
             role="bridge",
             notes="Клон Sr (6-й период): щелочноземельный мост",
-            epsilon=1.0,          # как у Sr/Ca
+            epsilon=1.0,  # как у Sr/Ca
         ),
-
         # Tl: клон In (мягкий p-hub 6-го периода)
         AtomGraph(
             name="Tl",
             Z=81,
-            nodes=5,              # как у In
-            edges=4,              # как у In
-            ports=3,              # как у In
-            symmetry_score=0.6,   # как у In
+            nodes=5,  # как у In
+            edges=4,  # как у In
+            ports=3,  # как у In
+            symmetry_score=0.6,  # как у In
             port_geometry="trigonal",
             role="hub",
             notes="Клон In (6-й период): мягкий p-hub",
-            epsilon=-0.1,         # как у In/Ga
+            epsilon=-0.1,  # как у In/Ga
         ),
-
         # Pb: клон Sn (четырехпортовый p-hub 6-го периода)
         AtomGraph(
             name="Pb",
             Z=82,
-            nodes=6,              # как у Sn
-            edges=6,              # как у Sn
-            ports=4,              # как у Sn
-            symmetry_score=0.2,   # как у Sn
+            nodes=6,  # как у Sn
+            edges=6,  # как у Sn
+            ports=4,  # как у Sn
+            symmetry_score=0.2,  # как у Sn
             port_geometry="tetra",
             role="hub",
             notes="Клон Sn (6-й период): четырехпортовый hub",
-            epsilon=0.0,          # как у Sn/Ge
+            epsilon=0.0,  # как у Sn/Ge
         ),
         # --- конец 5-го/6-го периода -------------------------------------------
     ]
@@ -1423,9 +1430,7 @@ def _make_base_atoms() -> List[AtomGraph]:
     try:
         return _load_atoms_from_json(json_path)
     except Exception as exc:
-        raise RuntimeError(
-            f"Failed to load atoms DB from {json_path}: {exc}"
-        ) from exc
+        raise RuntimeError(f"Failed to load atoms DB from {json_path}: {exc}") from exc
 
 
 base_atoms: List[AtomGraph] = _make_base_atoms()
@@ -1441,7 +1446,7 @@ def get_atom(name: str) -> AtomGraph:
     # This allows finding dynamically added atoms like "X"
     if "PERIODIC_TABLE" in globals() and name in PERIODIC_TABLE:
         return PERIODIC_TABLE[name]
-    
+
     for atom in base_atoms:
         if atom.name == name:
             return atom
@@ -1461,11 +1466,12 @@ class AtomOverrideContext:
     """
     Контекстный менеджер для временного изменения параметров атома
     (например, epsilon и period) в спектральной таблице.
-    
+
     Usage:
         with AtomOverrideContext(PERIODIC_TABLE, "O", epsilon=-5.0):
             mol = make_H2O()  # uses modified O
     """
+
     def __init__(self, periodic_table: dict, symbol: str, **overrides):
         self.pt = periodic_table
         self.symbol = symbol
@@ -1486,8 +1492,6 @@ class AtomOverrideContext:
         # Restore original values
         for name, old_value in self._backup.items():
             object.__setattr__(atom, name, old_value)
-
-
 
 
 def compute_mu_env_spec() -> float:
@@ -1690,7 +1694,7 @@ class Molecule:
                 continue
 
             delta = base_angle - theta0
-            total += k_angle * n_virtual * (delta ** 2)
+            total += k_angle * n_virtual * (delta**2)
 
         return total
 
@@ -2021,9 +2025,7 @@ def print_port_energies(a: float = 0.5, b: float = 1.0, c: float = 1.5) -> None:
     Вывести таблицу геометрической энергии на порт для элементов с ports > 0.
     """
     atoms_with_ports = [atom for atom in base_atoms if atom.ports > 0]
-    atoms_with_ports.sort(
-        key=lambda atom: atom.per_port_energy(a=a, b=b, c=c) or 0.0
-    )
+    atoms_with_ports.sort(key=lambda atom: atom.per_port_energy(a=a, b=b, c=c) or 0.0)
 
     print()
     print(f"Per-port geometric energy (a={a}, b={b}, c={c}):")
@@ -2037,8 +2039,7 @@ def print_port_energies(a: float = 0.5, b: float = 1.0, c: float = 1.5) -> None:
         if e_port is None:
             continue
         print(
-            f"{atom.name:<3} {atom.Z:>2d} {atom.ports:>5d} "
-            f"{F:>8.3f} {e_port:>8.3f}"
+            f"{atom.name:<3} {atom.Z:>2d} {atom.ports:>5d} " f"{F:>8.3f} {e_port:>8.3f}"
         )
 
 
@@ -2048,8 +2049,7 @@ def print_port_geometries() -> None:
     """
     print()
     header = (
-        f"{'El':<3} {'Z':>2} {'ports':>5} {'geom':>10} "
-        f"{'angle':>8} {'role':>10}"
+        f"{'El':<3} {'Z':>2} {'ports':>5} {'geom':>10} " f"{'angle':>8} {'role':>10}"
     )
     print(header)
     print("-" * len(header))
@@ -2177,14 +2177,8 @@ def print_bond_polarities(
     print(f"Bond polarities (a={a}, b={b}, c={c}, alpha={alpha:.3f}):")
     print("Molecule  bond   Δchi_sgn   comment")
     print("------------------------------------------")
-    print(
-        f"HF       H->F  {delta_hf:9.3f}   "
-        f"(поляризация к F, акцептор)"
-    )
-    print(
-        f"HCl      H->Cl {delta_hcl:9.3f}   "
-        f"(поляризация к Cl, акцептор)"
-    )
+    print(f"HF       H->F  {delta_hf:9.3f}   " f"(поляризация к F, акцептор)")
+    print(f"HCl      H->Cl {delta_hcl:9.3f}   " f"(поляризация к Cl, акцептор)")
 
 
 def classify_bond(delta_chi: float) -> str:
@@ -2254,8 +2248,7 @@ def print_bond_polarities_spec(
         f"gamma_donor={gamma_donor}):"
     )
     header = (
-        f"{'Molecule':<8} {'bond':<7} {'Δchi_spec':>10}   "
-        f"{'type':<18} {'comment'}"
+        f"{'Molecule':<8} {'bond':<7} {'Δchi_spec':>10}   " f"{'type':<18} {'comment'}"
     )
     print(header)
     print("-" * len(header))
@@ -2272,10 +2265,7 @@ def print_bond_polarities_spec(
             comment = f"{label}, полярная ковалентная"
         else:
             comment = f"{label}, сильно ионная связь"
-        print(
-            f"{name:<8} {label:<7} {dchi:10.3f}   "
-            f"{bond_type:<18} {comment}"
-        )
+        print(f"{name:<8} {label:<7} {dchi:10.3f}   " f"{bond_type:<18} {comment}")
 
 
 def get_chi_spec(
@@ -2340,14 +2330,9 @@ def print_chain_polarities(
             direction = (
                 f"{ai.name}->{aj.name}"
                 if delta > 0
-                else f"{aj.name}->{ai.name}"
-                if delta < 0
-                else "none"
+                else f"{aj.name}->{ai.name}" if delta < 0 else "none"
             )
-            print(
-                f"{k:>4d}   {ai.name}-{aj.name:2}  {delta:9.3f}   "
-                f"({direction})"
-            )
+            print(f"{k:>4d}   {ai.name}-{aj.name:2}  {delta:9.3f}   " f"({direction})")
 
     print()
     print(f"Chain bond polarities (a={a}, b={b}, c={c}, alpha={alpha:.3f}):")
@@ -2382,8 +2367,7 @@ def print_chain_polarities_spec(
         print()
         print(f"Molecule: {name}")
         header = (
-            f"{'bond':>4} {'atoms':>7} {'Δchi_spec':>10}   "
-            f"{'type':<18} {'comment'}"
+            f"{'bond':>4} {'atoms':>7} {'Δchi_spec':>10}   " f"{'type':<18} {'comment'}"
         )
         print(header)
         print("-" * len(header))
@@ -2450,9 +2434,7 @@ def print_molecule_spectral_charges(
     print("-----------------------------------------------")
     for i, atom in enumerate(mol.atoms):
         el = atom.name
-        print(
-            f"{i:3d}  {el:2s}  {chi[i]:8.3f}   {eta[i]:10.3f}   {q[i]:10.3f}"
-        )
+        print(f"{i:3d}  {el:2s}  {chi[i]:8.3f}   {eta[i]:10.3f}   {q[i]:10.3f}")
     print()
 
     print("Bond charge differences (approx dipoles q_j - q_i):")
@@ -2487,9 +2469,7 @@ def print_pair_polarity_map(
         f"k_center={k_center})"
     )
     header = (
-        f"{'A':<3} {'B':<3} "
-        f"{'chi_A':>9} {'chi_B':>9} "
-        f"{'Δchi':>9} {'type':>14}"
+        f"{'A':<3} {'B':<3} " f"{'chi_A':>9} {'chi_B':>9} " f"{'Δchi':>9} {'type':>14}"
     )
     print(header)
     print("-" * len(header))
@@ -2608,10 +2588,7 @@ def print_spectral_energies(
         f"Spectral integral energies "
         f"(omega in [{omega_min},{omega_max}], eta={eta}, beta={beta}):"
     )
-    header = (
-        f"{'El':<3} {'Z':>2} "
-        f"{'F_exp':>10} {'F_quad':>10} {'F_lin':>10}"
-    )
+    header = f"{'El':<3} {'Z':>2} " f"{'F_exp':>10} {'F_quad':>10} {'F_lin':>10}"
     print(header)
     print("-" * len(header))
 
@@ -2729,11 +2706,11 @@ def print_role_averages(
     omega_max: float = 6.0,
     eta: float = 0.1,
     beta: float = 0.5,
-      a: float = 0.5,
-      b: float = 1.0,
-      c: float = 1.5,
-      alpha: float = ALPHA_CALIBRATED,
-      eps_neutral: float = EPS_NEUTRAL,
+    a: float = 0.5,
+    b: float = 1.0,
+    c: float = 1.5,
+    alpha: float = ALPHA_CALIBRATED,
+    eps_neutral: float = EPS_NEUTRAL,
 ) -> None:
     """
     Усреднённые спектральные характеристики по ролям:
@@ -2848,14 +2825,17 @@ def print_spectral_periodic_table(
             beta=beta,
         )
         e_port = atom.per_port_energy(a=a, b=b, c=c) or 0.0
-        chi = atom.chi_geom_signed_spec(
-            a=a,
-            b=b,
-            c=c,
-            alpha=alpha,
-            eps_neutral=eps_neutral,
-            gamma_donor=gamma_donor,
-        ) or 0.0
+        chi = (
+            atom.chi_geom_signed_spec(
+                a=a,
+                b=b,
+                c=c,
+                alpha=alpha,
+                eps_neutral=eps_neutral,
+                gamma_donor=gamma_donor,
+            )
+            or 0.0
+        )
 
         print(
             f"{Z:>2d} {atom.name:<2} {per:>3d} {atom.role:>10} "
@@ -3182,8 +3162,12 @@ def run_v1_baseline_checks() -> None:
     chi_Li = get_chi_spec("Li")
     chi_Na = get_chi_spec("Na")
 
-    print(f"F vs Cl:  χ_spec(F)  = {chi_F:.3f}, χ_spec(Cl) = {chi_Cl:.3f}, Δ = {abs(chi_F - chi_Cl):.6f}")
-    print(f"Li vs Na: χ_spec(Li) = {chi_Li:.3f}, χ_spec(Na) = {chi_Na:.3f}, Δ = {abs(chi_Li - chi_Na):.6f}")
+    print(
+        f"F vs Cl:  χ_spec(F)  = {chi_F:.3f}, χ_spec(Cl) = {chi_Cl:.3f}, Δ = {abs(chi_F - chi_Cl):.6f}"
+    )
+    print(
+        f"Li vs Na: χ_spec(Li) = {chi_Li:.3f}, χ_spec(Na) = {chi_Na:.3f}, Δ = {abs(chi_Li - chi_Na):.6f}"
+    )
 
     # 2. Реакция обмена HF + NaCl ↔ HCl + NaF (должна быть ≈ 0)
     hf = make_HF()
@@ -3354,10 +3338,11 @@ def scan_period_exponent() -> None:
         chi_Li = get_chi_spec("Li") or 0.0
         chi_Na = get_chi_spec("Na") or 0.0
 
-        dF1 = reaction_energy([make_HF(), make_NaCl()],
-                              [make_HCl(), make_NaF()])
+        dF1 = reaction_energy([make_HF(), make_NaCl()], [make_HCl(), make_NaF()])
 
-        print(f"{k:4.1f}   {chi_F:7.3f} {chi_Cl:8.3f} {chi_Li:8.3f} {chi_Na:8.3f} {dF1:11.3f}")
+        print(
+            f"{k:4.1f}   {chi_F:7.3f} {chi_Cl:8.3f} {chi_Li:8.3f} {chi_Na:8.3f} {dF1:11.3f}"
+        )
 
     print()
     print("Interpretation:")
@@ -3374,6 +3359,7 @@ def scan_period_exponent() -> None:
 # R&D EXPERIMENTS
 # ============================================================
 
+
 def print_single_molecule_breakdown(mol, label: str) -> None:
     """
     Печатает разложение энергии для одной молекулы в удобном формате.
@@ -3383,8 +3369,10 @@ def print_single_molecule_breakdown(mol, label: str) -> None:
     F_angle = mol.angular_tension_sp3()
     _, _, _, _, F_flow = mol.spectral_charges()
     F_total = F_geom + F_angle + F_flow
-    print(f"  {label:20s}  F_geom={F_geom:7.3f}  F_angle={F_angle:6.3f}  "
-          f"F_flow={F_flow:7.3f}  F_total={F_total:7.3f}")
+    print(
+        f"  {label:20s}  F_geom={F_geom:7.3f}  F_angle={F_angle:6.3f}  "
+        f"F_flow={F_flow:7.3f}  F_total={F_total:7.3f}"
+    )
 
 
 def run_super_O_vs_S_experiment(
@@ -3393,7 +3381,7 @@ def run_super_O_vs_S_experiment(
 ) -> None:
     """
     R&D-эксперимент: Super-O vs S.
-    
+
     1) Сравниваем обычную H2O и H2S
     2) Вводим 'Super-O' (очень глубокая epsilon) и сравниваем H2O* с H2O/H2S.
     """
@@ -3408,8 +3396,10 @@ def run_super_O_vs_S_experiment(
     print("=" * 60)
     print("===== R&D EXPERIMENT: SUPER-O vs S =====")
     print("=" * 60)
-    print(f"[PARAMS] SPECTRAL_MODE=v2_period_split, k_period={k_period:.3f}, "
-          f"super_eps={super_eps:.3f}")
+    print(
+        f"[PARAMS] SPECTRAL_MODE=v2_period_split, k_period={k_period:.3f}, "
+        f"super_eps={super_eps:.3f}"
+    )
 
     # Baseline: normal O and S
     print()
@@ -3423,7 +3413,7 @@ def run_super_O_vs_S_experiment(
     print()
     print("--- SUPER-O VARIANT ---")
     print(f"[INFO] Setting O.epsilon = {super_eps} (was {get_atom('O').epsilon})")
-    
+
     with AtomOverrideContext(PERIODIC_TABLE, "O", epsilon=super_eps):
         mol_h2o_super = make_H2O()
         print_single_molecule_breakdown(mol_h2o_super, "H2O* (Super-O)")
@@ -3473,13 +3463,17 @@ def scan_donor_acceptor_decay(
         delta_d = chi_Li - chi_Na
         delta_a = chi_F - chi_Cl
 
-        print(f"{k:7.3f}  {chi_Li:8.3f} {chi_Na:8.3f} {delta_d:11.3f}  "
-              f"{chi_F:8.3f} {chi_Cl:8.3f} {delta_a:14.3f}")
+        print(
+            f"{k:7.3f}  {chi_Li:8.3f} {chi_Na:8.3f} {delta_d:11.3f}  "
+            f"{chi_F:8.3f} {chi_Cl:8.3f} {delta_a:14.3f}"
+        )
 
     print()
     print("[INTERPRETATION]")
     print("  - Δchi_donor  = chi_Li - chi_Na  (positive means Li is 'softer donor')")
-    print("  - Δchi_acceptor = chi_F - chi_Cl (positive means F is 'stronger acceptor')")
+    print(
+        "  - Δchi_acceptor = chi_F - chi_Cl (positive means F is 'stronger acceptor')"
+    )
     print()
 
     # Restore
@@ -3559,6 +3553,7 @@ def find_zero_chemistry_point_for_Cl_vs_H(
 # R&D MASTER REPORT
 # ============================================================
 
+
 def collect_element_chi(mode: str) -> dict:
     """
     Возвращает {symbol -> chi_spec} для указанного режима (v1 или v2).
@@ -3566,7 +3561,7 @@ def collect_element_chi(mode: str) -> dict:
     global SPECTRAL_MODE
     old_mode = SPECTRAL_MODE
     SPECTRAL_MODE = mode if mode == "v1" else "v2_period_split"
-    
+
     result = {}
     for atom in base_atoms:
         if atom.role == "inert":
@@ -3574,7 +3569,7 @@ def collect_element_chi(mode: str) -> dict:
         chi = atom.chi_geom_signed_spec()
         if chi is not None:
             result[atom.name] = chi
-    
+
     SPECTRAL_MODE = old_mode
     return result
 
@@ -3584,7 +3579,7 @@ def print_compact_spectral_table(mode_label: str) -> None:
     print(f"\n[{mode_label}] Spectral table (compact):")
     print("Z  El   role        eps_spec   E_port   chi_spec")
     print("-" * 55)
-    
+
     for atom in base_atoms:
         if atom.role == "inert":
             continue
@@ -3592,7 +3587,9 @@ def print_compact_spectral_table(mode_label: str) -> None:
         e_port = atom.per_port_energy() or 0.0
         chi = atom.chi_geom_signed_spec()
         chi_str = f"{chi:8.3f}" if chi is not None else "    N/A"
-        print(f"{atom.Z:2d} {atom.name:3s}  {atom.role:10s}  {eps:8.3f}  {e_port:7.3f}  {chi_str}")
+        print(
+            f"{atom.Z:2d} {atom.name:3s}  {atom.role:10s}  {eps:8.3f}  {e_port:7.3f}  {chi_str}"
+        )
 
 
 def print_organic_testbench_with_reactivity(mode_label: str) -> None:
@@ -3613,7 +3610,7 @@ def print_organic_testbench_with_reactivity(mode_label: str) -> None:
     print(f"\n[{mode_label}] Organic testbench with reactivity index:")
     print("Molecule   F_geom   F_angle    F_flow   F_total  R_react")
     print("-" * 60)
-    
+
     for name, mol in molecules:
         a, b, c = 0.5, 1.0, 1.5
         F_geom = sum(at.F_geom(a=a, b=b, c=c) for at in mol.atoms)
@@ -3622,21 +3619,23 @@ def print_organic_testbench_with_reactivity(mode_label: str) -> None:
         F_total = F_geom + F_angle + F_flow
         denom = max(F_geom + F_angle, 1e-9)
         R = abs(F_flow) / denom
-        print(f"{name:8s} {F_geom:8.3f} {F_angle:9.3f} {F_flow:9.3f} {F_total:9.3f} {R:7.4f}")
+        print(
+            f"{name:8s} {F_geom:8.3f} {F_angle:9.3f} {F_flow:9.3f} {F_total:9.3f} {R:7.4f}"
+        )
 
 
 def print_reaction_block(mode_label: str) -> None:
     """Печатает блок реакций с энергиями."""
-    hf   = make_HF()
-    hcl  = make_HCl()
-    naf  = make_NaF()
+    hf = make_HF()
+    hcl = make_HCl()
+    naf = make_NaF()
     nacl = make_NaCl()
-    lif  = make_LiF()
+    lif = make_LiF()
     licl = make_LiCl()
-    
+
     dF1 = reaction_energy([hf, nacl], [hcl, naf])
     dF2 = reaction_energy([lif, hcl], [licl, hf])
-    
+
     print(f"\n[{mode_label}] Reaction energies:")
     print(f"  HF + NaCl → HCl + NaF:  ΔF = {dF1:+.4f}")
     print(f"  LiF + HCl → LiCl + HF:  ΔF = {dF2:+.4f}")
@@ -3662,19 +3661,21 @@ def scan_period_exponent_compact(
 
     for k in k_values:
         V2_PERIOD_EXPONENT = k
-        
-        chi_F  = get_chi_spec("F") or 0.0
+
+        chi_F = get_chi_spec("F") or 0.0
         chi_Cl = get_chi_spec("Cl") or 0.0
         chi_Li = get_chi_spec("Li") or 0.0
         chi_Na = get_chi_spec("Na") or 0.0
-        
+
         dF = reaction_energy([make_HF(), make_NaCl()], [make_HCl(), make_NaF()])
-        
+
         dchi_FCl = chi_F - chi_Cl
         dchi_LiNa = chi_Li - chi_Na
-        
-        print(f"{k:4.2f}  {chi_F:7.3f} {chi_Cl:8.3f} {dchi_FCl:9.3f}  "
-              f"{chi_Li:8.3f} {chi_Na:8.3f} {dchi_LiNa:10.3f} {dF:9.3f}")
+
+        print(
+            f"{k:4.2f}  {chi_F:7.3f} {chi_Cl:8.3f} {dchi_FCl:9.3f}  "
+            f"{chi_Li:8.3f} {chi_Na:8.3f} {dchi_LiNa:10.3f} {dF:9.3f}"
+        )
 
     SPECTRAL_MODE = old_mode
     V2_PERIOD_EXPONENT = old_k
@@ -3689,39 +3690,39 @@ def run_super_O_vs_S_enhanced(k_period: float = 0.7, super_eps: float = -5.0) ->
     V2_PERIOD_EXPONENT = k_period
 
     print(f"\n[SUPER-O] Parameters: k_period={k_period:.3f}, super_eps={super_eps:.3f}")
-    
+
     # Baseline O
     O_atom = get_atom("O")
     S_atom = get_atom("S")
     chi_O_base = O_atom.chi_geom_signed_spec() or 0.0
     chi_S = S_atom.chi_geom_signed_spec() or 0.0
-    
+
     mol_h2o = make_H2O()
     mol_h2s = make_H2S()
-    
+
     q_h2o, _, _, _, flow_h2o = mol_h2o.spectral_charges()
     q_h2s, _, _, _, flow_h2s = mol_h2s.spectral_charges()
-    
+
     # q values: index 0 is central atom (O or S), 1,2 are H
     q_O = q_h2o[0] if len(q_h2o) > 0 else 0.0
     q_S = q_h2s[0] if len(q_h2s) > 0 else 0.0
-    
+
     print(f"\nBaseline O : chi_spec={chi_O_base:+.3f}, eps={O_atom.epsilon:.2f}")
     print(f"             q_O={q_O:+.4f}, F_flow(H2O)={flow_h2o:+.4f}")
-    
+
     print(f"\nSulfur     : chi_spec={chi_S:+.3f}, eps={S_atom.epsilon:.2f}")
     print(f"             q_S={q_S:+.4f}, F_flow(H2S)={flow_h2s:+.4f}")
-    
+
     # Super-O
     with AtomOverrideContext(PERIODIC_TABLE, "O", epsilon=super_eps):
         chi_O_super = get_atom("O").chi_geom_signed_spec() or 0.0
         mol_h2o_super = make_H2O()
         q_super, _, _, _, flow_super = mol_h2o_super.spectral_charges()
         q_O_super = q_super[0] if len(q_super) > 0 else 0.0
-        
+
         print(f"\nSuper-O    : chi_spec={chi_O_super:+.3f}, eps={super_eps:.2f}")
         print(f"             q_O={q_O_super:+.4f}, F_flow(H2O*)={flow_super:+.4f}")
-    
+
     print(f"\n[COMPARISON]")
     print(f"  Δ(F_flow): H2O* - H2O = {flow_super - flow_h2o:+.4f}")
     print(f"  Δ(F_flow): H2O  - H2S = {flow_h2o - flow_h2s:+.4f}")
@@ -3730,7 +3731,9 @@ def run_super_O_vs_S_enhanced(k_period: float = 0.7, super_eps: float = -5.0) ->
     print()
     print("[NOTE] Super-O experiment in v2.0: overriding epsilon(O)")
     print("       does NOT change chi_spec or QEq charges in the current calibration.")
-    print("       This is an intentional NEGATIVE result and a marker for future v3.0 work.")
+    print(
+        "       This is an intentional NEGATIVE result and a marker for future v3.0 work."
+    )
 
     SPECTRAL_MODE = old_mode
     V2_PERIOD_EXPONENT = old_k
@@ -3742,7 +3745,9 @@ def run_super_O_vs_S_v3(k_period: float = 0.7, super_eps: float = -5.0) -> None:
     old_k = V2_PERIOD_EXPONENT
     V2_PERIOD_EXPONENT = k_period
 
-    print(f"\n[SUPER-O v3] Parameters: k_period={k_period:.3f}, super_eps={super_eps:.3f}")
+    print(
+        f"\n[SUPER-O v3] Parameters: k_period={k_period:.3f}, super_eps={super_eps:.3f}"
+    )
 
     # Baseline O/S in current (v3) mode
     O_atom = get_atom("O")
@@ -3787,19 +3792,21 @@ def run_super_O_vs_S_v3(k_period: float = 0.7, super_eps: float = -5.0) -> None:
 # CSV EXPORT FUNCTIONS (for book tables)
 # ============================================================
 
+
 def export_periodic_table_v3_csv(out=None) -> None:
     """
     Печатает компактную v4.0-таблицу в CSV-формате:
     Z,El,period,role,eps_spec,E_port,chi_spec
     """
     import sys
+
     if out is None:
         out = sys.stdout
-    
+
     global SPECTRAL_MODE
     old_mode = SPECTRAL_MODE
     SPECTRAL_MODE = SPECTRAL_MODE_V4
-    
+
     try:
         print("Z,El,period,role,eps_spec,E_port,chi_spec", file=out)
         for atom in base_atoms:
@@ -3807,8 +3814,11 @@ def export_periodic_table_v3_csv(out=None) -> None:
             e_port = atom.per_port_energy() or 0.0
             chi = atom.chi_geom_signed_spec()
             chi_val = chi if chi is not None else 0.0
-            print(f"{atom.Z},{atom.name},{atom.period},{atom.role},"
-                  f"{eps_spec:.4f},{e_port:.4f},{chi_val:.4f}", file=out)
+            print(
+                f"{atom.Z},{atom.name},{atom.period},{atom.role},"
+                f"{eps_spec:.4f},{e_port:.4f},{chi_val:.4f}",
+                file=out,
+            )
     finally:
         SPECTRAL_MODE = old_mode
 
@@ -3819,13 +3829,14 @@ def export_organic_testbench_v3_csv(out=None) -> None:
     mol,F_geom,F_angle,F_flow,F_total,R_react
     """
     import sys
+
     if out is None:
         out = sys.stdout
-    
+
     global SPECTRAL_MODE
     old_mode = SPECTRAL_MODE
     SPECTRAL_MODE = SPECTRAL_MODE_V4
-    
+
     try:
         mols = [
             ("CH4", make_CH4()),
@@ -3841,7 +3852,7 @@ def export_organic_testbench_v3_csv(out=None) -> None:
             ("CH3F", make_CH3F()),
             ("CH3Cl", make_CH3Cl()),
         ]
-        
+
         print("mol,F_geom,F_angle,F_flow,F_total,R_react", file=out)
         for name, mol in mols:
             a, b, c = 0.5, 1.0, 1.5
@@ -3851,8 +3862,11 @@ def export_organic_testbench_v3_csv(out=None) -> None:
             F_total = F_geom + F_angle + F_flow
             denom = max(F_geom + F_angle, 1e-9)
             R = abs(F_flow) / denom
-            print(f"{name},{F_geom:.4f},{F_angle:.4f},{F_flow:.4f},"
-                  f"{F_total:.4f},{R:.4f}", file=out)
+            print(
+                f"{name},{F_geom:.4f},{F_angle:.4f},{F_flow:.4f},"
+                f"{F_total:.4f},{R:.4f}",
+                file=out,
+            )
     finally:
         SPECTRAL_MODE = old_mode
 
@@ -3863,29 +3877,38 @@ def export_reactions_v3_csv(out=None) -> None:
     reaction,DeltaF
     """
     import sys
+
     if out is None:
         out = sys.stdout
-    
+
     global SPECTRAL_MODE
     old_mode = SPECTRAL_MODE
     SPECTRAL_MODE = SPECTRAL_MODE_V4
-    
+
     try:
         reactions = [
-            ("HF + NaCl -> HCl + NaF",
-             [make_HF(), make_NaCl()],
-             [make_HCl(), make_NaF()]),
-            ("LiF + HCl -> LiCl + HF",
-             [make_LiF(), make_HCl()],
-             [make_LiCl(), make_HF()]),
-            ("HF + LiCl -> HCl + LiF",
-             [make_HF(), make_LiCl()],
-             [make_HCl(), make_LiF()]),
-            ("NaF + HCl -> NaCl + HF",
-             [make_NaF(), make_HCl()],
-             [make_NaCl(), make_HF()]),
+            (
+                "HF + NaCl -> HCl + NaF",
+                [make_HF(), make_NaCl()],
+                [make_HCl(), make_NaF()],
+            ),
+            (
+                "LiF + HCl -> LiCl + HF",
+                [make_LiF(), make_HCl()],
+                [make_LiCl(), make_HF()],
+            ),
+            (
+                "HF + LiCl -> HCl + LiF",
+                [make_HF(), make_LiCl()],
+                [make_HCl(), make_LiF()],
+            ),
+            (
+                "NaF + HCl -> NaCl + HF",
+                [make_NaF(), make_HCl()],
+                [make_NaCl(), make_HF()],
+            ),
         ]
-        
+
         print("reaction,DeltaF", file=out)
         for label, reactants, products in reactions:
             dF = reaction_energy(reactants, products)
@@ -3897,6 +3920,7 @@ def export_reactions_v3_csv(out=None) -> None:
 # ============================================================
 # ELEMENT INDICES (donor/acceptor characterization)
 # ============================================================
+
 
 def compute_element_indices(
     a: float = 0.5,
@@ -3914,32 +3938,34 @@ def compute_element_indices(
     global SPECTRAL_MODE
     old_mode = SPECTRAL_MODE
     SPECTRAL_MODE = SPECTRAL_MODE_V4
-    
+
     results = []
     for atom in base_atoms:
         chi = atom.chi_geom_signed_spec()
         e_port = atom.per_port_energy(a=a, b=b, c=c)
-        
+
         if chi is None:
             chi = 0.0
         if e_port is None:
             e_port = 0.0
-        
+
         denom = max(e_port, 1e-6)
         D_index = max(-chi, 0.0) / denom  # donor: negative chi
-        A_index = max(chi, 0.0) / denom   # acceptor: positive chi
-        
-        results.append({
-            "Z": atom.Z,
-            "El": atom.name,
-            "role": atom.role,
-            "period": atom.period,
-            "chi_spec": chi,
-            "E_port": e_port,
-            "D_index": D_index,
-            "A_index": A_index,
-        })
-    
+        A_index = max(chi, 0.0) / denom  # acceptor: positive chi
+
+        results.append(
+            {
+                "Z": atom.Z,
+                "El": atom.name,
+                "role": atom.role,
+                "period": atom.period,
+                "chi_spec": chi,
+                "E_port": e_port,
+                "D_index": D_index,
+                "A_index": A_index,
+            }
+        )
+
     SPECTRAL_MODE = old_mode
     return results
 
@@ -3950,16 +3976,18 @@ def print_element_indices_table(label: str = "v4.0 indices") -> None:
     Z  El  role  per  chi_spec  E_port  D_index  A_index
     """
     indices = compute_element_indices()
-    
+
     print(f"\n[{label}] Element donor/acceptor indices:")
     print("Z  El   role       per  chi_spec  E_port  D_index  A_index")
     print("-" * 65)
-    
+
     for item in indices:
-        print(f"{item['Z']:2d} {item['El']:3s}  {item['role']:10s} "
-              f"{item['period']:2d}  {item['chi_spec']:+7.3f}  "
-              f"{item['E_port']:6.3f}  {item['D_index']:7.4f}  {item['A_index']:7.4f}")
-    
+        print(
+            f"{item['Z']:2d} {item['El']:3s}  {item['role']:10s} "
+            f"{item['period']:2d}  {item['chi_spec']:+7.3f}  "
+            f"{item['E_port']:6.3f}  {item['D_index']:7.4f}  {item['A_index']:7.4f}"
+        )
+
     print()
     print("[LEGEND]")
     print("  D_index = max(-χ, 0) / E_port  → higher = stronger donor (metals)")
@@ -3975,17 +4003,17 @@ def print_element_quadrants(label: str = "v4.0 classes") -> None:
       - Inert: both ~ 0
     """
     indices = compute_element_indices()
-    
+
     print(f"\n[{label}] Element Classification by D/A Index")
     print("Z  El   D_index  A_index  Class")
     print("-" * 45)
-    
+
     for item in indices:
-        D = item['D_index']
-        A = item['A_index']
-        
+        D = item["D_index"]
+        A = item["A_index"]
+
         # Simple heuristic classification
-        if item['role'] == 'inert':
+        if item["role"] == "inert":
             cls = "Inert"
         elif D > 0.1 and A < 0.05:
             cls = "Metal (Donor)"
@@ -3995,7 +4023,7 @@ def print_element_quadrants(label: str = "v4.0 classes") -> None:
             cls = "Amphoteric"
         else:
             cls = "Borderline / Weak"
-            
+
         print(f"{item['Z']:2d} {item['El']:3s}  {D:7.4f}  {A:7.4f}  {cls}")
 
 
@@ -4006,25 +4034,25 @@ def predict_bond_polarity_and_type(atom1_symbol: str, atom2_symbol: str) -> None
     global SPECTRAL_MODE
     old_mode = SPECTRAL_MODE
     SPECTRAL_MODE = SPECTRAL_MODE_V4
-    
+
     try:
         a1 = get_atom(atom1_symbol)
         a2 = get_atom(atom2_symbol)
-        
+
         chi1 = a1.chi_geom_signed_spec() or 0.0
         chi2 = a2.chi_geom_signed_spec() or 0.0
-        
+
         e1 = a1.per_port_energy() or 0.1
         e2 = a2.per_port_energy() or 0.1
-        
+
         delta_chi = chi2 - chi1
         abs_delta = abs(delta_chi)
-        
+
         print(f"\n[BOND PREDICTION v4.0] {atom1_symbol} -- {atom2_symbol}")
         print(f"  {atom1_symbol}: chi={chi1:+.3f}, E_port={e1:.3f}")
         print(f"  {atom2_symbol}: chi={chi2:+.3f}, E_port={e2:.3f}")
         print(f"  Delta_chi = {delta_chi:+.3f}")
-        
+
         # Polarity
         if abs_delta < 0.1:
             polarity = "Non-polar / Covalent"
@@ -4032,21 +4060,21 @@ def predict_bond_polarity_and_type(atom1_symbol: str, atom2_symbol: str) -> None
             polarity = f"Polar: {atom1_symbol}(δ+) -> {atom2_symbol}(δ-)"
         else:
             polarity = f"Polar: {atom2_symbol}(δ+) -> {atom1_symbol}(δ-)"
-            
+
         # Type estimation
         # Heuristic: Ionic if large delta_chi AND one is strong donor, other strong acceptor
         # Covalent if small delta_chi OR both are hard/soft similar
-        
+
         if abs_delta > 1.5:
             bond_type = "Ionic (Strong)"
         elif abs_delta > 0.8:
             bond_type = "Ionic / Polar Covalent"
         else:
             bond_type = "Covalent"
-            
+
         print(f"  > Polarity: {polarity}")
         print(f"  > Est. Type: {bond_type}")
-        
+
     except Exception as e:
         print(f"Error predicting bond: {e}")
     finally:
@@ -4057,20 +4085,22 @@ def predict_bond_polarity_and_type(atom1_symbol: str, atom2_symbol: str) -> None
 # ISLAND OF STABILITY SCAN (Virtual Atom X)
 # ============================================================
 
+
 def make_virtual_molecule(central_symbol: str, ligand_symbol: str, n_ligands: int = 1):
     """Создаёт простую молекулу: центральный атом + лиганды."""
     # Always get fresh copies to avoid graph pollution
     central = get_atom(central_symbol)
     ligand = get_atom(ligand_symbol)
-    
+
     if central is None or ligand is None:
         return None
-    
+
     # Deep copy atoms to ensure they are independent nodes in the new graph
     import copy
+
     atoms = [copy.deepcopy(central)] + [copy.deepcopy(ligand) for _ in range(n_ligands)]
-    bonds = [(0, i+1) for i in range(n_ligands)]
-    
+    bonds = [(0, i + 1) for i in range(n_ligands)]
+
     try:
         mol_name = f"{central_symbol}-{ligand_symbol}_{n_ligands}"
         mol = Molecule(name=mol_name, atoms=atoms, bonds=bonds)
@@ -4096,23 +4126,29 @@ def run_virtual_atom_island_scan(
     global SPECTRAL_MODE
     old_mode = SPECTRAL_MODE
     SPECTRAL_MODE = SPECTRAL_MODE_V4
-    
+
     # Use Si as base template for X
     if "X" not in PERIODIC_TABLE:
         # Create virtual atom X (Z=14 gives period=3 like Si)
         # AtomGraph fields: name, Z, nodes, edges, ports, symmetry_score, port_geometry, role, notes, epsilon
         x_atom = AtomGraph(
-            name="X", Z=14,  # Z=14 → period=3
-            nodes=4, edges=6, ports=4,
-            symmetry_score=0.0, port_geometry="tetrahedral",
-            role="hub", notes="R&D virtual", epsilon=-1.0
+            name="X",
+            Z=14,  # Z=14 → period=3
+            nodes=4,
+            edges=6,
+            ports=4,
+            symmetry_score=0.0,
+            port_geometry="tetrahedral",
+            role="hub",
+            notes="R&D virtual",
+            epsilon=-1.0,
         )
         PERIODIC_TABLE["X"] = x_atom
-    
+
     print("\n[ISLAND SCAN] Virtual atom X parameter sweep")
     print("period  ports   eps     F(HX)    F(XO)    F(XF)   chi_X")
     print("-" * 65)
-    
+
     scanned = 0
     for period in period_values:
         for ports in ports_values:
@@ -4121,16 +4157,17 @@ def run_virtual_atom_island_scan(
                 # period 1: Z=1-2, period 2: Z=3-10, period 3: Z=11-18, period 4: Z=19-36
                 z_for_period = {1: 1, 2: 5, 3: 14, 4: 25, 5: 40}
                 target_z = z_for_period.get(period, 14)
-                
+
                 # Apply overrides to X (use Z instead of period)
-                with AtomOverrideContext(PERIODIC_TABLE, "X", 
-                                         Z=target_z, ports=ports, epsilon=eps):
+                with AtomOverrideContext(
+                    PERIODIC_TABLE, "X", Z=target_z, ports=ports, epsilon=eps
+                ):
                     x = get_atom("X")
                     chi_x = x.chi_geom_signed_spec() if x else 0.0
-                    
+
                     # Try to build molecules
-                    F_HX = F_XO = F_XF = float('nan')
-                    
+                    F_HX = F_XO = F_XF = float("nan")
+
                     # HX (X + 1 H)
                     mol_hx = make_virtual_molecule("X", "H", 1)
                     if mol_hx:
@@ -4139,7 +4176,7 @@ def run_virtual_atom_island_scan(
                         except Exception as e:
                             print(f"DEBUG: HX energy failed: {e}")
                             pass
-                    
+
                     # XO (X + 1 O) - linear
                     mol_xo = make_virtual_molecule("X", "O", 1)
                     if mol_xo:
@@ -4148,7 +4185,7 @@ def run_virtual_atom_island_scan(
                         except Exception as e:
                             print(f"DEBUG: XO energy failed: {e}")
                             pass
-                    
+
                     # XF (X + 1 F) - linear
                     mol_xf = make_virtual_molecule("X", "F", 1)
                     if mol_xf:
@@ -4157,15 +4194,17 @@ def run_virtual_atom_island_scan(
                         except Exception as e:
                             print(f"DEBUG: XF energy failed: {e}")
                             pass
-                    
+
                     # Format output
                     def fmt(x):
                         return f"{x:8.3f}" if not (x != x) else "     N/A"
-                    
-                    print(f"{period:5d}  {ports:5d}  {eps:6.2f}  "
-                          f"{fmt(F_HX)}  {fmt(F_XO)}  {fmt(F_XF)}  {chi_x:+7.3f}")
+
+                    print(
+                        f"{period:5d}  {ports:5d}  {eps:6.2f}  "
+                        f"{fmt(F_HX)}  {fmt(F_XO)}  {fmt(F_XF)}  {chi_x:+7.3f}"
+                    )
                     scanned += 1
-    
+
     print()
     print(f"[INFO] Scanned {scanned} configurations")
     print("[INTERPRETATION]")
@@ -4173,7 +4212,7 @@ def run_virtual_atom_island_scan(
     print("  - Very negative F → super-stable (possibly unphysical)")
     print("  - Very positive F or N/A → unstable/impossible configuration")
     print("  - Look for 'sweet spot' where F values are moderate")
-    
+
     SPECTRAL_MODE = old_mode
 
 
@@ -4187,45 +4226,47 @@ def run_rnd_master_report() -> None:
       - SECTION 5: zero-chemistry point для Cl~H
     """
     global SPECTRAL_MODE, V2_PERIOD_EXPONENT, MODEL_VERSION
-    
+
     # Save original state
     orig_mode = SPECTRAL_MODE
     orig_k = V2_PERIOD_EXPONENT
-    
+
     # Reset to default v4 for fresh start
     SPECTRAL_MODE = SPECTRAL_MODE_DEFAULT
-    
+
     print("=" * 70)
     print("===== RND MASTER REPORT =====")
     print("=" * 70)
     print(f"[MODEL] {MODEL_VERSION}")
     print(f"[MODES] v1=twins, v2=period, v3=eps, v4=full (production)")
-    print(f"[PARAMS] k_period={V2_PERIOD_EXPONENT}, eps_coupling={EPS_COUPLING_STRENGTH}")
+    print(
+        f"[PARAMS] k_period={V2_PERIOD_EXPONENT}, eps_coupling={EPS_COUPLING_STRENGTH}"
+    )
     print()
-    
+
     # ========== SECTION 1: BASELINE v1.0 ==========
     print("\n--- SECTION 1: BASELINE v1.0 ---")
-    
+
     SPECTRAL_MODE = "v1"
-    
+
     print_compact_spectral_table("v1.0")
     print_organic_testbench_with_reactivity("v1.0")
     print_reaction_block("v1.0")
-    
+
     # ========== SECTION 2: BASELINE v2.0 ==========
     print("\n--- SECTION 2: BASELINE v2.0 (period split) ---")
-    
+
     SPECTRAL_MODE = "v2_period_split"
     V2_PERIOD_EXPONENT = orig_k
-    
+
     # Chi comparison v1 vs v2
     chi_v1 = collect_element_chi("v1")
     chi_v2 = collect_element_chi("v2")
-    
+
     print(f"\n[CHI COMPARISON] v1 vs v2 (k={orig_k:.2f}):")
     print("Z  El   role        chi_v1    chi_v2    dchi")
     print("-" * 55)
-    
+
     for atom in base_atoms:
         if atom.role == "inert":
             continue
@@ -4233,27 +4274,29 @@ def run_rnd_master_report() -> None:
         c1 = chi_v1.get(name, 0.0)
         c2 = chi_v2.get(name, 0.0)
         d = c2 - c1
-        print(f"{atom.Z:2d} {name:3s}  {atom.role:10s}  {c1:8.3f}  {c2:8.3f}  {d:+7.3f}")
-    
+        print(
+            f"{atom.Z:2d} {name:3s}  {atom.role:10s}  {c1:8.3f}  {c2:8.3f}  {d:+7.3f}"
+        )
+
     print_compact_spectral_table("v2.0")
     print_organic_testbench_with_reactivity("v2.0")
     print_reaction_block("v2.0")
-    
+
     # ========== SECTION 3: PERIOD EXPONENT SCAN ==========
     print("\n--- SECTION 3: PERIOD EXPONENT SCAN (donor/acceptor decay) ---")
-    
+
     scan_period_exponent_compact()
-    
+
     # ========== SECTION 4: SUPER-O vs S ==========
     print("\n--- SECTION 4: SUPER-O vs S EXPERIMENT ---")
-    
+
     run_super_O_vs_S_enhanced(k_period=orig_k, super_eps=-5.0)
     print("\n[SECTION 4 NOTE] In v2.0 this is a NEGATIVE control experiment:")
     print("                 epsilon-override for O does not affect chi_spec/QEq yet.")
-    
+
     # ========== SECTION 5: ZERO-CHEMISTRY POINT ==========
     print("\n--- SECTION 5: ZERO-CHEMISTRY POINT (Cl ~ H) ---")
-    
+
     find_zero_chemistry_point_for_Cl_vs_H(k_min=0.0, k_max=2.0, k_step=0.1)
 
     # ========== SECTION 6: v3.0 epsilon–chi coupling ==========
@@ -4290,7 +4333,7 @@ def run_rnd_master_report() -> None:
     print("\n" + "=" * 70)
     print("--- SECTION 7: ELEMENT INDICES (v4.0) ---")
     print("=" * 70)
-    
+
     SPECTRAL_MODE = SPECTRAL_MODE_V4
     print_element_indices_table("v4.0 (period+eps)")
     print_element_quadrants("v4.0 classes")
@@ -4299,19 +4342,19 @@ def run_rnd_master_report() -> None:
     print("\n" + "=" * 70)
     print("--- SECTION 8: VIRTUAL ATOM X - ISLAND SCAN (coarse) ---")
     print("=" * 70)
-    
+
     run_virtual_atom_island_scan()
 
     # ========== SECTION 9: NUMERICAL ENGINE CHECK (FDM) ==========
     print("\n" + "=" * 70)
     print("--- SECTION 9: NUMERICAL ENGINE CHECK (FDM) ---")
     print("=" * 70)
-    
+
     print("[FDM] Estimating 'spectral energy' integral via FDM (3D, depth=4)")
     print("      Model: rho(r) = exp(-beta * r^2), beta = 0.5 + 0.05*Z")
     print("Atom  Z   E_port(v4)   E_fdm_integral (approx)")
     print("-" * 55)
-    
+
     test_atoms = ["H", "C", "O", "F", "Si", "S", "Cl"]
     for sym in test_atoms:
         a = get_atom(sym)
@@ -4319,55 +4362,62 @@ def run_rnd_master_report() -> None:
             e_port = a.per_port_energy() or 0.0
             e_fdm = estimate_atom_energy_fdm(a.Z, e_port)
             print(f"{sym:4s} {a.Z:2d}   {e_port:6.3f}       {e_fdm:8.4f}")
-            
-    print("\n[NOTE] E_fdm reflects total spectral volume; E_port is per-bond Potential.")
+
+    print(
+        "\n[NOTE] E_fdm reflects total spectral volume; E_port is per-bond Potential."
+    )
 
     # ========== SECTION 9: GRAPH COMPLEXITY ==========
     print("\n" + "=" * 70)
     print("--- SECTION 9: GRAPH COMPLEXITY ---")
     print("=" * 70)
-    
-    print(f"{'Z':<3} {'El':<3} {'Role':<10} {'Ports':<5}  {'Cyclomatic':<10}  {'C_graph':<8}")
+
+    print(
+        f"{'Z':<3} {'El':<3} {'Role':<10} {'Ports':<5}  {'Cyclomatic':<10}  {'C_graph':<8}"
+    )
     print("-" * 65)
-    
+
     # Sort atoms by Z
     all_atoms = sorted(PERIODIC_TABLE.values(), key=lambda x: x.Z)
     for a in all_atoms:
-        if a.Z > 18: continue
+        if a.Z > 18:
+            continue
         adj = a.adjacency_matrix()
         feats = compute_complexity_features(adj)
-        print(f"{a.Z:<3} {a.name:<3} {a.role:<10} {a.ports:<5}  {feats.cyclomatic:<10}  {feats.total:8.3f}")
-        
+        print(
+            f"{a.Z:<3} {a.name:<3} {a.role:<10} {a.ports:<5}  {feats.cyclomatic:<10}  {feats.total:8.3f}"
+        )
+
     print("-" * 65)
-    
+
     # ========== SECTION 10: CHRISTMAS TREE GROWTH (R&D) ==========
     print("\n" + "=" * 70)
     print("--- SECTION 10: CHRISTMAS TREE GROWTH (R&D) ---")
     print("=" * 70)
-    
+
     # Import locally
     from .grower import GrowthParams, grow_molecule_christmas_tree, describe_molecule
-    
+
     # Demo parameters
     params = GrowthParams(max_depth=4, max_atoms=16)
     seeds = ["C", "Si", "O"]
-    
+
     for root in seeds:
         print(f"\n[ROOT = {root} | MaxDepth=4]")
         # Fixed seed for reproducibility in R&D report
         rng_seed = 42 + sum(ord(c) for c in root)
         rng = np.random.default_rng(rng_seed)
-        
+
         for i in range(2):
             mol = grow_molecule_christmas_tree(root, params, rng=rng)
             print(f"  Tree #{i+1}: {describe_molecule(mol)}")
-
 
     # ========== FINAL SUMMARY ==========
     print("\n" + "=" * 70)
     print("===== ИТОГОВАЯ СВОДКА: ЭВОЛЮЦИЯ МОДЕЛИ =====")
     print("=" * 70)
-    print("""
+    print(
+        """
 v1.0 (базовый режим):
   - Li~Na, F~Cl — спектральные «близнецы» (одинаковые E_port, χ_spec)
   - Обменные реакции изоэнергетичны: ΔF ≈ 0
@@ -4389,11 +4439,12 @@ v4.0 (полная модель):
   - Объединяет v2 (period-scaling) + v3 (ε-coupling)
   - Лучшее от обоих: период ломает близнецов, ε добавляет характер
   - Готова для химических предсказаний
-""")
+"""
+    )
 
     print("===== КОНЕЦ R&D МАСТЕР-ОТЧЁТА =====")
     print("=" * 70)
-    
+
     # Restore original state
     SPECTRAL_MODE = orig_mode
     V2_PERIOD_EXPONENT = orig_k
@@ -4421,8 +4472,8 @@ if __name__ == "__main__":
         try:
             idx = args.index("--bond")
             if idx + 2 < len(args):
-                a1 = args[idx+1]
-                a2 = args[idx+2]
+                a1 = args[idx + 1]
+                a2 = args[idx + 2]
                 predict_bond_polarity_and_type(a1, a2)
             else:
                 print("Error: --bond requires two element symbols (e.g. --bond H Cl)")
@@ -4434,8 +4485,12 @@ if __name__ == "__main__":
         print()
         print("Usage:")
         print("  python geom_atoms.py --rnd               # полный R&D-отчёт v1+v2+v3")
-        print("  python geom_atoms.py --export-periodic   # CSV периодической таблицы v3")
-        print("  python geom_atoms.py --export-organic    # CSV органического тестбенча v3")
+        print(
+            "  python geom_atoms.py --export-periodic   # CSV периодической таблицы v3"
+        )
+        print(
+            "  python geom_atoms.py --export-organic    # CSV органического тестбенча v3"
+        )
         print("  python geom_atoms.py --export-reactions  # CSV реакций v3")
         print()
         print("Examples:")

@@ -29,6 +29,8 @@ class ThermoConfig:
     coupling_density_shape: float = 0.0
     coupling_port_geometry: float = 0.0
     coupling_ws_Z: float = 0.0
+    coupling_shape_softness: float = 0.0
+    coupling_shape_chi: float = 0.0
 
     density_model: str = "tf_radius"
     density_blend: str = "linear"
@@ -54,6 +56,10 @@ class ThermoConfig:
     ws_geom_gap_ref: float = 1.0
     ws_Z_ref: float = 10.0
     ws_Z_alpha: float = 1.0 / 3.0
+
+    # Shape-driven chemistry (R&D, disabled by default)
+    shape_kurt_scale: float = 0.30
+    shape_rrms_scale: float = 1.50
 
     experiment_name: str = "default_thermo"
 
@@ -110,6 +116,12 @@ def _strict_from_mapping(d: Mapping[str, Any]) -> ThermoConfig:
         coupling_ws_Z=float(
             d.get("coupling_ws_Z", base.coupling_ws_Z)
         ),
+        coupling_shape_softness=float(
+            d.get("coupling_shape_softness", base.coupling_shape_softness)
+        ),
+        coupling_shape_chi=float(
+            d.get("coupling_shape_chi", base.coupling_shape_chi)
+        ),
         density_model=str(d.get("density_model", base.density_model)),
         density_blend=str(d.get("density_blend", base.density_blend)),
         density_Z_ref=float(d.get("density_Z_ref", base.density_Z_ref)),
@@ -136,6 +148,8 @@ def _strict_from_mapping(d: Mapping[str, Any]) -> ThermoConfig:
         ws_geom_gap_ref=float(d.get("ws_geom_gap_ref", base.ws_geom_gap_ref)),
         ws_Z_ref=float(d.get("ws_Z_ref", base.ws_Z_ref)),
         ws_Z_alpha=float(d.get("ws_Z_alpha", base.ws_Z_alpha)),
+        shape_kurt_scale=float(d.get("shape_kurt_scale", base.shape_kurt_scale)),
+        shape_rrms_scale=float(d.get("shape_rrms_scale", base.shape_rrms_scale)),
         experiment_name=str(d.get("experiment_name", base.experiment_name)),
     )
 

@@ -79,6 +79,18 @@ def add_thermo_args(parser) -> None:
         help="Override coupling_ws_Z (Z-coupling for WS radial problem).",
     )
     parser.add_argument(
+        "--coupling-shape-softness",
+        type=float,
+        default=None,
+        help="Override coupling_shape_softness (shape-driven softness).",
+    )
+    parser.add_argument(
+        "--coupling-shape-chi",
+        type=float,
+        default=None,
+        help="Override coupling_shape_chi (shape-driven chi_spec).",
+    )
+    parser.add_argument(
         "--density-model",
         type=str,
         default=None,
@@ -195,6 +207,18 @@ def add_thermo_args(parser) -> None:
         default=None,
         help="Exponent alpha for WS radial scaling (ws_Z_alpha).",
     )
+    parser.add_argument(
+        "--shape-kurt-scale",
+        type=float,
+        default=None,
+        help="Scale for |delta_kurtosis| in shape activity.",
+    )
+    parser.add_argument(
+        "--shape-rrms-scale",
+        type=float,
+        default=None,
+        help="Scale for r_rms_ws in shape activity.",
+    )
 
 
 def apply_thermo_from_args(args, fallback_config_path: Optional[str] = None) -> None:
@@ -225,6 +249,14 @@ def apply_thermo_from_args(args, fallback_config_path: Optional[str] = None) -> 
     if getattr(args, "coupling_ws_z", None) is not None:
         cfg = replace(
             cfg, coupling_ws_Z=float(args.coupling_ws_z)
+        )
+    if getattr(args, "coupling_shape_softness", None) is not None:
+        cfg = replace(
+            cfg, coupling_shape_softness=float(args.coupling_shape_softness)
+        )
+    if getattr(args, "coupling_shape_chi", None) is not None:
+        cfg = replace(
+            cfg, coupling_shape_chi=float(args.coupling_shape_chi)
         )
     if getattr(args, "density_model", None):
         cfg = replace(cfg, density_model=str(args.density_model))
@@ -258,6 +290,10 @@ def apply_thermo_from_args(args, fallback_config_path: Optional[str] = None) -> 
         cfg = replace(cfg, ws_geom_V0=float(args.ws_geom_v0))
     if getattr(args, "ws_geom_n_grid", None) is not None:
         cfg = replace(cfg, ws_geom_N_grid=int(args.ws_geom_n_grid))
+    if getattr(args, "shape_kurt_scale", None) is not None:
+        cfg = replace(cfg, shape_kurt_scale=float(args.shape_kurt_scale))
+    if getattr(args, "shape_rrms_scale", None) is not None:
+        cfg = replace(cfg, shape_rrms_scale=float(args.shape_rrms_scale))
     if getattr(args, "ws_geom_gap_scale", None) is not None:
         cfg = replace(cfg, ws_geom_gap_scale=float(args.ws_geom_gap_scale))
     if getattr(args, "ws_z_ref", None) is not None:
