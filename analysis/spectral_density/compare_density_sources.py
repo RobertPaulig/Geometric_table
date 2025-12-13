@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
+from dataclasses import asdict
+import argparse
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -9,9 +11,15 @@ import numpy as np
 from core.density_models import beta_effective
 from core.geom_atoms import toy_ldos_radial, cube_to_ball
 from core.spectral_density_ws import WSRadialParams, make_ws_rho3d_interpolator
-from core.thermo_config import ThermoConfig, override_thermo_config, set_current_thermo_config
+from core.thermo_config import (
+    ThermoConfig,
+    override_thermo_config,
+    set_current_thermo_config,
+    get_current_thermo_config,
+)
 from core.geom_atoms import estimate_atom_energy_fdm
 from core.fdm import FDMIntegrator, make_tensor_grid_ifs
+from analysis.thermo_cli import add_thermo_args, apply_thermo_from_args
 
 
 def _make_gaussian_density_fn(Z: int, thermo: ThermoConfig):
@@ -30,8 +38,8 @@ def _make_gaussian_density_fn(Z: int, thermo: ThermoConfig):
 
 
 def compare_for_Z(Z: int) -> None:
-    thermo = ThermoConfig(coupling_density=1.0)
-    set_current_thermo_config(thermo)
+    # Используем текущий ThermoConfig из глобального состояния
+    thermo = get_current_thermo_config()
 
     rho_gauss_fn, beta = _make_gaussian_density_fn(Z, thermo)
 
@@ -114,6 +122,16 @@ def compare_for_Z(Z: int) -> None:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Compare Gaussian vs WS spectral density for selected Z."
+    )
+    add_thermo_args(parser)
+    args = parser.parse_args()
+    apply_thermo_from_args(args)
+
+    print("Effective ThermoConfig (spectral_density):")
+    print(asdict(get_current_thermo_config()))
+
     Z_list = [1, 6, 14, 26]
     for Z in Z_list:
         compare_for_Z(Z)

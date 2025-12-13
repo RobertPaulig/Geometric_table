@@ -1,22 +1,21 @@
 from __future__ import annotations
 
 from pathlib import Path
+from dataclasses import asdict
+import argparse
 
 import matplotlib.pyplot as plt
 import numpy as np
 
-from core.geom_atoms import AtomGraph, PERIODIC_TABLE
+from core.geom_atoms import PERIODIC_TABLE
 from core.port_geometry_spectral import canonical_port_vectors, ws_sp_gap, hybrid_strength
-from core.thermo_config import ThermoConfig, override_thermo_config
+from core.thermo_config import get_current_thermo_config, override_thermo_config
 from core.spectral_density_ws import WSRadialParams
+from analysis.thermo_cli import add_thermo_args, apply_thermo_from_args
 
 
 def compare_for_elements(names):
-    cfg_legacy = ThermoConfig(coupling_port_geometry=0.0, port_geometry_source="legacy")
-    cfg_spectral = ThermoConfig(
-        coupling_port_geometry=1.0,
-        port_geometry_source="ws_sp_gap",
-    )
+    cfg = get_current_thermo_config()
 
     rows = []
     matches = 0
@@ -24,25 +23,25 @@ def compare_for_elements(names):
         atom = PERIODIC_TABLE.get(name)
         if atom is None:
             continue
-        with override_thermo_config(cfg_legacy):
-            base_label = atom.port_geometry
-        with override_thermo_config(cfg_spectral):
-            inferred_label = atom.effective_port_geometry(cfg_spectral)
-            vecs = atom.port_vectors(cfg_spectral)
+        # legacy-ярлык из справочника
+        base_label = atom.port_geometry
+        # inferred при текущем ThermoConfig
+        inferred_label = atom.effective_port_geometry(cfg)
+        vecs = atom.port_vectors(cfg)
         if inferred_label == base_label:
             matches += 1
 
-        # спектральные признаки для отладки
+        # спектральные признаки для отладки (WSGeom-профиль из ThermoConfig)
         params = WSRadialParams(
-            R_max=cfg_spectral.ws_geom_R_max,
-            R_well=cfg_spectral.ws_geom_R_well,
-            V0=cfg_spectral.ws_geom_V0,
-            N_grid=cfg_spectral.ws_geom_N_grid,
+            R_max=cfg.ws_geom_R_max,
+            R_well=cfg.ws_geom_R_well,
+            V0=cfg.ws_geom_V0,
+            N_grid=cfg.ws_geom_N_grid,
             ell=0,
             state_index=0,
         )
         gap = ws_sp_gap(atom.Z, params)
-        h = hybrid_strength(gap, cfg_spectral.ws_geom_gap_ref, cfg_spectral.ws_geom_gap_scale)
+        h = hybrid_strength(gap, cfg.ws_geom_gap_ref, cfg.ws_geom_gap_scale)
 
         rows.append((name, base_label, inferred_label, vecs, gap, h))
 
@@ -84,6 +83,16 @@ def compare_for_elements(names):
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Compare legacy vs spectral port geometry under current ThermoConfig."
+    )
+    add_thermo_args(parser)
+    args = parser.parse_args()
+    apply_thermo_from_args(args)
+
+    print("Effective ThermoConfig (geom compare):")
+    print(asdict(get_current_thermo_config()))
+
     names = ["B", "C", "N", "O", "Si", "P", "S"]
     compare_for_elements(names)
 

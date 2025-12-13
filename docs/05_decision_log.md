@@ -919,3 +919,19 @@
 - При `coupling_ws_Z>0` применяется радиусное масштабирование WS-параметров: `R_eff = (1-c)*R + c*(R*(Z_ref/Z)^alpha)` для `R_max` и `R_well`.
 - Масштабирование используется как в `make_ws_rho3d_interpolator` (ρ_ws(r;Z)), так и в `ws_sp_gap(Z, ...)`, делая оба моста чувствительными к Z.
 Инвариант зелёной зоны: по умолчанию `coupling_ws_Z=0`, поведение v5/v6 не меняется.
+
+## [SPECTRAL-REPORT-CLI-1] ThermoConfig-driven reproducibility for SD/SG analysis scripts
+
+Дата: 2025-12-13
+
+Решение:
+- R&D-скрипты `analysis.spectral_density.compare_density_sources` и
+  `analysis.geom.compare_port_geometry_sources` приведены к единому CLI-паттерну ThermoConfig:
+  `add_thermo_args()` + `apply_thermo_from_args()`.
+- Скрипты печатают Effective ThermoConfig в консоль, чтобы режим (baseline vs wsZ-on) был
+  однозначно воспроизводим из логов.
+- В `analysis.geom.scan_ws_gap_vs_Z` добавлен параметр `--out`, чтобы разные режимы не перетирали
+  один и тот же CSV.
+
+Инвариант зелёной зоны:
+- При отсутствии thermo-параметров поведение скриптов соответствует прежнему (legacy запуск).

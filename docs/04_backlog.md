@@ -82,3 +82,4 @@
 - [SPECTRAL-WS-Z-1] Включить Z-зависимое радиусное масштабирование WS-потенциала (coupling_ws_Z, ws_Z_ref, ws_Z_alpha) и сделать ws_sp_gap(Z), rho_ws(r;Z) чувствительными к Z при сохранении legacy-режима при coupling_ws_Z=0.
 - [SPECTRAL-GEOM-1C] После SPECTRAL-WS-Z-1: сделать ws_sp_gap действительно элемент-специфичным: centered hybrid_strength(gap_ref, scale), скан gap(Z), калибровка на B/C/N/O/Si/P/S.
 - [SPECTRAL-DENSITY-1C] После SPECTRAL-WS-Z-1: добавить shape-sensitive observables (⟨r⟩, ⟨r²⟩, r_rms, kurtosis) для rho_gauss vs rho_ws_scaled; при необходимости R&D-терм в FDM energy, чувствительный к форме.
+- [SPECTRAL-REPORT-CLI-1] Привести compare_density_sources и compare_port_geometry_sources к поддержке --thermo-config и CLI override’ов (в т.ч. coupling_ws_Z), печатать Effective ThermoConfig в консоль, добавить --out в scan_ws_gap_vs_Z чтобы не затирать результаты.
