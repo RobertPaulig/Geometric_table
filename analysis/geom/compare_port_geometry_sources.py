@@ -6,8 +6,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from core.geom_atoms import AtomGraph, PERIODIC_TABLE
-from core.port_geometry_spectral import canonical_port_vectors
+from core.port_geometry_spectral import canonical_port_vectors, ws_sp_gap, hybrid_strength
 from core.thermo_config import ThermoConfig, override_thermo_config
+from core.spectral_density_ws import WSRadialParams
 
 
 def compare_for_elements(names):
@@ -18,6 +19,7 @@ def compare_for_elements(names):
     )
 
     rows = []
+    matches = 0
     for name in names:
         atom = PERIODIC_TABLE.get(name)
         if atom is None:
@@ -27,19 +29,30 @@ def compare_for_elements(names):
         with override_thermo_config(cfg_spectral):
             inferred_label = atom.effective_port_geometry(cfg_spectral)
             vecs = atom.port_vectors(cfg_spectral)
-        rows.append((name, base_label, inferred_label, vecs))
+        if inferred_label == base_label:
+            matches += 1
 
-    for name, base_label, inferred_label, vecs in rows:
+        # спектральные признаки для отладки
+        params = WSRadialParams()
+        gap = ws_sp_gap(atom.Z, params)
+        h = hybrid_strength(gap, cfg_spectral.ws_geom_gap_scale)
+
+        rows.append((name, base_label, inferred_label, vecs, gap, h))
+
+    for name, base_label, inferred_label, vecs, gap, h in rows:
         print(
-            f"{name:>2}: base={base_label:>10} -> inferred={inferred_label:>10}, ports={vecs.shape[0]}"
+            f"{name:>2}: base={base_label:>10} -> inferred={inferred_label:>10}, "
+            f"ports={vecs.shape[0]}, gap={gap:.4f}, h={h:.4f}"
         )
+
+    print(f"Matches with legacy (B,C,N,O,Si,P,S): {matches}/{len(rows)}")
 
     # Простейший сферический scatter для одного элемента (например, C)
     target = "C"
     row = next((r for r in rows if r[0] == target), None)
     if row is None:
         return
-    _, _, inferred_label, vecs = row
+    _, _, inferred_label, vecs, _, _ = row
     if vecs.size == 0:
         return
 
@@ -70,4 +83,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
