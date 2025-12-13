@@ -27,12 +27,15 @@ def test_estimate_atom_energy_fdm_legacy_unchanged_when_density_source_gaussian(
     with override_thermo_config(cfg_baseline):
         baseline = estimate_atom_energy_fdm(atom_z, e_port)
 
-    # The same, but explicitly setting coupling_density_shape should not change
-    # anything while density_source=gaussian.
+    # The same, но с изменёнными WS-параметрами и ws Z-coupling — не должно влиять
+    # на gaussian-ветку.
     cfg_shape = ThermoConfig(
         coupling_density=1.0,
         coupling_density_shape=1.0,
         density_source="gaussian",
+        coupling_ws_Z=1.0,
+        ws_Z_ref=5.0,
+        ws_Z_alpha=0.5,
     )
     with override_thermo_config(cfg_shape):
         val = estimate_atom_energy_fdm(atom_z, e_port)

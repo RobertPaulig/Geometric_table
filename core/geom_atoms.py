@@ -12,7 +12,11 @@ from .fdm import IFS, FDMIntegrator, make_tensor_grid_ifs
 from .complexity import atom_complexity_from_adjacency, compute_complexity_features
 from core.density_models import beta_effective
 from core.thermo_config import get_current_thermo_config, ThermoConfig
-from core.spectral_density_ws import WSRadialParams, make_ws_rho3d_interpolator
+from core.spectral_density_ws import (
+    WSRadialParams,
+    make_ws_rho3d_interpolator,
+    make_ws_rho3d_with_diagnostics,
+)
 from core.port_geometry_spectral import (
     ws_sp_gap,
     hybrid_strength,
@@ -62,6 +66,16 @@ def _ws_params_from_thermo(cfg: ThermoConfig) -> WSRadialParams:
     )
 
 
+def _I_box(R: float, beta: float) -> float:
+    if beta <= 0.0:
+        return 0.0
+    # 1D интеграл по [-R, R]: sqrt(pi/beta) * erf(sqrt(beta)*R)
+    sqrt_term = math.sqrt(math.pi / float(beta))
+    erf_term = math.erf(math.sqrt(float(beta)) * float(R))
+    Ix = sqrt_term * erf_term
+    return Ix ** 3
+
+
 def estimate_atom_energy_fdm(atom_z: int, e_port: float) -> float:
     """
     Оценка 'спектральной энергии' атома через FDM-интеграл по 3D-ядру.
@@ -85,64 +99,76 @@ def estimate_atom_energy_fdm(atom_z: int, e_port: float) -> float:
     )
 
     dim = 3
-    # Use standard tensor grid IFS for covering the space
     ifs = make_tensor_grid_ifs(dim=dim, base=2)
-    fdm = FDMIntegrator(ifs)
 
-    # Define closure for integration
-    def integrand(r: np.ndarray) -> np.ndarray:
-        # Gaussian proxy
-        rho_gauss = toy_ldos_radial(r, beta)
-
-        # Optional WS-based radial density (scaled to Gaussian integral)
-        c_shape = float(getattr(thermo, "coupling_density_shape", 0.0))
-        use_ws = (
-            getattr(thermo, "density_source", "gaussian") == "ws_radial"
-            and c_shape > 0.0
+    # Legacy Gaussian-only branch (density_source != ws_radial)
+    def _integrate_gaussian(R: float) -> float:
+        fdm = FDMIntegrator(ifs)
+        def integrand(r: np.ndarray) -> np.ndarray:
+            return toy_ldos_radial(r, beta)
+        val = fdm.integrate(
+            integrand, depth=4, dim=dim, transform=lambda u: cube_to_ball(u, R)
         )
-        if not use_ws:
-            return rho_gauss
+        volume = (2.0 * R) ** 3
+        return val * volume
 
-        params = _ws_params_from_thermo(thermo)
-        rho_ws_fn = make_ws_rho3d_interpolator(int(atom_z), params)
+    # Check if WS-ветка включена
+    c_shape = float(getattr(thermo, "coupling_density_shape", 0.0))
+    use_ws = (
+        getattr(thermo, "density_source", "gaussian") == "ws_radial"
+        and c_shape > 0.0
+    )
 
-        # radii from 3D points
+    R_default = 4.0
+
+    if not use_ws:
+        return _integrate_gaussian(R_default)
+
+    # WS branch with box-aware scaling and adaptive R_eff
+    params = _ws_params_from_thermo(thermo)
+    rho_ws_fn, diag = make_ws_rho3d_with_diagnostics(int(atom_z), params)
+
+    R_eff = max(R_default, 1.2 * float(diag.r_99))
+
+    # Gaussian integral in the same box
+    I_box = _I_box(R_eff, beta)
+
+    # Масса WS-плотности в кубе до масштабирования
+    fdm_mass = FDMIntegrator(ifs)
+    def integrand_ws(r: np.ndarray) -> np.ndarray:
         radii = np.sqrt(np.sum(r * r, axis=1))
-        rho_ws = rho_ws_fn(radii)
+        return rho_ws_fn(radii)
+    mean_ws = fdm_mass.integrate(
+        integrand_ws, depth=4, dim=dim, transform=lambda u: cube_to_ball(u, R_eff)
+    )
+    volume_eff = (2.0 * R_eff) ** 3
+    M_ws_box = mean_ws * volume_eff
 
-        # Scale WS density to match analytic Gaussian integral (3D)
-        I_target = (math.pi / float(beta)) ** 1.5 if beta > 0.0 else 0.0
-        rho_ws_scaled = rho_ws * I_target
+    scale_ws = I_box / max(M_ws_box, 1e-30) if I_box > 0.0 else 0.0
+
+    fdm = FDMIntegrator(ifs)
+    def integrand(r: np.ndarray) -> np.ndarray:
+        rho_gauss = toy_ldos_radial(r, beta)
+        radii = np.sqrt(np.sum(r * r, axis=1))
+        rho_ws = rho_ws_fn(radii) * scale_ws
 
         c = max(0.0, min(c_shape, 1.0))
         blend_mode = getattr(thermo, "density_blend", "linear")
         rho_gauss = np.maximum(rho_gauss, 1e-30)
-        rho_ws_scaled = np.maximum(rho_ws_scaled, 1e-30)
+        rho_ws = np.maximum(rho_ws, 1e-30)
 
         if c <= 0.0:
             return rho_gauss
         if blend_mode == "log":
-            # Геометрическое смешивание по логарифмам
             return np.exp(
-                (1.0 - c) * np.log(rho_gauss) + c * np.log(rho_ws_scaled)
+                (1.0 - c) * np.log(rho_gauss) + c * np.log(rho_ws)
             )
-        # Линейная смесь по плотностям
-        return (1.0 - c) * rho_gauss + c * rho_ws_scaled
-    
-    # Depth 4 -> 2^(3*4) = 4096 points
-    val = fdm.integrate(integrand, depth=4, dim=dim, transform=cube_to_ball)
-    
-    # The integral of exp(-b*r^2) in 3D is (pi/b)^(3/2).
-    # Since we integrate numerically over a box [-R, R], if R is large enough,
-    # we should match the analytical result.
-    # But FDM measures 'average', so we multiply by volume?
-    # FDM.integrate returns Mean(f). Volume of box = (2R)^3.
-    # Integral ~ Mean * Volume.
-    
-    R = 4.0
-    volume = (2.0 * R) ** 3
-    total_energy = val * volume
-    
+        return (1.0 - c) * rho_gauss + c * rho_ws
+
+    val = fdm.integrate(
+        integrand, depth=4, dim=dim, transform=lambda u: cube_to_ball(u, R_eff)
+    )
+    total_energy = val * volume_eff
     return total_energy
 
 

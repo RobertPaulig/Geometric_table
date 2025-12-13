@@ -3,13 +3,23 @@ from __future__ import annotations
 from dataclasses import dataclass
 from functools import lru_cache
 import math
-from typing import Callable
+from typing import Callable, Tuple
 
 import numpy as np
 
 from core.nuclear_spectrum_ws import build_radial_hamiltonian_ws
 from core.thermo_config import get_current_thermo_config
 from core.ws_param_scaling import apply_ws_Z_scaling, WSRadialParams
+
+
+@dataclass(frozen=True)
+class WSRadialDiagnostics:
+    r: np.ndarray
+    u: np.ndarray
+    cdf: np.ndarray
+    r_mean: float
+    r_rms: float
+    r_99: float
 
 
 def _radial_grid(R_max: float, N_grid: int) -> tuple[np.ndarray, float]:
@@ -34,13 +44,32 @@ def _rho3d_from_u(u: np.ndarray, r: np.ndarray) -> np.ndarray:
     return rho
 
 
-@lru_cache(maxsize=256)
-def make_ws_rho3d_interpolator(Z: int, params: WSRadialParams) -> Callable[[np.ndarray], np.ndarray]:
-    """
-    Построить интерполятор ρ_3d(r) из WS-спектра для данного Z и параметров.
+def _compute_diagnostics(r: np.ndarray, u: np.ndarray, dr: float) -> WSRadialDiagnostics:
+    pdf = (u * u)
+    cdf = np.cumsum(pdf * dr)
+    total = float(cdf[-1]) if cdf.size > 0 else 1.0
+    if total <= 0.0:
+        cdf_norm = cdf
+    else:
+        cdf_norm = cdf / total
 
-    Z здесь включён только для кэш-ключа; текущая реализация не использует его
-    явно, но в будущем параметры потенциала могут зависеть от Z.
+    r_mean = float(np.sum(r * pdf * dr))
+    r_rms = math.sqrt(float(np.sum((r * r) * pdf * dr)))
+
+    r_99 = float(r[-1])
+    if cdf_norm.size > 0:
+        idx = np.searchsorted(cdf_norm, 0.99)
+        idx = min(idx, len(r) - 1)
+        r_99 = float(r[idx])
+
+    return WSRadialDiagnostics(r=r, u=u, cdf=cdf_norm, r_mean=r_mean, r_rms=r_rms, r_99=r_99)
+
+
+@lru_cache(maxsize=256)
+def make_ws_rho3d_with_diagnostics(Z: int, params: WSRadialParams) -> Tuple[Callable[[np.ndarray], np.ndarray], WSRadialDiagnostics]:
+    """
+    Построить интерполятор ρ_3d(r) из WS-спектра для данного Z и параметров и вернуть
+    диагностическую информацию по радиальной волновой функции.
     """
     # Радиальная сетка и шаг (с учётом Z-скейлинга, если включён)
     thermo = get_current_thermo_config()
@@ -74,6 +103,8 @@ def make_ws_rho3d_interpolator(Z: int, params: WSRadialParams) -> Callable[[np.n
     u = _normalize_u(u, dr)
     rho3d = _rho3d_from_u(u, r)
 
+    diag = _compute_diagnostics(r, u, dr)
+
     # возвращаем callable, принимающий radii (np.ndarray)
     def rho_fn(radii: np.ndarray) -> np.ndarray:
         x = np.asarray(radii, dtype=float)
@@ -82,4 +113,13 @@ def make_ws_rho3d_interpolator(Z: int, params: WSRadialParams) -> Callable[[np.n
         x_safe = np.maximum(x, r[0])
         return np.interp(x_safe, r, rho3d, left=rho3d[0], right=0.0)
 
+    return rho_fn, diag
+
+
+@lru_cache(maxsize=256)
+def make_ws_rho3d_interpolator(Z: int, params: WSRadialParams) -> Callable[[np.ndarray], np.ndarray]:
+    """
+    Обёртка над make_ws_rho3d_with_diagnostics, сохраняющая старый интерфейс.
+    """
+    rho_fn, _ = make_ws_rho3d_with_diagnostics(Z, params)
     return rho_fn
