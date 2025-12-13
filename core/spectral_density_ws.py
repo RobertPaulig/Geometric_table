@@ -8,16 +8,8 @@ from typing import Callable
 import numpy as np
 
 from core.nuclear_spectrum_ws import build_radial_hamiltonian_ws
-
-
-@dataclass(frozen=True)
-class WSRadialParams:
-    R_max: float = 12.0
-    R_well: float = 5.0
-    V0: float = 40.0
-    N_grid: int = 220
-    ell: int = 0
-    state_index: int = 0
+from core.thermo_config import get_current_thermo_config
+from core.ws_param_scaling import apply_ws_Z_scaling, WSRadialParams
 
 
 def _radial_grid(R_max: float, N_grid: int) -> tuple[np.ndarray, float]:
@@ -50,21 +42,30 @@ def make_ws_rho3d_interpolator(Z: int, params: WSRadialParams) -> Callable[[np.n
     Z здесь включён только для кэш-ключа; текущая реализация не использует его
     явно, но в будущем параметры потенциала могут зависеть от Z.
     """
-    # Радиальная сетка и шаг
-    r, dr = _radial_grid(params.R_max, params.N_grid)
+    # Радиальная сетка и шаг (с учётом Z-скейлинга, если включён)
+    thermo = get_current_thermo_config()
+    params_eff = apply_ws_Z_scaling(
+        params,
+        Z=int(Z),
+        coupling_ws_Z=getattr(thermo, "coupling_ws_Z", 0.0),
+        Z_ref=getattr(thermo, "ws_Z_ref", 10.0),
+        alpha=getattr(thermo, "ws_Z_alpha", 1.0 / 3.0),
+    )
+
+    r, dr = _radial_grid(params_eff.R_max, params_eff.N_grid)
 
     # Построение гамильтониана WS (радиальная задача)
     evals, evecs = build_radial_hamiltonian_ws(
-        R_max=params.R_max,
-        R0=params.R_well,
+        R_max=params_eff.R_max,
+        R0=params_eff.R_well,
         a=0.7,
-        V0=params.V0,
-        N_grid=params.N_grid,
-        ell=params.ell,
+        V0=params_eff.V0,
+        N_grid=params_eff.N_grid,
+        ell=params_eff.ell,
     )
 
     # Берём bound-состояния по энергии < 0 (если есть), иначе просто state_index
-    idx = int(params.state_index)
+    idx = int(params_eff.state_index)
     bound_idx = np.where(evals < 0.0)[0]
     if bound_idx.size > 0:
         idx = int(bound_idx[min(idx, bound_idx.size - 1)])
@@ -76,10 +77,9 @@ def make_ws_rho3d_interpolator(Z: int, params: WSRadialParams) -> Callable[[np.n
     # возвращаем callable, принимающий radii (np.ndarray)
     def rho_fn(radii: np.ndarray) -> np.ndarray:
         x = np.asarray(radii, dtype=float)
-        x = np.clip(x, 0.0, params.R_max)
+        x = np.clip(x, 0.0, params_eff.R_max)
         # r начинается с dr, поэтому для r≈0 используем rho(r=dr)
         x_safe = np.maximum(x, r[0])
         return np.interp(x_safe, r, rho3d, left=rho3d[0], right=0.0)
 
     return rho_fn
-

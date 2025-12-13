@@ -28,6 +28,7 @@ class ThermoConfig:
     coupling_density: float = 0.0
     coupling_density_shape: float = 0.0
     coupling_port_geometry: float = 0.0
+    coupling_ws_Z: float = 0.0
 
     density_model: str = "tf_radius"
     density_blend: str = "linear"
@@ -51,6 +52,8 @@ class ThermoConfig:
     ws_geom_N_grid: int = 800
     ws_geom_gap_scale: float = 1.0
     ws_geom_gap_ref: float = 1.0
+    ws_Z_ref: float = 10.0
+    ws_Z_alpha: float = 1.0 / 3.0
 
     experiment_name: str = "default_thermo"
 
@@ -104,6 +107,9 @@ def _strict_from_mapping(d: Mapping[str, Any]) -> ThermoConfig:
         coupling_port_geometry=float(
             d.get("coupling_port_geometry", base.coupling_port_geometry)
         ),
+        coupling_ws_Z=float(
+            d.get("coupling_ws_Z", base.coupling_ws_Z)
+        ),
         density_model=str(d.get("density_model", base.density_model)),
         density_blend=str(d.get("density_blend", base.density_blend)),
         density_Z_ref=float(d.get("density_Z_ref", base.density_Z_ref)),
@@ -128,6 +134,8 @@ def _strict_from_mapping(d: Mapping[str, Any]) -> ThermoConfig:
             d.get("ws_geom_gap_scale", base.ws_geom_gap_scale)
         ),
         ws_geom_gap_ref=float(d.get("ws_geom_gap_ref", base.ws_geom_gap_ref)),
+        ws_Z_ref=float(d.get("ws_Z_ref", base.ws_Z_ref)),
+        ws_Z_alpha=float(d.get("ws_Z_alpha", base.ws_Z_alpha)),
         experiment_name=str(d.get("experiment_name", base.experiment_name)),
     )
 

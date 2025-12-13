@@ -8,6 +8,8 @@ import numpy as np
 
 from core.nuclear_spectrum_ws import build_radial_hamiltonian_ws
 from core.spectral_density_ws import WSRadialParams
+from core.thermo_config import get_current_thermo_config
+from core.ws_param_scaling import apply_ws_Z_scaling
 
 
 def _best_bound_energy(params: WSRadialParams, ell: int) -> float:
@@ -28,11 +30,18 @@ def _best_bound_energy(params: WSRadialParams, ell: int) -> float:
 def ws_sp_gap(Z: int, params: WSRadialParams) -> float:
     """
     Спектральный признак: разрыв между низшими s- и p-состояниями (WS-модель).
-    Z включён для совместимости и будущей Z-зависимости параметров.
+    При включённом coupling_ws_Z параметры WS масштабируются по Z.
     """
-    _ = Z
-    E_s = _best_bound_energy(params, ell=0)
-    E_p = _best_bound_energy(params, ell=1)
+    thermo = get_current_thermo_config()
+    params_eff = apply_ws_Z_scaling(
+        params,
+        Z=int(Z),
+        coupling_ws_Z=getattr(thermo, "coupling_ws_Z", 0.0),
+        Z_ref=getattr(thermo, "ws_Z_ref", 10.0),
+        alpha=getattr(thermo, "ws_Z_alpha", 1.0 / 3.0),
+    )
+    E_s = _best_bound_energy(params_eff, ell=0)
+    E_p = _best_bound_energy(params_eff, ell=1)
     return float(E_p - E_s)
 
 

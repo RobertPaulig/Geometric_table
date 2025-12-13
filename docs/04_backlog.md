@@ -79,5 +79,6 @@
 - [SPECTRAL-DENSITY-2] Следующий шаг: угловая часть (Y_lm) и вывод port_geometry из интерференции (не из JSON).
 - [TOPO-3D-1] Добавить 3D force-directed layout и 3D-оценку пересечений/запутанности как альтернативу circle-proxy; сравнить 2D crossing proxy и 3D entanglement на типовых графах и сохранить результаты в results/topo3d_compare.csv.
 - [DBLOCK-SPEC-1] Вывести d-block свойства из заполнения d-уровней спектра без Pauling.
-- [SPECTRAL-GEOM-1C] Сделать ws_sp_gap действительно элемент-специфичным: centered hybrid_strength(gap_ref, scale), скан gap(Z), калибровка на B/C/N/O/Si/P/S.
-- [SPECTRAL-DENSITY-1C] Добавить shape-sensitive observables (⟨r⟩, ⟨r²⟩, r_rms, kurtosis) для rho_gauss vs rho_ws_scaled; при необходимости R&D-терм в FDM energy, чувствительный к форме.
+- [SPECTRAL-WS-Z-1] Включить Z-зависимое радиусное масштабирование WS-потенциала (coupling_ws_Z, ws_Z_ref, ws_Z_alpha) и сделать ws_sp_gap(Z), rho_ws(r;Z) чувствительными к Z при сохранении legacy-режима при coupling_ws_Z=0.
+- [SPECTRAL-GEOM-1C] После SPECTRAL-WS-Z-1: сделать ws_sp_gap действительно элемент-специфичным: centered hybrid_strength(gap_ref, scale), скан gap(Z), калибровка на B/C/N/O/Si/P/S.
+- [SPECTRAL-DENSITY-1C] После SPECTRAL-WS-Z-1: добавить shape-sensitive observables (⟨r⟩, ⟨r²⟩, r_rms, kurtosis) для rho_gauss vs rho_ws_scaled; при необходимости R&D-терм в FDM energy, чувствительный к форме.

@@ -73,6 +73,12 @@ def add_thermo_args(parser) -> None:
         help="Override coupling_port_geometry (spectral port geometry).",
     )
     parser.add_argument(
+        "--coupling-ws-z",
+        type=float,
+        default=None,
+        help="Override coupling_ws_Z (Z-coupling for WS radial problem).",
+    )
+    parser.add_argument(
         "--density-model",
         type=str,
         default=None,
@@ -177,6 +183,18 @@ def add_thermo_args(parser) -> None:
         default=None,
         help="Scale parameter for mapping WS s-p gap to hybrid strength.",
     )
+    parser.add_argument(
+        "--ws-z-ref",
+        type=float,
+        default=None,
+        help="Reference Z for WS radial scaling (ws_Z_ref).",
+    )
+    parser.add_argument(
+        "--ws-z-alpha",
+        type=float,
+        default=None,
+        help="Exponent alpha for WS radial scaling (ws_Z_alpha).",
+    )
 
 
 def apply_thermo_from_args(args, fallback_config_path: Optional[str] = None) -> None:
@@ -203,6 +221,10 @@ def apply_thermo_from_args(args, fallback_config_path: Optional[str] = None) -> 
     if getattr(args, "coupling_port_geometry", None) is not None:
         cfg = replace(
             cfg, coupling_port_geometry=float(args.coupling_port_geometry)
+        )
+    if getattr(args, "coupling_ws_z", None) is not None:
+        cfg = replace(
+            cfg, coupling_ws_Z=float(args.coupling_ws_z)
         )
     if getattr(args, "density_model", None):
         cfg = replace(cfg, density_model=str(args.density_model))
@@ -238,5 +260,9 @@ def apply_thermo_from_args(args, fallback_config_path: Optional[str] = None) -> 
         cfg = replace(cfg, ws_geom_N_grid=int(args.ws_geom_n_grid))
     if getattr(args, "ws_geom_gap_scale", None) is not None:
         cfg = replace(cfg, ws_geom_gap_scale=float(args.ws_geom_gap_scale))
+    if getattr(args, "ws_z_ref", None) is not None:
+        cfg = replace(cfg, ws_Z_ref=float(args.ws_z_ref))
+    if getattr(args, "ws_z_alpha", None) is not None:
+        cfg = replace(cfg, ws_Z_alpha=float(args.ws_z_alpha))
 
     set_current_thermo_config(cfg)
