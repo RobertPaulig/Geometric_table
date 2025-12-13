@@ -77,5 +77,7 @@
 
 - [SPECTRAL-DENSITY-1] WS_Spectrum -> rho(r) -> FDM: подключить радиальную плотность из nuclear_spectrum_ws в estimate_atom_energy_fdm через ThermoConfig.density_source и coupling_density (с кешированием и масштабированием).
 - [SPECTRAL-DENSITY-2] Следующий шаг: угловая часть (Y_lm) и вывод port_geometry из интерференции (не из JSON).
-- [TOPO-3D-1] Добавить 3D force-directed layout и 3D-оценку пересечений/запутанности как альтернативу circle-proxy.
+- [TOPO-3D-1] Добавить 3D force-directed layout и 3D-оценку пересечений/запутанности как альтернативу circle-proxy; сравнить 2D crossing proxy и 3D entanglement на типовых графах и сохранить результаты в results/topo3d_compare.csv.
 - [DBLOCK-SPEC-1] Вывести d-block свойства из заполнения d-уровней спектра без Pauling.
+- [SPECTRAL-GEOM-1C] Сделать ws_sp_gap действительно элемент-специфичным: centered hybrid_strength(gap_ref, scale), скан gap(Z), калибровка на B/C/N/O/Si/P/S.
+- [SPECTRAL-DENSITY-1C] Добавить shape-sensitive observables (⟨r⟩, ⟨r²⟩, r_rms, kurtosis) для rho_gauss vs rho_ws_scaled; при необходимости R&D-терм в FDM energy, чувствительный к форме.

@@ -886,3 +886,27 @@
 - В `estimate_atom_energy_fdm` реализовано смешивание gaussian proxy и WS-плотности через `ThermoConfig.coupling_density` (0..1) и `density_blend`.
 - Для устойчивости масштаба WS-плотность масштабируется к аналитическому интегралу гауссианы при текущем `beta`.
 - Инвариант: при `density_source=gaussian` (default) поведение идентично legacy; включение WS требует явного выбора источника и ненулевого coupling.
+
+## [SPECTRAL-DENSITY-1 | Empirical sanity-check (Z=1,6,14,26)]
+
+Запуск: `python -m analysis.spectral_density.compare_density_sources` (WS params: R_max=12, R_well=5, V0=40, N_grid=220, ell=0).
+
+Наблюдения (coupling_density_shape=1, density_source=ws_radial):
+- Z=1: ratio_E = E_ws/E_gauss ≈ 1.026
+- Z=6: ratio_E ≈ 1.000
+- Z=14: ratio_E ≈ 1.000
+- Z=26: ratio_E ≈ 1.000
+- mass_ratio ≈ 1 на кубе интегрирования (R=4): масштабирование WS-плотности к I_target воспроизводит массу без заметных потерь.
+
+Вывод: мост WS ρ(r) → FDM по масштабу устойчив. Для «видимого» физического эффекта требуется shape-sensitive метрика (moments/grad-terms), т.к. текущий E_fdm почти инвариантен к форме при фиксированной массе.
+
+## [SPECTRAL-GEOM-1 | Empirical sanity-check (B,C,N,O,Si,P,S)]
+
+Запуск: `python -m analysis.geom.compare_port_geometry_sources` (ws_geom_* defaults: R_max=25, R_well=6, V0=45, N_grid=800, gap_scale=1.0, gap_ref=1.0).
+
+Факт:
+- В текущем профиле WS s-p разрыв даёт практически одинаковый gap для малого набора элементов; h определяется главным образом через port-логику (триг/пирамидал/бент) и порог 0.5.
+- При исходных настройках совпадение legacy vs inferred примерно 6/7; после центрирования hybrid_strength на gap_ref=1.0 часть элементов (B) исправляется, но другие начинают дрейфовать (N,O,P,S).
+- Картинка по C («tetra») визуально корректна: канонические портовые векторы дают тетраэдрическую конфигурацию.
+
+Вывод: механизм портовых векторов работает и пригоден как вход в 3D-укладчик, но spectral-признак `ws_sp_gap` в текущем виде остаётся почти константой по Z. Для фаз SPECTRAL-GEOM-2/3 потребуется либо Z-зависимый WS-потенциал, либо дополнительная калибровка gap_ref/scale на расширенном наборе элементов.
