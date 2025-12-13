@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from core.density_models import beta_effective
-from core.geom_atoms import toy_ldos_radial
+from core.geom_atoms import toy_ldos_radial, cube_to_ball
 from core.spectral_density_ws import WSRadialParams, make_ws_rho3d_interpolator
 from core.thermo_config import ThermoConfig, override_thermo_config, set_current_thermo_config
 from core.geom_atoms import estimate_atom_energy_fdm
@@ -62,7 +62,37 @@ def compare_for_Z(Z: int) -> None:
     with override_thermo_config(thermo_ws):
         e_ws = estimate_atom_energy_fdm(Z, 1.0)
 
-    print(f"Z={Z}: beta={beta:.4g}, E_fdm_gauss={e_gauss:.4g}, E_fdm_ws={e_ws:.4g}")
+    ratio = e_ws / e_gauss if e_gauss != 0 else float("nan")
+
+    # Оценим массу WS-плотности в той же области, что и FDM-интеграл (куб [-R,R]^3)
+    dim = 3
+    ifs = make_tensor_grid_ifs(dim=dim, base=2)
+    fdm = FDMIntegrator(ifs)
+
+    thermo_ws_mass = ThermoConfig(
+        coupling_density=1.0,
+        coupling_density_shape=1.0,
+        density_source="ws_radial",
+    )
+    with override_thermo_config(thermo_ws_mass):
+        def integrand_ws(r: np.ndarray) -> np.ndarray:
+            # radii from 3D points
+            radii = np.sqrt(np.sum(r * r, axis=1))
+            return rho_ws_fn(radii)
+
+        mean_ws = fdm.integrate(integrand_ws, depth=4, dim=dim, transform=cube_to_ball)
+
+    R = 4.0
+    volume = (2.0 * R) ** 3
+    M_ws = mean_ws * volume * I_target if I_target != 0.0 else 0.0
+    I_target_analytic = I_target
+    mass_ratio = M_ws / I_target_analytic if I_target_analytic != 0.0 else float("nan")
+
+    print(
+        f"Z={Z}: beta={beta:.4g}, "
+        f"E_fdm_gauss={e_gauss:.4g}, E_fdm_ws={e_ws:.4g}, "
+        f"ratio_E={ratio:.4g}, mass_ratio={mass_ratio:.4g}"
+    )
 
     # Plot
     fig, ax = plt.subplots(figsize=(6, 4))
