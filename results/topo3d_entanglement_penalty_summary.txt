@@ -1,0 +1,32 @@
+TOPO-3D-2 experiment: 2D crossing proxy vs 3D entanglement penalty
+===============================================================
+
+coupling_topo_3d=1.0
+topo_3d_beta=1.0
+layout_seed=42
+max_exact_n=8
+
+corr(E_3d, crossing_density) = -0.045162
+corr(penalty_factor_3d, crossing_density) = -0.045162
+corr(penalty_factor_3d, E_3d) = 1.000000
+
+max|formula_residual| = 2.430633e-11
+median|formula_residual| = 0.000000e+00
+
+Top graphs by penalty_factor_3d:
+           name       source  n  m  cyclomatic  crossing_density         E_3d  total_fdm  total_entangled  penalty_factor_3d  formula_target  formula_residual  coupling_topo_3d  topo_3d_beta
+           K4_C   manual_ref  4  6           3          0.166667 6.002979e-01   2.844362         4.551826           1.600298        1.600298      2.220446e-16               1.0           1.0
+grow_loopy_Si_2 grower_loopy  5  7           3          0.142857 3.481436e-01   3.338014         4.500122           1.348144        1.348144      0.000000e+00               1.0           1.0
+grow_loopy_Si_7 grower_loopy  7  9           3          0.000000 1.051027e-01   4.135348         4.569985           1.105103        1.105103      0.000000e+00               1.0           1.0
+ grow_loopy_C_5 grower_loopy 17 19           3          0.526316 6.175415e-02   6.289168         6.677551           1.061754        1.061754     -2.430633e-11               1.0           1.0
+ grow_loopy_N_8 grower_loopy 10 12           3          0.333333 5.979058e-02   5.135458         5.442510           1.059791        1.059791      0.000000e+00               1.0           1.0
+ grow_loopy_C_0 grower_loopy 21 22           2          1.409091 1.909397e-02   6.662088         6.789293           1.019094        1.019094      0.000000e+00               1.0           1.0
+  grow_tree_C_5  grower_tree 14 13           0          0.307692 5.132725e-03   6.043915         6.074937           1.005133        1.005133      0.000000e+00               1.0           1.0
+ grow_loopy_N_3 grower_loopy 25 27           3          1.962963 3.543007e-03   7.421582         7.447876           1.003543        1.003543     -2.944311e-13               1.0           1.0
+           C2H4       manual  6  5           0          0.000000 2.749255e-03   3.769636         3.780000           1.002749        1.002749      0.000000e+00               1.0           1.0
+  grow_tree_N_3  grower_tree 20 19           0          0.631579 2.625065e-03   7.001147         7.019525           1.002625        1.002625      0.000000e+00               1.0           1.0
+  grow_tree_O_1  grower_tree  8  7           0          0.000000 2.414550e-03   5.034015         5.046170           1.002415        1.002415      0.000000e+00               1.0           1.0
+           C6H6       manual 12 12           1          0.333333 2.115805e-03   5.481610         5.493208           1.002116        1.002116      0.000000e+00               1.0           1.0
+  grow_tree_C_0  grower_tree 23 22           0          1.272727 7.141075e-04   7.543343         7.548730           1.000714        1.000714      0.000000e+00               1.0           1.0
+  grow_tree_O_6  grower_tree  9  8           0          0.000000 5.121000e-04   5.910684         5.913711           1.000512        1.000512      0.000000e+00               1.0           1.0
+  grow_tree_N_8  grower_tree  4  3           0          0.000000 1.609865e-08   3.093115         3.093115           1.000000        1.000000      0.000000e+00               1.0           1.0
