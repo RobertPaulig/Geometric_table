@@ -32,6 +32,7 @@ class ThermoConfig:
     coupling_shape_softness: float = 0.0
     coupling_shape_chi: float = 0.0
     coupling_topo_3d: float = 0.0
+    coupling_delta_G: float = 1.0
 
     density_model: str = "tf_radius"
     density_blend: str = "linear"
@@ -64,6 +65,11 @@ class ThermoConfig:
     shape_softness_gain: float = 0.35
     shape_chi_gain: float = 0.30
     topo_3d_beta: float = 1.0
+
+    # MH-grower controls (R&D)
+    temperature_T: float = 1.0
+    grower_use_mh: bool = False
+    deltaG_backend: str = "fdm_entanglement"
 
     experiment_name: str = "default_thermo"
 
@@ -129,6 +135,9 @@ def _strict_from_mapping(d: Mapping[str, Any]) -> ThermoConfig:
         coupling_topo_3d=float(
             d.get("coupling_topo_3d", base.coupling_topo_3d)
         ),
+        coupling_delta_G=float(
+            d.get("coupling_delta_G", base.coupling_delta_G)
+        ),
         density_model=str(d.get("density_model", base.density_model)),
         density_blend=str(d.get("density_blend", base.density_blend)),
         density_Z_ref=float(d.get("density_Z_ref", base.density_Z_ref)),
@@ -160,6 +169,9 @@ def _strict_from_mapping(d: Mapping[str, Any]) -> ThermoConfig:
         shape_softness_gain=float(d.get("shape_softness_gain", base.shape_softness_gain)),
         shape_chi_gain=float(d.get("shape_chi_gain", base.shape_chi_gain)),
         topo_3d_beta=float(d.get("topo_3d_beta", base.topo_3d_beta)),
+        temperature_T=float(d.get("temperature_T", base.temperature_T)),
+        grower_use_mh=bool(d.get("grower_use_mh", base.grower_use_mh)),
+        deltaG_backend=str(d.get("deltaG_backend", base.deltaG_backend)),
         experiment_name=str(d.get("experiment_name", base.experiment_name)),
     )
 

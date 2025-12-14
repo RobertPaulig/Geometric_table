@@ -103,6 +103,9 @@ def grow_molecule_christmas_tree(
     """
     # Lazy import to avoid circular dependency
     from .geom_atoms import Molecule, get_atom, AtomGraph, PERIODIC_TABLE
+    from core.thermo_config import get_current_thermo_config
+    from core.energy_model import compute_delta_G
+    from core.mh import mh_accept
 
     if rng is None:
         rng = np.random.default_rng()
@@ -122,9 +125,6 @@ def grow_molecule_christmas_tree(
     if root_atom_data is None:
         return mol  # Should not happen if symbol is valid
 
-    # QSG v5.0 / THERMO-2C: softness of the seed globally damps branching
-    from core.thermo_config import get_current_thermo_config
-
     thermo = get_current_thermo_config()
     seed_softness = root_atom_data.effective_softness(thermo)
 
@@ -137,7 +137,12 @@ def grow_molecule_christmas_tree(
             free_ports=root_atom_data.ports
         )
     ]
-    
+
+    # MH statistics (for R&D / tests)
+    mh_proposals = 0
+    mh_accepted = 0
+    mh_rejected = 0
+
     # Candidate atoms for growth (simplified subset of common elements)
     candidate_pool = ["H", "C", "N", "O", "F", "Si", "P", "S", "Cl"]
     
@@ -199,31 +204,62 @@ def grow_molecule_christmas_tree(
                 # Let's cap with H so F_total makes sense.
                 pass
             else:
-                # Grow! Pick a child.
-                # Simple random choice for now.
+                # Grow! Pick a child (proposal stage).
                 child_sym = rng.choice(candidate_pool)
                 child_atom_data = get_atom(child_sym)
-                
+
+                # MH proposal: сформировать кандидата new_mol
+                if getattr(thermo, "grower_use_mh", False):
+                    # Clone minimal Molecule state for energy evaluation
+                    proposed_atoms = list(mol.atoms)
+                    proposed_bonds = list(mol.bonds)
+                    child_idx_prop = len(proposed_atoms)
+                    proposed_atoms.append(child_sym)
+                    proposed_bonds.append((current_node.atom_index, child_idx_prop))
+                    proposed_mol = Molecule(name=mol.name, atoms=proposed_atoms, bonds=proposed_bonds)
+
+                    deltaG = compute_delta_G(mol, proposed_mol, thermo)
+                    mh_proposals += 1
+                    if not mh_accept(deltaG, thermo, rng):
+                        mh_rejected += 1
+                        # reject: не применяем изменение и не добавляем в frontier
+                        current_node.free_ports -= 1
+                        continue
+                    mh_accepted += 1
+
+                # MH выключен или accept: применяем изменение как раньше
                 child_idx = add_atom_to_mol(child_sym)
-                
+
                 # Add bond
                 mol.bonds.append((current_node.atom_index, child_idx))
-                
+
                 # Add to frontier
                 # child uses 1 port to connect to parent
                 child_free = child_atom_data.ports - 1
                 if child_free > 0:
-                    frontier.append(GrowthNode(
-                        atom_symbol=child_sym,
-                        atom_index=child_idx,
-                        depth=current_node.depth + 1,
-                        free_ports=child_free
-                    ))
+                    frontier.append(
+                        GrowthNode(
+                            atom_symbol=child_sym,
+                            atom_index=child_idx,
+                            depth=current_node.depth + 1,
+                            free_ports=child_free,
+                        )
+                    )
                 
             current_node.free_ports -= 1
 
     # CY-1: R&D-слой циклов (loopy overlay) — по умолчанию выключен.
     _add_loopy_bonds(mol, params, rng)
+
+    # Attach MH stats for diagnostics (не используется legacy-пайплайном)
+    try:
+        mol.mh_stats = {
+            "proposals": mh_proposals,
+            "accepted": mh_accepted,
+            "rejected": mh_rejected,
+        }
+    except Exception:
+        pass
 
     return mol
 

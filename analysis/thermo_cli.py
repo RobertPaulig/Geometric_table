@@ -243,6 +243,29 @@ def add_thermo_args(parser) -> None:
         default=None,
         help="Beta factor for 3D entanglement backend.",
     )
+    parser.add_argument(
+        "--grower-use-mh",
+        action="store_true",
+        help="Enable Metropolis–Hastings layer in grower.",
+    )
+    parser.add_argument(
+        "--coupling-delta-G",
+        type=float,
+        default=None,
+        help="Override coupling_delta_G for MH grower energy scale.",
+    )
+    parser.add_argument(
+        "--temperature-T",
+        type=float,
+        default=None,
+        help="Override temperature_T for MH grower.",
+    )
+    parser.add_argument(
+        "--deltaG-backend",
+        type=str,
+        default=None,
+        help="Backend for MH grower energy: fdm | fdm_entanglement.",
+    )
 
 
 def apply_thermo_from_args(args, fallback_config_path: Optional[str] = None) -> None:
@@ -326,6 +349,14 @@ def apply_thermo_from_args(args, fallback_config_path: Optional[str] = None) -> 
         cfg = replace(cfg, coupling_topo_3d=float(args.coupling_topo_3d))
     if getattr(args, "topo_3d_beta", None) is not None:
         cfg = replace(cfg, topo_3d_beta=float(args.topo_3d_beta))
+    if getattr(args, "grower_use_mh", None):
+        cfg = replace(cfg, grower_use_mh=True)
+    if getattr(args, "coupling_delta_G", None) is not None:
+        cfg = replace(cfg, coupling_delta_G=float(args.coupling_delta_G))
+    if getattr(args, "temperature_T", None) is not None:
+        cfg = replace(cfg, temperature_T=float(args.temperature_T))
+    if getattr(args, "deltaG_backend", None):
+        cfg = replace(cfg, deltaG_backend=str(args.deltaG_backend))
     if getattr(args, "ws_geom_gap_scale", None) is not None:
         cfg = replace(cfg, ws_geom_gap_scale=float(args.ws_geom_gap_scale))
     if getattr(args, "ws_z_ref", None) is not None:
