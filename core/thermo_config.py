@@ -70,6 +70,8 @@ class ThermoConfig:
     temperature_T: float = 1.0
     grower_use_mh: bool = False
     deltaG_backend: str = "fdm_entanglement"
+    consume_port_on_reject: bool = True
+    max_attempts_per_port: int = 1
 
     experiment_name: str = "default_thermo"
 
@@ -172,6 +174,12 @@ def _strict_from_mapping(d: Mapping[str, Any]) -> ThermoConfig:
         temperature_T=float(d.get("temperature_T", base.temperature_T)),
         grower_use_mh=bool(d.get("grower_use_mh", base.grower_use_mh)),
         deltaG_backend=str(d.get("deltaG_backend", base.deltaG_backend)),
+        consume_port_on_reject=bool(
+            d.get("consume_port_on_reject", base.consume_port_on_reject)
+        ),
+        max_attempts_per_port=int(
+            d.get("max_attempts_per_port", base.max_attempts_per_port)
+        ),
         experiment_name=str(d.get("experiment_name", base.experiment_name)),
     )
 

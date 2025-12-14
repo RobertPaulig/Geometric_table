@@ -89,9 +89,10 @@ def _run_single(
 
     elapsed = time.time() - start
 
-    penalty_factor_3d = (
-        total_ent / total_fdm if total_fdm > 0 else 0.0
-    )
+    if m <= 0 or total_fdm <= 0.0:
+        penalty_factor_3d = float("nan")
+    else:
+        penalty_factor_3d = total_ent / total_fdm
 
     # Для always-accept режимов проверяем, что ΔG не считалась.
     if T >= 1e9:
@@ -180,7 +181,16 @@ def run_sweep(cfg: SweepConfig) -> Tuple[Path, Path]:
 
         for T in T_VALUES:
             for backend in BACKENDS:
-                subset = [r for r in rows if r["T"] == T and r["deltaG_backend"] == backend]
+                subset_all = [r for r in rows if r["T"] == T and r["deltaG_backend"] == backend]
+                if not subset_all:
+                    continue
+                # Фильтр валидных penalty (m>0, total_fdm>0)
+                subset = [
+                    r
+                    for r in subset_all
+                    if r["m"] > 0 and r["total_fdm"] > 0.0
+                ]
+                n_invalid = len(subset_all) - len(subset)
                 if not subset:
                     continue
 
@@ -211,7 +221,7 @@ def run_sweep(cfg: SweepConfig) -> Tuple[Path, Path]:
                 )
                 f.write(f"  E_3d: median={e3d_med:.3f}, p90={e3d_q90:.3f}\n")
                 f.write(
-                    f"  penalty_factor_3d: median={pen_med:.3f}, p90={pen_q90:.3f}\n"
+                    f"  penalty_factor_3d: median={pen_med:.3f}, p90={pen_q90:.3f}, n_invalid={n_invalid}\n"
                 )
 
                 # Top-5 по entanglement

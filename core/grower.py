@@ -75,7 +75,7 @@ def _add_loopy_bonds(
 
     # Lazy imports здесь, чтобы не тянуть thermo/energy в лёгких сценариях
     from core.thermo_config import get_current_thermo_config
-    from core.energy_model import compute_delta_G
+    from core.energy_model import compute_delta_G, compute_energy
     from core.mh import mh_accept
 
     thermo = get_current_thermo_config()
@@ -145,7 +145,7 @@ def grow_molecule_christmas_tree(
     # Lazy import to avoid circular dependency
     from .geom_atoms import Molecule, get_atom, AtomGraph, PERIODIC_TABLE
     from core.thermo_config import get_current_thermo_config
-    from core.energy_model import compute_delta_G
+    from core.energy_model import compute_delta_G, compute_energy
     from core.mh import mh_accept
 
     if rng is None:
@@ -181,6 +181,12 @@ def grow_molecule_christmas_tree(
 
     # MH statistics (for R&D / tests)
     mh_stats = {"proposals": 0, "accepted": 0, "rejected": 0}
+    # Кэш энергии для MH (MH-GROWER-2)
+    use_mh = getattr(thermo, "grower_use_mh", False)
+    coupling_delta_G = float(getattr(thermo, "coupling_delta_G", 1.0))
+    temperature_T = float(getattr(thermo, "temperature_T", 1.0))
+    always_accept = coupling_delta_G == 0.0 or temperature_T >= 1e8
+    cached_energy: Optional[float] = None
 
     # Candidate atoms for growth (simplified subset of common elements)
     candidate_pool = ["H", "C", "N", "O", "F", "Si", "P", "S", "Cl"]
@@ -226,23 +232,23 @@ def grow_molecule_christmas_tree(
         # Here we just treat 'free_ports' as a counter.
         
         orig_free_ports = current_node.free_ports
+        # Параметры reject-политики
+        consume_port_on_reject = bool(getattr(thermo, "consume_port_on_reject", True))
+        max_attempts_per_port = max(1, int(getattr(thermo, "max_attempts_per_port", 1)))
+
         for _ in range(orig_free_ports):
             if len(mol.atoms) >= params.max_atoms:
                 break
-                
-            # Roll dice
-            if rng.random() > p_continue_eff:
-                # Decide NOT to grow on this port -> connection to 'Nothing'?
-                # Or just leave it open (radical)? 
-                # In standard chemistry, open ports are radicals.
-                # To make valid closed molecules, usually we cap with H.
-                # "Christmas Tree" theorem usually implies filling.
-                # Let's assume we cap with H if we don't extend, OR allow open ports as 'radicals'.
-                # For this R&D, let's auto-cap with H if we stop, OR just leave it.
-                # Let's leave it for now, or cap with H to make 'clean' molecules.
-                # Let's cap with H so F_total makes sense.
-                pass
-            else:
+
+            attempts_left = max_attempts_per_port
+            grew_here = False
+
+            while attempts_left > 0 and not grew_here and len(mol.atoms) < params.max_atoms:
+                # Roll dice
+                if rng.random() > p_continue_eff:
+                    # Решили не расти на этом порту в этой попытке
+                    break
+
                 # Grow! Pick a child (proposal stage).
                 child_sym = rng.choice(candidate_pool)
                 child_atom_data = get_atom(child_sym)
@@ -256,7 +262,10 @@ def grow_molecule_christmas_tree(
 
                     # Always-accept режим: не считаем ΔG и не трогаем RNG.
                     if not (coupling == 0.0 or T >= 1e8):
-                        # Clone minimal Molecule state for energy evaluation
+                        # Кэширование энергии: считаем E_old один раз
+                        if cached_energy is None:
+                            cached_energy = compute_energy(mol, thermo)
+
                         proposed_atoms = list(mol.atoms)
                         proposed_bonds = list(mol.bonds)
                         child_idx_prop = len(proposed_atoms)
@@ -264,12 +273,18 @@ def grow_molecule_christmas_tree(
                         proposed_bonds.append((current_node.atom_index, child_idx_prop))
                         proposed_mol = Molecule(name=mol.name, atoms=proposed_atoms, bonds=proposed_bonds)
 
-                        deltaG = compute_delta_G(mol, proposed_mol, thermo)
+                        e_new = compute_energy(proposed_mol, thermo)
+                        deltaG = coupling * float(e_new - cached_energy)
                         if not mh_accept(deltaG, thermo, rng):
                             mh_stats["rejected"] += 1
-                            # reject: не применяем изменение и не добавляем в frontier
-                            current_node.free_ports -= 1
+                            attempts_left -= 1
+                            if consume_port_on_reject:
+                                # Порт считается "съеденным" после reject
+                                break
+                            # Иначе пробуем ещё раз на этом же порту
                             continue
+                        # Accept: обновляем кэш
+                        cached_energy = e_new
                     mh_stats["accepted"] += 1
 
                 # MH выключен или accept: применяем изменение как раньше
@@ -290,7 +305,9 @@ def grow_molecule_christmas_tree(
                             free_ports=child_free,
                         )
                     )
-                
+
+                grew_here = True
+
             current_node.free_ports -= 1
 
     # CY-1: R&D-слой циклов (loopy overlay) — по умолчанию выключен.
