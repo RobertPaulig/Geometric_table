@@ -16,6 +16,7 @@ from .complexity_fdm import (
 )
 from core.crossing import estimate_crossing_number_circle
 from core.complexity_config import get_current_penalties
+from core.thermo_config import get_current_thermo_config
 
 @dataclass
 class ComplexityDecomposition:
@@ -177,6 +178,16 @@ def atom_complexity_from_adjacency(adj_matrix: np.ndarray) -> float:
     return compute_crossing_complexity(adj_matrix)
 
 
+def _edges_from_adj(adj_matrix: np.ndarray):
+    n = int(adj_matrix.shape[0])
+    edges = []
+    for i in range(n):
+        for j in range(i + 1, n):
+            if float(adj_matrix[i, j]) > 0.0:
+                edges.append((i, j))
+    return edges
+
+
 def compute_complexity_features_v2(
     adj_matrix: np.ndarray,
     backend: str = "heuristic",
@@ -253,6 +264,26 @@ def compute_complexity_features_v2(
         penalty_cross = 1.0 + beta_cross * crossing_proxy
         total_cross = float(total_fdm) * penalty_cycle * penalty_cross
         return replace(feats_fdm, total=total_cross)
+
+    if backend == "fdm_entanglement":
+        feats_fdm = compute_complexity_features_v2(adj_matrix, backend="fdm")
+        total_fdm = float(feats_fdm.total)
+
+        cfg = get_current_thermo_config()
+        coupling = float(getattr(cfg, "coupling_topo_3d", 0.0))
+        beta = float(getattr(cfg, "topo_3d_beta", 1.0))
+        if coupling == 0.0 or beta == 0.0:
+            return feats_fdm
+
+        from core.layout_3d import force_directed_layout_3d
+        from core.entanglement_3d import entanglement_score
+
+        edges = _edges_from_adj(adj_matrix)
+        pos = force_directed_layout_3d(int(feats_fdm.n), edges, seed=42)
+        e3d = float(entanglement_score(pos, edges))
+
+        scale = 1.0 + coupling * beta * e3d
+        return replace(feats_fdm, total=total_fdm * scale)
 
     if backend == "hybrid":
         total_fdm = compute_fdm_complexity(

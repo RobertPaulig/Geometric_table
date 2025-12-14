@@ -767,7 +767,8 @@ class AtomGraph:
             a_k = abs(obs.delta_k) / (abs(obs.delta_k) + float(thermo.shape_kurt_scale))
             a_r = obs.r_rms_ws / (obs.r_rms_ws + float(thermo.shape_rrms_scale))
             activity = max(0.0, min(0.5 * a_k + 0.5 * a_r, 1.0))
-            chi_abs_eff *= 1.0 + 0.40 * c_shape * activity
+            gain = float(getattr(thermo, "shape_chi_gain", 0.30))
+            chi_abs_eff *= 1.0 + gain * c_shape * activity
 
         return sign * chi_abs_eff
 

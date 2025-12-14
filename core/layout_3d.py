@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, TYPE_CHECKING
 
 import numpy as np
 
-from core.geom_atoms import Molecule
 from core.thermo_config import ThermoConfig, get_current_thermo_config
+
+if TYPE_CHECKING:
+    from core.geom_atoms import Molecule
 
 
 def force_directed_layout_3d(
@@ -72,7 +74,7 @@ def force_directed_layout_3d(
 
 
 def init_layout_from_ports(
-    mol: Molecule,
+    mol: "Molecule",
     *,
     thermo: Optional[ThermoConfig] = None,
     seed: int = 0,
@@ -107,7 +109,7 @@ def init_layout_from_ports(
 
 
 def layout_molecule_3d(
-    mol: Molecule,
+    mol: "Molecule",
     *,
     thermo: Optional[ThermoConfig] = None,
     n_steps: int = 500,
@@ -130,4 +132,3 @@ def layout_molecule_3d(
         seed=seed,
         init_pos=init_pos,
     )
-

@@ -219,6 +219,24 @@ def add_thermo_args(parser) -> None:
         default=None,
         help="Scale for r_rms_ws in shape activity.",
     )
+    parser.add_argument(
+        "--shape-chi-gain",
+        type=float,
+        default=None,
+        help="Gain for shape-driven chi_spec amplification.",
+    )
+    parser.add_argument(
+        "--coupling-topo-3d",
+        type=float,
+        default=None,
+        help="Override coupling_topo_3d (3D entanglement backend gain).",
+    )
+    parser.add_argument(
+        "--topo-3d-beta",
+        type=float,
+        default=None,
+        help="Beta factor for 3D entanglement backend.",
+    )
 
 
 def apply_thermo_from_args(args, fallback_config_path: Optional[str] = None) -> None:
@@ -294,6 +312,12 @@ def apply_thermo_from_args(args, fallback_config_path: Optional[str] = None) -> 
         cfg = replace(cfg, shape_kurt_scale=float(args.shape_kurt_scale))
     if getattr(args, "shape_rrms_scale", None) is not None:
         cfg = replace(cfg, shape_rrms_scale=float(args.shape_rrms_scale))
+    if getattr(args, "shape_chi_gain", None) is not None:
+        cfg = replace(cfg, shape_chi_gain=float(args.shape_chi_gain))
+    if getattr(args, "coupling_topo_3d", None) is not None:
+        cfg = replace(cfg, coupling_topo_3d=float(args.coupling_topo_3d))
+    if getattr(args, "topo_3d_beta", None) is not None:
+        cfg = replace(cfg, topo_3d_beta=float(args.topo_3d_beta))
     if getattr(args, "ws_geom_gap_scale", None) is not None:
         cfg = replace(cfg, ws_geom_gap_scale=float(args.ws_geom_gap_scale))
     if getattr(args, "ws_z_ref", None) is not None:
