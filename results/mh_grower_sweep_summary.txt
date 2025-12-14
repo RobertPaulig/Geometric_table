@@ -1,0 +1,149 @@
+MH-GROWER-1 sweep summary
+N_seeds=50, combinations=12, total_time_sec=598.94
+
+T=0.1, backend=fdm
+  acceptance_rate: p10=0.000, median=0.000, p90=0.000
+  cyclomatic: median=0.000, p90=0.000
+  E_3d: median=0.000, p90=0.000
+  penalty_factor_3d: median=0.000, p90=0.000
+  top-5 entangled:
+    seed=0, E_3d=0.000, penalty=0.000, n=1, m=0, cyclomatic=0
+    seed=1, E_3d=0.000, penalty=0.000, n=1, m=0, cyclomatic=0
+    seed=2, E_3d=0.000, penalty=0.000, n=1, m=0, cyclomatic=0
+    seed=3, E_3d=0.000, penalty=0.000, n=1, m=0, cyclomatic=0
+    seed=4, E_3d=0.000, penalty=0.000, n=1, m=0, cyclomatic=0
+
+T=0.1, backend=fdm_entanglement
+  acceptance_rate: p10=0.000, median=0.000, p90=0.000
+  cyclomatic: median=0.000, p90=0.000
+  E_3d: median=0.000, p90=0.000
+  penalty_factor_3d: median=0.000, p90=0.000
+  top-5 entangled:
+    seed=0, E_3d=0.000, penalty=0.000, n=1, m=0, cyclomatic=0
+    seed=1, E_3d=0.000, penalty=0.000, n=1, m=0, cyclomatic=0
+    seed=2, E_3d=0.000, penalty=0.000, n=1, m=0, cyclomatic=0
+    seed=3, E_3d=0.000, penalty=0.000, n=1, m=0, cyclomatic=0
+    seed=4, E_3d=0.000, penalty=0.000, n=1, m=0, cyclomatic=0
+
+T=0.3, backend=fdm
+  acceptance_rate: p10=0.000, median=0.000, p90=0.000
+  cyclomatic: median=0.000, p90=0.000
+  E_3d: median=0.000, p90=0.000
+  penalty_factor_3d: median=0.000, p90=0.000
+  top-5 entangled:
+    seed=0, E_3d=0.000, penalty=0.000, n=1, m=0, cyclomatic=0
+    seed=1, E_3d=0.000, penalty=0.000, n=1, m=0, cyclomatic=0
+    seed=2, E_3d=0.000, penalty=0.000, n=1, m=0, cyclomatic=0
+    seed=3, E_3d=0.000, penalty=0.000, n=1, m=0, cyclomatic=0
+    seed=4, E_3d=0.000, penalty=0.000, n=1, m=0, cyclomatic=0
+
+T=0.3, backend=fdm_entanglement
+  acceptance_rate: p10=0.000, median=0.000, p90=0.000
+  cyclomatic: median=0.000, p90=0.000
+  E_3d: median=0.000, p90=0.000
+  penalty_factor_3d: median=0.000, p90=0.000
+  top-5 entangled:
+    seed=0, E_3d=0.000, penalty=0.000, n=1, m=0, cyclomatic=0
+    seed=1, E_3d=0.000, penalty=0.000, n=1, m=0, cyclomatic=0
+    seed=2, E_3d=0.000, penalty=0.000, n=1, m=0, cyclomatic=0
+    seed=3, E_3d=0.000, penalty=0.000, n=1, m=0, cyclomatic=0
+    seed=4, E_3d=0.000, penalty=0.000, n=1, m=0, cyclomatic=0
+
+T=1.0, backend=fdm
+  acceptance_rate: p10=0.000, median=0.292, p90=0.818
+  cyclomatic: median=0.000, p90=3.000
+  E_3d: median=0.000, p90=0.180
+  penalty_factor_3d: median=1.000, p90=1.180
+  top-5 entangled:
+    seed=43, E_3d=0.730, penalty=1.730, n=7, m=9, cyclomatic=3
+    seed=29, E_3d=0.600, penalty=1.600, n=4, m=6, cyclomatic=3
+    seed=27, E_3d=0.476, penalty=1.476, n=5, m=7, cyclomatic=3
+    seed=26, E_3d=0.437, penalty=1.437, n=5, m=7, cyclomatic=3
+    seed=42, E_3d=0.286, penalty=1.286, n=7, m=9, cyclomatic=3
+
+T=1.0, backend=fdm_entanglement
+  acceptance_rate: p10=0.000, median=0.292, p90=0.750
+  cyclomatic: median=0.000, p90=3.000
+  E_3d: median=0.000, p90=0.109
+  penalty_factor_3d: median=1.000, p90=1.109
+  top-5 entangled:
+    seed=43, E_3d=0.199, penalty=1.199, n=7, m=9, cyclomatic=3
+    seed=39, E_3d=0.147, penalty=1.147, n=7, m=8, cyclomatic=2
+    seed=27, E_3d=0.147, penalty=1.147, n=5, m=7, cyclomatic=3
+    seed=26, E_3d=0.146, penalty=1.146, n=5, m=7, cyclomatic=3
+    seed=30, E_3d=0.127, penalty=1.127, n=8, m=10, cyclomatic=3
+
+T=3.0, backend=fdm
+  acceptance_rate: p10=0.325, median=0.857, p90=1.000
+  cyclomatic: median=3.000, p90=3.000
+  E_3d: median=0.047, p90=0.374
+  penalty_factor_3d: median=1.047, p90=1.374
+  top-5 entangled:
+    seed=24, E_3d=0.622, penalty=1.622, n=9, m=11, cyclomatic=3
+    seed=33, E_3d=0.600, penalty=1.600, n=4, m=6, cyclomatic=3
+    seed=34, E_3d=0.600, penalty=1.600, n=4, m=6, cyclomatic=3
+    seed=7, E_3d=0.600, penalty=1.600, n=4, m=6, cyclomatic=3
+    seed=35, E_3d=0.600, penalty=1.600, n=4, m=6, cyclomatic=3
+
+T=3.0, backend=fdm_entanglement
+  acceptance_rate: p10=0.325, median=0.857, p90=0.963
+  cyclomatic: median=3.000, p90=3.000
+  E_3d: median=0.049, p90=0.225
+  penalty_factor_3d: median=1.049, p90=1.225
+  top-5 entangled:
+    seed=24, E_3d=0.622, penalty=1.622, n=9, m=11, cyclomatic=3
+    seed=7, E_3d=0.600, penalty=1.600, n=4, m=6, cyclomatic=3
+    seed=35, E_3d=0.600, penalty=1.600, n=4, m=6, cyclomatic=3
+    seed=5, E_3d=0.451, penalty=1.451, n=7, m=9, cyclomatic=3
+    seed=42, E_3d=0.286, penalty=1.286, n=7, m=9, cyclomatic=3
+
+T=10.0, backend=fdm
+  acceptance_rate: p10=0.899, median=1.000, p90=1.000
+  cyclomatic: median=3.000, p90=3.000
+  E_3d: median=0.060, p90=0.219
+  penalty_factor_3d: median=1.060, p90=1.219
+  top-5 entangled:
+    seed=35, E_3d=0.600, penalty=1.600, n=4, m=6, cyclomatic=3
+    seed=11, E_3d=0.600, penalty=1.600, n=4, m=6, cyclomatic=3
+    seed=10, E_3d=0.349, penalty=1.349, n=5, m=7, cyclomatic=3
+    seed=44, E_3d=0.347, penalty=1.347, n=5, m=7, cyclomatic=3
+    seed=42, E_3d=0.286, penalty=1.286, n=7, m=9, cyclomatic=3
+
+T=10.0, backend=fdm_entanglement
+  acceptance_rate: p10=0.900, median=1.000, p90=1.000
+  cyclomatic: median=3.000, p90=3.000
+  E_3d: median=0.058, p90=0.279
+  penalty_factor_3d: median=1.058, p90=1.279
+  top-5 entangled:
+    seed=35, E_3d=0.600, penalty=1.600, n=4, m=6, cyclomatic=3
+    seed=10, E_3d=0.437, penalty=1.437, n=5, m=7, cyclomatic=3
+    seed=44, E_3d=0.347, penalty=1.347, n=5, m=7, cyclomatic=3
+    seed=40, E_3d=0.343, penalty=1.343, n=13, m=15, cyclomatic=3
+    seed=42, E_3d=0.286, penalty=1.286, n=7, m=9, cyclomatic=3
+
+T=1000000000.0, backend=fdm
+  acceptance_rate: p10=1.000, median=1.000, p90=1.000
+  cyclomatic: median=3.000, p90=3.000
+  E_3d: median=0.037, p90=0.141
+  penalty_factor_3d: median=1.037, p90=1.141
+  top-5 entangled:
+    seed=35, E_3d=0.600, penalty=1.600, n=4, m=6, cyclomatic=3
+    seed=34, E_3d=0.302, penalty=1.302, n=7, m=9, cyclomatic=3
+    seed=7, E_3d=0.171, penalty=1.171, n=11, m=13, cyclomatic=3
+    seed=6, E_3d=0.143, penalty=1.143, n=5, m=7, cyclomatic=3
+    seed=13, E_3d=0.141, penalty=1.141, n=6, m=8, cyclomatic=3
+
+T=1000000000.0, backend=fdm_entanglement
+  acceptance_rate: p10=1.000, median=1.000, p90=1.000
+  cyclomatic: median=3.000, p90=3.000
+  E_3d: median=0.037, p90=0.141
+  penalty_factor_3d: median=1.037, p90=1.141
+  top-5 entangled:
+    seed=35, E_3d=0.600, penalty=1.600, n=4, m=6, cyclomatic=3
+    seed=34, E_3d=0.302, penalty=1.302, n=7, m=9, cyclomatic=3
+    seed=7, E_3d=0.171, penalty=1.171, n=11, m=13, cyclomatic=3
+    seed=6, E_3d=0.143, penalty=1.143, n=5, m=7, cyclomatic=3
+    seed=13, E_3d=0.141, penalty=1.141, n=6, m=8, cyclomatic=3
+
+deltaG_calls(T=1e9, any_backend) ~= 0 (expected ~ 0 by design)
+max|penalty_factor_3d - (1 + E_3d)| = 1.000000e+00

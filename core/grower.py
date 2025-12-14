@@ -43,6 +43,7 @@ def _add_loopy_bonds(
     mol: Any,
     params: GrowthParams,
     rng: np.random.Generator,
+    mh_stats: Optional[Dict[str, int]] = None,
 ) -> None:
     """
     CY-1: R&D-слой. Поверх уже выросшего дерева пытается добавить
@@ -72,6 +73,20 @@ def _add_loopy_bonds(
     if not candidate_pairs:
         return
 
+    # Lazy imports здесь, чтобы не тянуть thermo/energy в лёгких сценариях
+    from core.thermo_config import get_current_thermo_config
+    from core.energy_model import compute_delta_G
+    from core.mh import mh_accept
+
+    thermo = get_current_thermo_config()
+
+    # Счётчики MH: если переданы снаружи, обновляем их; иначе локальные.
+    if mh_stats is None:
+        mh_stats_local = {"proposals": 0, "accepted": 0, "rejected": 0}
+        mh_stats_ref = mh_stats_local
+    else:
+        mh_stats_ref = mh_stats
+
     added = 0
     attempts = 0
     max_attempts = params.max_extra_bonds * 4
@@ -88,7 +103,33 @@ def _add_loopy_bonds(
         idx = rng.integers(low=0, high=len(candidate_pairs))
         i, j = candidate_pairs.pop(int(idx))
 
-        # Добавляем ребро i-j в mol (как и в основном grower-е).
+        # MH-этап поверх legacy-proposal loopy-ребра.
+        # Сначала формируем предложенный граф, затем решаем, применять ли изменение.
+        if getattr(thermo, "grower_use_mh", False):
+            coupling = float(getattr(thermo, "coupling_delta_G", 1.0))
+            T = float(getattr(thermo, "temperature_T", 1.0))
+
+            # Всегда-accept режим: не считаем ΔG и не трогаем RNG внутри MH.
+            mh_stats_ref["proposals"] += 1
+            if coupling == 0.0 or T >= 1e8:
+                mh_stats_ref["accepted"] += 1
+            else:
+                proposed_bonds = list(mol.bonds)
+                proposed_bonds.append((i, j))
+                proposed_mol = mol.__class__(
+                    name=getattr(mol, "name", "Loopy"),
+                    atoms=list(mol.atoms),
+                    bonds=proposed_bonds,
+                )
+
+                deltaG = compute_delta_G(mol, proposed_mol, thermo)
+                if not mh_accept(deltaG, thermo, rng):
+                    mh_stats_ref["rejected"] += 1
+                    # Reject: не добавляем ребро, двигаемся к следующей попытке.
+                    continue
+                mh_stats_ref["accepted"] += 1
+
+        # MH выключен или accept: добавляем ребро как в legacy.
         mol.bonds.append((i, j))
         added += 1
 
@@ -139,9 +180,7 @@ def grow_molecule_christmas_tree(
     ]
 
     # MH statistics (for R&D / tests)
-    mh_proposals = 0
-    mh_accepted = 0
-    mh_rejected = 0
+    mh_stats = {"proposals": 0, "accepted": 0, "rejected": 0}
 
     # Candidate atoms for growth (simplified subset of common elements)
     candidate_pool = ["H", "C", "N", "O", "F", "Si", "P", "S", "Cl"]
@@ -210,22 +249,28 @@ def grow_molecule_christmas_tree(
 
                 # MH proposal: сформировать кандидата new_mol
                 if getattr(thermo, "grower_use_mh", False):
-                    # Clone minimal Molecule state for energy evaluation
-                    proposed_atoms = list(mol.atoms)
-                    proposed_bonds = list(mol.bonds)
-                    child_idx_prop = len(proposed_atoms)
-                    proposed_atoms.append(child_sym)
-                    proposed_bonds.append((current_node.atom_index, child_idx_prop))
-                    proposed_mol = Molecule(name=mol.name, atoms=proposed_atoms, bonds=proposed_bonds)
+                    coupling = float(getattr(thermo, "coupling_delta_G", 1.0))
+                    T = float(getattr(thermo, "temperature_T", 1.0))
 
-                    deltaG = compute_delta_G(mol, proposed_mol, thermo)
-                    mh_proposals += 1
-                    if not mh_accept(deltaG, thermo, rng):
-                        mh_rejected += 1
-                        # reject: не применяем изменение и не добавляем в frontier
-                        current_node.free_ports -= 1
-                        continue
-                    mh_accepted += 1
+                    mh_stats["proposals"] += 1
+
+                    # Always-accept режим: не считаем ΔG и не трогаем RNG.
+                    if not (coupling == 0.0 or T >= 1e8):
+                        # Clone minimal Molecule state for energy evaluation
+                        proposed_atoms = list(mol.atoms)
+                        proposed_bonds = list(mol.bonds)
+                        child_idx_prop = len(proposed_atoms)
+                        proposed_atoms.append(child_sym)
+                        proposed_bonds.append((current_node.atom_index, child_idx_prop))
+                        proposed_mol = Molecule(name=mol.name, atoms=proposed_atoms, bonds=proposed_bonds)
+
+                        deltaG = compute_delta_G(mol, proposed_mol, thermo)
+                        if not mh_accept(deltaG, thermo, rng):
+                            mh_stats["rejected"] += 1
+                            # reject: не применяем изменение и не добавляем в frontier
+                            current_node.free_ports -= 1
+                            continue
+                    mh_stats["accepted"] += 1
 
                 # MH выключен или accept: применяем изменение как раньше
                 child_idx = add_atom_to_mol(child_sym)
@@ -249,15 +294,11 @@ def grow_molecule_christmas_tree(
             current_node.free_ports -= 1
 
     # CY-1: R&D-слой циклов (loopy overlay) — по умолчанию выключен.
-    _add_loopy_bonds(mol, params, rng)
+    _add_loopy_bonds(mol, params, rng, mh_stats=mh_stats)
 
     # Attach MH stats for diagnostics (не используется legacy-пайплайном)
     try:
-        mol.mh_stats = {
-            "proposals": mh_proposals,
-            "accepted": mh_accepted,
-            "rejected": mh_rejected,
-        }
+        mol.mh_stats = dict(mh_stats)
     except Exception:
         pass
 
