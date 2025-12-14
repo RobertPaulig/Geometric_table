@@ -408,7 +408,8 @@ class AtomGraph:
             a_k = abs(obs.delta_k) / (abs(obs.delta_k) + float(thermo.shape_kurt_scale))
             a_r = obs.r_rms_ws / (obs.r_rms_ws + float(thermo.shape_rrms_scale))
             activity = max(0.0, min(0.5 * a_k + 0.5 * a_r, 1.0))
-            soft_shape = max(0.0, min(out + 0.35 * activity, 0.95))
+            gain_soft = float(getattr(thermo, "shape_softness_gain", 0.35))
+            soft_shape = max(0.0, min(out + gain_soft * activity, 0.95))
             out = max(0.0, min((1.0 - c_shape) * out + c_shape * soft_shape, 0.95))
 
         return out

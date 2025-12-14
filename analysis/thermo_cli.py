@@ -220,6 +220,12 @@ def add_thermo_args(parser) -> None:
         help="Scale for r_rms_ws in shape activity.",
     )
     parser.add_argument(
+        "--shape-softness-gain",
+        type=float,
+        default=None,
+        help="Gain for shape-driven softness amplification.",
+    )
+    parser.add_argument(
         "--shape-chi-gain",
         type=float,
         default=None,
@@ -312,6 +318,8 @@ def apply_thermo_from_args(args, fallback_config_path: Optional[str] = None) -> 
         cfg = replace(cfg, shape_kurt_scale=float(args.shape_kurt_scale))
     if getattr(args, "shape_rrms_scale", None) is not None:
         cfg = replace(cfg, shape_rrms_scale=float(args.shape_rrms_scale))
+    if getattr(args, "shape_softness_gain", None) is not None:
+        cfg = replace(cfg, shape_softness_gain=float(args.shape_softness_gain))
     if getattr(args, "shape_chi_gain", None) is not None:
         cfg = replace(cfg, shape_chi_gain=float(args.shape_chi_gain))
     if getattr(args, "coupling_topo_3d", None) is not None:

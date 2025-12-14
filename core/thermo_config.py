@@ -61,6 +61,7 @@ class ThermoConfig:
     # Shape-driven chemistry (R&D, disabled by default)
     shape_kurt_scale: float = 0.30
     shape_rrms_scale: float = 1.50
+    shape_softness_gain: float = 0.35
     shape_chi_gain: float = 0.30
     topo_3d_beta: float = 1.0
 
@@ -156,6 +157,7 @@ def _strict_from_mapping(d: Mapping[str, Any]) -> ThermoConfig:
         ws_Z_alpha=float(d.get("ws_Z_alpha", base.ws_Z_alpha)),
         shape_kurt_scale=float(d.get("shape_kurt_scale", base.shape_kurt_scale)),
         shape_rrms_scale=float(d.get("shape_rrms_scale", base.shape_rrms_scale)),
+        shape_softness_gain=float(d.get("shape_softness_gain", base.shape_softness_gain)),
         shape_chi_gain=float(d.get("shape_chi_gain", base.shape_chi_gain)),
         topo_3d_beta=float(d.get("topo_3d_beta", base.topo_3d_beta)),
         experiment_name=str(d.get("experiment_name", base.experiment_name)),
