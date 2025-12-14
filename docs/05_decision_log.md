@@ -291,6 +291,32 @@
   `geom_nuclear_map.csv` теперь ищутся сначала в `data/`, затем в
   корне репозитория.
 
+## [TOPO-3D-2] 3D entanglement backend vs 2D crossing proxy
+
+**Решение.**
+
+- Реализован backend `fdm_entanglement` в `compute_complexity_features_v2`, который масштабирует FDM-сложность по формуле
+  `total_entangled = total_fdm * (1 + coupling_topo_3d * topo_3d_beta * E_3d)`, где `E_3d` — entanglement_score по
+  force-directed layout (seed=42).
+- Добавлен экспериментальный скрипт `analysis/topo3d/experiment_entanglement_penalty.py`, который измеряет
+  `crossing_density`, `E_3d`, `total_fdm`, `total_entangled` и `penalty_factor_3d` на смешанном датасете:
+  учебные молекулы (H₂, H₂O, CH₄, NH₃, CO₂, C₂H₄, C₆H₆, NaCl, SiO₂, chain_C3, K4_C) и grower-графы (деревья и loopy).
+- Численная проверка: `max|formula_residual| ≈ 2.4e-11`, `median = 0` (формула backend’а реализована корректно);
+  `corr(penalty_factor_3d, E_3d) = 1.0` (как и ожидается для аффинной связи).
+- На учебных молекулах 3D-штраф практически нулевой (`penalty_factor_3d ≈ 1.000–1.003`), т.е. базовая химия
+  не «ломается» при включённом 3D-entanglement.
+- На K4 и части loopy-grower-графов entanglement даёт заметный штраф (`E_3d ≈ 0.35–0.60`, `penalty_factor_3d ≈ 1.35–1.60`),
+  что подтверждает чувствительность 3D-оси к действительно плотным/запутанным графам.
+- Корреляция `E_3d` с 2D `crossing_density` близка к нулю (`≈ -0.045`), т.е. 3D-entanglement даёт независимую ось сложности,
+  а не «улучшенную версию» 2D crossing-proxy.
+
+**Инварианты.**
+
+- При `coupling_topo_3d=0` или `topo_3d_beta=0` backend `fdm_entanglement` сводится к чистому FDM (`backend="fdm"`), так что
+  зелёная зона по умолчанию не меняется.
+- В R&D-режимах `topo_3d_beta` подбирается по хвосту распределения `E_3d`, чтобы p95-penalty на grower_loopy-графах оставался
+  в фиксированном коридоре (например, ≤ 1.2–1.5).
+
 **Статус.**
 
 - Для элементов H--Kr ядерные колонки `band_width`, `N_best`,
