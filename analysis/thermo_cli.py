@@ -263,6 +263,11 @@ def add_thermo_args(parser) -> None:
         help="Beta factor for 3D entanglement backend.",
     )
     parser.add_argument(
+        "--topo3d-prefilter-tree",
+        action="store_true",
+        help="Enable 3D entanglement prefilter for trees (cyclomatic=0).",
+    )
+    parser.add_argument(
         "--grower-use-mh",
         action="store_true",
         help="Enable Metropolis–Hastings layer in grower.",
@@ -401,6 +406,8 @@ def apply_thermo_from_args(args, fallback_config_path: Optional[str] = None) -> 
         cfg = replace(cfg, ws_Z_ref=float(args.ws_z_ref))
     if getattr(args, "ws_z_alpha", None) is not None:
         cfg = replace(cfg, ws_Z_alpha=float(args.ws_z_alpha))
+    if getattr(args, "topo3d_prefilter_tree", None):
+        cfg = replace(cfg, topo3d_prefilter_tree=True)
     if getattr(args, "ws_integrator", None):
         cfg = replace(cfg, ws_integrator=str(args.ws_integrator))
     if getattr(args, "ws_fdm_depth", None) is not None:

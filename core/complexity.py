@@ -275,6 +275,11 @@ def compute_complexity_features_v2(
         if coupling == 0.0 or beta == 0.0:
             return feats_fdm
 
+        # TOPO-PREFILTER-0: если включён prefilter и граф дерево (cyclomatic==0),
+        # возвращаем чистый FDM без 3D layout/entanglement.
+        if bool(getattr(cfg, "topo3d_prefilter_tree", False)) and feats_fdm.cyclomatic == 0:
+            return feats_fdm
+
         from core.layout_3d import force_directed_layout_3d
         from core.entanglement_3d import entanglement_score
 
