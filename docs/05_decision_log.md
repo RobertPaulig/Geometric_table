@@ -1114,3 +1114,40 @@
 Инварианты:
 - WS-trapz (4096 точек) остаётся эталонным baseline по форме; FDM-параметры по-прежнему хранятся в ThermoConfig и могут переопределяться в R&D.
 - Файлы `results/fast_spectrum_2_bench*.csv/txt` игнорируются git согласно [RESULTS-1]; в истории остаются только код, тесты и данный decision log.
+
+## [SMART-GROWTH-1] End-to-end проверка turbo-atom в MH-росте
+
+Дата: 2025-12-16
+
+Решение:
+- Добавлен бенч-скрипт `analysis/growth/smart_growth_1_bench.py`, который сравнивает рост деревьев в двух режимах:
+  - `ws_integrator="trapz"` (baseline),
+  - `ws_integrator="fdm"` с параметрами `(ws_fdm_base=2, ws_fdm_depth=5)` (turbo-atom из FAST-SPECTRUM-2).
+- В обоих режимах используются одинаковые термо-параметры, кроме интегратора:
+  - `coupling_shape_softness=1.0`, `coupling_shape_chi=1.0` (shape-ветка принудительно включена),
+  - `grower_use_mh=True`, `deltaG_backend="fdm_entanglement"`, `temperature_T=1.0`.
+- Для каждого интегратора и Z из списка `[6, 8, 14, 26]` (C, O, Si, Fe) grower запускается с одними и теми же `GrowthParams`:
+  - `max_depth=4`, `max_atoms=25`,
+  - `n_trees_per_Z=50` деревьев на каждую пару (режим, Z).
+- Для каждого дерева собираются:
+  - время роста одной молекулы (по Python-таймеру вокруг `grow_molecule_christmas_tree`),
+  - размер дерева (число атомов),
+  - FDM-сложность дерева по `compute_complexity_features_v2(..., backend="fdm")`.
+- По результатам по (режим, Z) считаются агрегаты:
+  - `runtime_total_sec`, `runtime_per_tree_sec_mean/median`,
+  - `size_mean/median`,
+  - `complexity_fdm_mean`, `complexity_fdm_max`.
+- Текстовый summary пишется в `results/smart_growth_1_bench.txt`, CSV — в `results/smart_growth_1_bench.csv` (оба игнорируются git согласно [RESULTS-1]).
+
+Цифры (из `results/smart_growth_1_bench.txt`, n_trees_per_Z=50, max_depth=4, max_atoms=25):
+- Z=6 (C): `trapz_mean≈6.29e-4s`, `fdm_mean≈7.75e-4s`, `speedup≈0.81×`, `size_mean_trapz≈2.06`, `size_mean_fdm≈2.12`, `Cfdm_mean_trapz≈0.99`, `Cfdm_mean_fdm≈0.82`.
+- Z=8 (O): `trapz_mean≈2.30e-4s`, `fdm_mean≈2.78e-4s`, `speedup≈0.83×`, `size_mean_trapz≈1.20`, `size_mean_fdm≈1.40`, `Cfdm_mean_trapz≈0.34`, `Cfdm_mean_fdm≈0.49`.
+- Z=14 (Si): `trapz_mean≈5.02e-4s`, `fdm_mean≈3.54e-4s`, `speedup≈1.42×`, `size_mean_trapz≈1.84`, `size_mean_fdm≈1.42`, `Cfdm_mean_trapz≈0.75`, `Cfdm_mean_fdm≈0.44`.
+- Z=26 (Fe): `trapz_mean≈1.02e-3s`, `fdm_mean≈1.32e-3s`, `speedup≈0.77×`, `size_mean_trapz≈2.78`, `size_mean_fdm≈3.68`, `Cfdm_mean_trapz≈1.31`, `Cfdm_mean_fdm≈1.67`.
+
+Интерпретация:
+- На текущем малом стенде MH-роста (max_depth=4, max_atoms=25) выигрыш turbo-atom по времени на дерево не монотонен по Z:
+  - FDM быстрее trapz только для Si (Z=14, speedup≈1.42×),
+  - для C, O и Fe наблюдается лёгкое замедление (speedup<1×) при включённой shape-ветке и FH-энергетике.
+- Средние размеры деревьев и FDM-комплексности отличаются между режимами, что отражает чувствительность MH-роста к форме потенциала и shape-наблюдаемым; при этом порядок величин размеров и сложностей сопоставим между trapz и FDM.
+- Для более жёсткой end-to-end оценки требуется либо увеличить глубину/размер деревьев, либо оптимизировать ещё и остальные bottle-neck-и MH-роста (энергетика, proposal-логика); текущий SMART-GROWTH-1 фиксирует базовую картину и служит R&D-стендом для дальнейших SMART-GROWTH-* задач.
