@@ -999,3 +999,55 @@
 Инварианты:
 - Gaussian-режим (`density_source="gaussian"`) остаётся неизменным при любых настройках ws Z-coupling.
 - При `coupling_ws_Z=0` поведение WS-ветки соответствует legacy-профилю без Z-зависимости радиусного масштаба.
+
+## [TOPO-PREFILTER-0/0.1] Prefilter для деревьев в fdm_entanglement + benchmark
+
+Дата: 2025-12-15
+
+Решение:
+- В `ThermoConfig` добавлен флаг `topo3d_prefilter_tree: bool = False` и CLI-переключатель `--topo3d-prefilter-tree`.
+- В backend `fdm_entanglement` (`compute_complexity_features_v2`) введён ранний выход: при `topo3d_prefilter_tree=True` и `cyclomatic==0` возвращается чистый FDM (`total_entangled == total_fdm`) без вызова 3D layout/entanglement.
+- Добавлены тесты `tests/test_topo_prefilter_tree.py`, доказывающие:
+  - для цепочки (tree) при включённом prefilter layout не вызывается и total совпадает с FDM;
+  - для K4 prefilter не срабатывает, layout вызывается (через monkeypatch на `force_directed_layout_3d`).
+- Добавлен R&D-скрипт `analysis/topo3d/benchmark_prefilter_tree.py`, который бенчит `fdm_entanglement` на 200 случайных деревьях (n=20) с prefilter off/on.
+
+Цифры:
+- По summary `results/topo3d_prefilter_bench_summary.txt`:
+  - `n_graphs=200`, `n_tree(cyclomatic==0)=200`;
+  - медианный speedup по времени `t_off/t_on` на деревьях ≈ **8.2×10²**, максимум ≈ **1.0×10³**.
+- Это “идеальный” сценарий (100% деревья): на реальных наборах с циклами выигрыш будет ниже, но prefilter существенно уменьшает стоимость entanglement-backend на acyclic-графах.
+
+Инварианты:
+- При `topo3d_prefilter_tree=False` поведение backend `fdm_entanglement` полностью совпадает с предыдущим (зелёная зона не меняется).
+
+## [FAST-SPECTRUM-1] Векторизация WS-FDM и выбор (base*, depth*)
+
+Дата: 2025-12-15
+
+Решение:
+- В `core/shape_observables.get_shape_observables` FDM-ветка для `kurt_ws` векторизована:
+  - вместо Python-цикла по FDM-точкам используется batch-вычисление: `samples = fdm.sample(...)`, `vals = moments_func(samples)`, `m_vec = R_max * vals.mean(axis=0)`.
+- Добавлен свип-скрипт `analysis/ws/sweep_ws_fdm_depth.py`, который:
+  - для Z = [1, 6, 8, 14, 26] считает baseline `kurt_ws` и `t_trapz` для trapz@4096;
+  - для сетки (base ∈ {2,3,4}, depth ∈ {5..10}) считает FDM-значения `kurt_fdm`, времена `t_fdm` и speedup `t_trapz / t_fdm`;
+  - записывает результаты в `results/ws_fdm_sweep.csv` и агрегаты в `results/ws_fdm_sweep_summary.txt`.
+- По агрегатам выбирается пара `(ws_fdm_base*, ws_fdm_depth*)`, удовлетворя строгим критериям:
+  - `max_abs_err(kurt_ws) = max_Z |kurt_fdm(Z) - kurt_trapz(Z)| ≤ 0.05`;
+  - `median_speedup = median_Z (t_trapz(Z)/t_fdm(Z)) ≥ 1.8`.
+- Выбор зафиксирован тестом `tests/test_ws_integrator_fdm_vs_trapz.py`, который проверяет DoD.1 для выбранных `(base*, depth*)`.
+
+Цифры (из `results/ws_fdm_sweep_summary.txt` для выбранных параметров):
+- Свип по (base, depth) показал:
+  - `base=2, depth=5`: `max_abs_err_over_Z ≈ 0.00487`, `median_speedup_over_Z ≈ 2.63×`;
+  - `base=2, depth=6`: `max_abs_err_over_Z ≈ 2.8e-4`, `median_speedup_over_Z ≈ 2.43×`;
+  - `base=3, depth=5`: `max_abs_err_over_Z ≈ 1e-5`, `median_speedup_over_Z ≈ 2.00×`;
+  - для более глубоких depth speedup падает (<1.8×), хотя ошибка становится ещё меньше.
+- Выбрано `(ws_fdm_base*, ws_fdm_depth*) = (2, 5)` как компромисс:
+  - `max_abs_err(kurt_ws) ≈ 0.00487` на Z=[1, 6, 8, 14, 26] (≈2% от типичного значения ~-0.227);
+  - `median_speedup ≈ 2.63×` по времени `trapz/FDM`, что удовлетворяет целевому порогу ≥1.8×.
+- Для всех Z в [1,6,8,14,26] ошибка по kurtosis на (2,5) почти одинакова (~0.00487), speedup варьируется в пределах ~2–5×.
+
+Инварианты:
+- Trapz-baseline (4096 точек) сохранён как эталон; FDM-параметры хранятся в ThermoConfig и могут быть переопределены для R&D.
+- Публичный API `get_shape_observables` не менялся (возвращается тот же ShapeObs).
