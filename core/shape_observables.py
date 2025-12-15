@@ -10,6 +10,7 @@ import numpy as np
 from core.thermo_config import ThermoConfig, get_current_thermo_config
 from core.spectral_density_ws import WSRadialParams, make_ws_rho3d_with_diagnostics
 from core.density_models import beta_effective
+from core.fdm import FDMIntegrator, make_tensor_grid_ifs
 # Excess kurtosis for radial variable of 3D Gaussian (Maxwell distribution).
 KURTOSIS_EXCESS_GAUSS_RADIAL = (
     4.0 * (-96.0 - 3.0 * math.pi ** 2 + 40.0 * math.pi)
@@ -26,16 +27,16 @@ def radial_kurtosis_excess_from_rho3d(r: np.ndarray, rho3d: np.ndarray) -> float
     rho3d = np.asarray(rho3d, dtype=float)
 
     p = 4.0 * math.pi * (r ** 2) * rho3d
-    norm = np.trapz(p, r)
+    norm = np.trapezoid(p, r)
     if not np.isfinite(norm) or norm <= 0:
         return float("nan")
     p = p / norm
 
-    mu = np.trapz(r * p, r)
-    var = np.trapz((r - mu) ** 2 * p, r)
+    mu = np.trapezoid(r * p, r)
+    var = np.trapezoid((r - mu) ** 2 * p, r)
     if not np.isfinite(var) or var <= 0:
         return float("nan")
-    mu4 = np.trapz((r - mu) ** 4 * p, r)
+    mu4 = np.trapezoid((r - mu) ** 4 * p, r)
     return float(mu4 / (var ** 2) - 3.0)
 
 
@@ -80,6 +81,9 @@ def thermo_fingerprint_for_shape(cfg: ThermoConfig) -> Tuple:
         float(cfg.ws_Z_ref),
         float(cfg.ws_Z_alpha),
         float(cfg.coupling_ws_Z),
+        cfg.ws_integrator,
+        int(cfg.ws_fdm_depth),
+        int(cfg.ws_fdm_base),
     )
 
 
@@ -92,12 +96,57 @@ def get_shape_observables(Z: int, thermo_fp: Tuple) -> ShapeObs:
     cfg = get_current_thermo_config()
     params = _ws_params_from_thermo(cfg)
     rho_fn, diag = make_ws_rho3d_with_diagnostics(int(Z), params)
-
     r_rms_ws = float(diag.r_rms)
 
-    r_grid = np.linspace(0.0, float(params.R_max), 4096)
-    rho_grid = rho_fn(r_grid)
-    kurt_ws = float(radial_kurtosis_excess_from_rho3d(r_grid, rho_grid))
+    # Compute kurtosis via selected integrator
+    R_max = float(params.R_max)
+    method = getattr(cfg, "ws_integrator", "trapz")
+
+    if method == "fdm":
+        base = int(getattr(cfg, "ws_fdm_base", 2))
+        depth = int(getattr(cfg, "ws_fdm_depth", 9))
+        ifs = make_tensor_grid_ifs(dim=1, base=base)
+        fdm = FDMIntegrator(ifs)
+
+        def moments_func(u: np.ndarray) -> np.ndarray:
+            # u shape: (N,1) in [0,1]; map to r in [0, R_max]
+            r = (u[:, 0]) * R_max
+            rho = rho_fn(r)
+            p = 4.0 * math.pi * (r ** 2) * rho
+            # raw moments m0..m4 for the integrand
+            m0 = p
+            m1 = r * p
+            m2 = (r ** 2) * p
+            m3 = (r ** 3) * p
+            m4 = (r ** 4) * p
+            return np.stack([m0, m1, m2, m3, m4], axis=1)
+
+        # FDMIntegrator.integrate returns mean over u; true integral = R_max * mean
+        # Здесь moments_func возвращает (N, 5), поэтому используем vectorized=False
+        # и обрабатываем внутри по точкам.
+        samples = fdm.sample(depth=depth, dim=1)
+        vals = []
+        for u in samples:
+            vals.append(moments_func(u.reshape(1, -1))[0])
+        m_vec = R_max * np.mean(np.asarray(vals, dtype=float), axis=0)
+        m0, m1, m2, m3, m4 = [float(x) for x in m_vec]
+        if not np.isfinite(m0) or m0 <= 0.0:
+            kurt_ws = float("nan")
+        else:
+            mu = m1 / m0
+            # central moments via raw moments
+            mu2 = m2 / m0 - mu ** 2
+            mu3 = m3 / m0 - 3 * mu * (m2 / m0) + 2 * mu ** 3
+            mu4 = m4 / m0 - 4 * mu * (m3 / m0) + 6 * (mu ** 2) * (m2 / m0) - 3 * mu ** 4
+            if not np.isfinite(mu2) or mu2 <= 0.0:
+                kurt_ws = float("nan")
+            else:
+                kurt_ws = float(mu4 / (mu2 ** 2) - 3.0)
+    else:
+        # Legacy trapz-based computation on fixed grid
+        r_grid = np.linspace(0.0, R_max, 4096)
+        rho_grid = rho_fn(r_grid)
+        kurt_ws = float(radial_kurtosis_excess_from_rho3d(r_grid, rho_grid))
 
     beta = beta_effective(
         int(Z),

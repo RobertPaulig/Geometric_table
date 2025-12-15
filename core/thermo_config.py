@@ -66,6 +66,11 @@ class ThermoConfig:
     shape_chi_gain: float = 0.30
     topo_3d_beta: float = 1.0
 
+    # WS / shape integrator controls
+    ws_integrator: str = "trapz"  # trapz | fdm
+    ws_fdm_depth: int = 9
+    ws_fdm_base: int = 2
+
     # MH-grower controls (R&D)
     temperature_T: float = 1.0
     grower_use_mh: bool = False
@@ -174,6 +179,9 @@ def _strict_from_mapping(d: Mapping[str, Any]) -> ThermoConfig:
         shape_softness_gain=float(d.get("shape_softness_gain", base.shape_softness_gain)),
         shape_chi_gain=float(d.get("shape_chi_gain", base.shape_chi_gain)),
         topo_3d_beta=float(d.get("topo_3d_beta", base.topo_3d_beta)),
+        ws_integrator=str(d.get("ws_integrator", base.ws_integrator)),
+        ws_fdm_depth=int(d.get("ws_fdm_depth", base.ws_fdm_depth)),
+        ws_fdm_base=int(d.get("ws_fdm_base", base.ws_fdm_base)),
         temperature_T=float(d.get("temperature_T", base.temperature_T)),
         grower_use_mh=bool(d.get("grower_use_mh", base.grower_use_mh)),
         deltaG_backend=str(d.get("deltaG_backend", base.deltaG_backend)),

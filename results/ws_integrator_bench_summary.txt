@@ -1,0 +1,13 @@
+FAST-SPECTRUM-0 WS integrator benchmark
+Z_values=[1, 6, 8, 14, 26]
+ws_fdm_depth=9, ws_fdm_base=2
+
+Z=1: kurt_trapz=-0.2271, kurt_fdm=-0.2271, abs_err=0.0000, t_trapz=0.0077s, t_fdm=0.0070s, speedup=1.11x
+Z=6: kurt_trapz=-0.2271, kurt_fdm=-0.2271, abs_err=0.0000, t_trapz=0.0070s, t_fdm=0.0071s, speedup=0.99x
+Z=8: kurt_trapz=-0.2271, kurt_fdm=-0.2271, abs_err=0.0000, t_trapz=0.0090s, t_fdm=0.0080s, speedup=1.12x
+Z=14: kurt_trapz=-0.2271, kurt_fdm=-0.2271, abs_err=0.0000, t_trapz=0.0071s, t_fdm=0.0067s, speedup=1.06x
+Z=26: kurt_trapz=-0.2271, kurt_fdm=-0.2271, abs_err=0.0000, t_trapz=0.0070s, t_fdm=0.0066s, speedup=1.06x
+
+max_abs_err=0.0000
+median_abs_err=0.0000
+median_speedup=1.06x

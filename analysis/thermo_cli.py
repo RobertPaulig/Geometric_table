@@ -208,6 +208,25 @@ def add_thermo_args(parser) -> None:
         help="Exponent alpha for WS radial scaling (ws_Z_alpha).",
     )
     parser.add_argument(
+        "--ws-integrator",
+        type=str,
+        choices=["trapz", "fdm"],
+        default=None,
+        help="Integrator for WS/shape observables: trapz | fdm.",
+    )
+    parser.add_argument(
+        "--ws-fdm-depth",
+        type=int,
+        default=None,
+        help="Depth for FDM integrator (controls number of points).",
+    )
+    parser.add_argument(
+        "--ws-fdm-base",
+        type=int,
+        default=None,
+        help="Base for FDM tensor grid (default=2).",
+    )
+    parser.add_argument(
         "--shape-kurt-scale",
         type=float,
         default=None,
@@ -382,6 +401,12 @@ def apply_thermo_from_args(args, fallback_config_path: Optional[str] = None) -> 
         cfg = replace(cfg, ws_Z_ref=float(args.ws_z_ref))
     if getattr(args, "ws_z_alpha", None) is not None:
         cfg = replace(cfg, ws_Z_alpha=float(args.ws_z_alpha))
+    if getattr(args, "ws_integrator", None):
+        cfg = replace(cfg, ws_integrator=str(args.ws_integrator))
+    if getattr(args, "ws_fdm_depth", None) is not None:
+        cfg = replace(cfg, ws_fdm_depth=int(args.ws_fdm_depth))
+    if getattr(args, "ws_fdm_base", None) is not None:
+        cfg = replace(cfg, ws_fdm_base=int(args.ws_fdm_base))
     if getattr(args, "grower_proposal_policy", None):
         cfg = replace(cfg, grower_proposal_policy=str(args.grower_proposal_policy))
     if getattr(args, "proposal_beta", None) is not None:
