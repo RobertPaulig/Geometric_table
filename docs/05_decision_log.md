@@ -1151,3 +1151,39 @@
   - для C, O и Fe наблюдается лёгкое замедление (speedup<1×) при включённой shape-ветке и FH-энергетике.
 - Средние размеры деревьев и FDM-комплексности отличаются между режимами, что отражает чувствительность MH-роста к форме потенциала и shape-наблюдаемым; при этом порядок величин размеров и сложностей сопоставим между trapz и FDM.
 - Для более жёсткой end-to-end оценки требуется либо увеличить глубину/размер деревьев, либо оптимизировать ещё и остальные bottle-neck-и MH-роста (энергетика, proposal-логика); текущий SMART-GROWTH-1 фиксирует базовую картину и служит R&D-стендом для дальнейших SMART-GROWTH-* задач.
+
+## [SMART-GROWTH-2] Профилирование MH-роста и честное сравнение trapz vs FDM
+
+Дата: 2025-12-16
+
+Решение:
+- Добавлен профилировочный бенч `analysis/growth/smart_growth_2_bench.py`, который сравнивает режимы `ws_integrator="trapz"` и `ws_integrator="fdm"` при одинаковых сценариях роста, фиксированных seed’ах и включённой shape-ветке:
+  - для обоих режимов ThermoConfig: `ws_fdm_base=2`, `ws_fdm_depth=5`, `coupling_shape_softness=1.0`, `coupling_shape_chi=1.0`, `grower_use_mh=True`, `deltaG_backend="fdm_entanglement"`, `temperature_T=1.0`;
+  - список Z: `[6, 8, 14, 26]` (C, O, Si, Fe);
+  - для каждого профиля заранее генерируется таблица seed’ов `seeds[(Z, tree_idx)]` одним базовым RNG (`make_rng("smart_growth_2_<profile>")`), и trapz/FDM используют одни и те же seed’ы.
+- Введены два режима нагрузки:
+  - SMALL: `max_depth=4`, `max_atoms=25`, `n_trees_per_Z=50`;
+  - HEAVY: `max_depth=8`, `max_atoms=80`, `n_trees_per_Z=100`.
+- Для каждого профиля/режима/элемента собираются:
+  - общие тайминги роста (per-tree и total),
+  - профили `t_shape_total` (через обёртку вокруг `get_shape_observables`) и `t_complexity_total` (обёртка вокруг `compute_complexity_features_v2`),
+  - счётчики `n_shape_calls`, `shape_cache_hits/misses` по LRU-кэшу ShapeObs,
+  - MH-статистика по деревьям (`mh_proposals`, `mh_accepted`, `mh_rejected`, `mh_accept_rate`).
+- Результаты сохраняются в `results/smart_growth_2_bench.csv` и `results/smart_growth_2_bench.txt` (игнорируются git согласно [RESULTS-1]); summary включает speedup по total и по shape-компоненте, доли времени shape/complexity и accept rate.
+
+Цифры (из `results/smart_growth_2_bench.txt`):
+- SMALL (max_depth=4, max_atoms=25, n_trees_per_Z=50):
+  - Z=6: `speedup_total≈0.87×`, `speedup_shape≈1.00×`, `shape_frac_trapz≈0.00`, `shape_frac_fdm≈0.00`, `complexity_frac_trapz≈3.84`, `complexity_frac_fdm≈1.32`, `mh_accept_rate_trapz≈0.41`, `mh_accept_rate_fdm≈0.41`, `shape_hits_trapz=320`, `shape_hits_fdm=320`, `shape_misses_trapz=40`, `shape_misses_fdm=40`.
+  - Z=8: `speedup_total≈0.99×`, `speedup_shape≈1.00×`, `shape_frac_trapz≈0.00`, `shape_frac_fdm≈0.00`, `complexity_frac_trapz≈15.60`, `complexity_frac_fdm≈6.08`, `mh_accept_rate_trapz≈0.22`, `mh_accept_rate_fdm≈0.22`, shape-кэш: те же hits/misses.
+  - Z=14: `speedup_total≈0.98×`, `speedup_shape≈1.00×`, `shape_frac_trapz≈0.00`, `shape_frac_fdm≈0.00`, `complexity_frac_trapz≈10.45`, `complexity_frac_fdm≈4.04`, `mh_accept_rate_trapz≈0.22`, `mh_accept_rate_fdm≈0.23`.
+  - Z=26: `speedup_total≈0.93×`, `speedup_shape≈1.00×`, `shape_frac_trapz≈0.00`, `shape_frac_fdm≈0.00`, `complexity_frac_trapz≈3.07`, `complexity_frac_fdm≈1.12`, `mh_accept_rate_trapz≈0.46`, `mh_accept_rate_fdm≈0.46`.
+- HEAVY (max_depth=8, max_atoms=80, n_trees_per_Z=100):
+  - Z=6: `speedup_total≈1.04×`, `speedup_shape≈1.00×`, `shape_frac_trapz≈0.00`, `shape_frac_fdm≈0.00`, `complexity_frac_trapz≈1.88`, `complexity_frac_fdm≈2.02`, `mh_accept_rate_trapz≈0.32`, `mh_accept_rate_fdm≈0.32`, `shape_hits_trapz=520`, `shape_hits_fdm=520`, `shape_misses_trapz=40`, `shape_misses_fdm=40`.
+  - Z=8: `speedup_total≈0.99×`, `speedup_shape≈1.00×`, `shape_frac_trapz≈0.00`, `shape_frac_fdm≈0.00`, `complexity_frac_trapz≈3.94`, `complexity_frac_fdm≈4.05`, `mh_accept_rate_trapz≈0.37`, `mh_accept_rate_fdm≈0.37`.
+  - Z=14: `speedup_total≈1.01×`, `speedup_shape≈1.00×`, `shape_frac_trapz≈0.00`, `shape_frac_fdm≈0.00`, `complexity_frac_trapz≈4.08`, `complexity_frac_fdm≈4.27`, `mh_accept_rate_trapz≈0.27`, `mh_accept_rate_fdm≈0.27`.
+  - Z=26: `speedup_total≈0.91×`, `speedup_shape≈1.00×`, `shape_frac_trapz≈0.00`, `shape_frac_fdm≈0.00`, `complexity_frac_trapz≈0.98`, `complexity_frac_fdm≈0.92`, `mh_accept_rate_trapz≈0.44`, `mh_accept_rate_fdm≈0.44`.
+
+Интерпретация:
+- RNG-детерминизм обеспечен: trapz и FDM видят идентичные сценарии роста (одинаковые seed’ы на каждый Z и индекс дерева), различия в метриках обусловлены только выбором интегратора и связанными изменениями в shape/энергетике.
+- Для обоих профилей SMALL/HEAVY доля времени, уходящая на `get_shape_observables`, на текущем стенде близка к нулю (shape_frac≈0.0), а основное время уходит в блок сложности/энергетики (`compute_complexity_features_v2`), причём FDM-реализация там даёт сопоставимую или меньшую долю времени.
+- Speedup_total колеблется вокруг 1× (от ≈0.87× до ≈1.04×) и не демонстрирует устойчивого выигрыша FDM над trapz на уровне полного MH-роста при заданных параметрах; turbo-atom остаётся локальной оптимизацией shape-слоя, а глобальный bottleneck лежит в complexity/энергетике и других частях пайплайна роста.
