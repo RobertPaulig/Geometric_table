@@ -48,6 +48,9 @@ class ShapeObs:
     kurt_g: float
     delta_r: float
     delta_k: float
+    effective_volume_ws: float
+    softness_integral_ws: float
+    density_overlap_ws: float
 
 
 def _ws_params_from_thermo(cfg: ThermoConfig) -> WSRadialParams:
@@ -84,6 +87,10 @@ def thermo_fingerprint_for_shape(cfg: ThermoConfig) -> Tuple:
         cfg.ws_integrator,
         int(cfg.ws_fdm_depth),
         int(cfg.ws_fdm_base),
+        float(cfg.coupling_density),
+        cfg.density_model,
+        cfg.density_blend,
+        float(cfg.density_Z_ref),
     )
 
 
@@ -97,6 +104,20 @@ def get_shape_observables(Z: int, thermo_fp: Tuple) -> ShapeObs:
     params = _ws_params_from_thermo(cfg)
     rho_fn, diag = make_ws_rho3d_with_diagnostics(int(Z), params)
     r_rms_ws = float(diag.r_rms)
+
+    beta = beta_effective(
+        int(Z),
+        getattr(cfg, "coupling_density", 0.0),
+        model=getattr(cfg, "density_model", "tf_radius"),
+        blend=getattr(cfg, "density_blend", "linear"),
+        Z_ref=getattr(cfg, "density_Z_ref", 10.0),
+    )
+
+    def _gaussian_rho3d(r: np.ndarray) -> np.ndarray:
+        r = np.asarray(r, dtype=float)
+        beta_pos = max(float(beta), 1e-15)
+        norm = (beta_pos / math.pi) ** 1.5
+        return norm * np.exp(-beta_pos * (r ** 2))
 
     # Compute kurtosis via selected integrator
     R_max = float(params.R_max)
@@ -113,19 +134,47 @@ def get_shape_observables(Z: int, thermo_fp: Tuple) -> ShapeObs:
             r = (u[:, 0]) * R_max
             rho = rho_fn(r)
             p = 4.0 * math.pi * (r ** 2) * rho
+            rho_g = _gaussian_rho3d(r)
             # raw moments m0..m4 for the integrand
             m0 = p
             m1 = r * p
             m2 = (r ** 2) * p
             m3 = (r ** 3) * p
             m4 = (r ** 4) * p
-            return np.stack([m0, m1, m2, m3, m4], axis=1)
+            # additional channels for FAST-SPECTRUM-2
+            i_rho2 = 4.0 * math.pi * (r ** 2) * (rho ** 2)
+            i_soft = np.exp(-beta * (r ** 2)) * p
+            i_overlap = 4.0 * math.pi * (r ** 2) * rho * rho_g
+            return np.stack(
+                [m0, m1, m2, m3, m4, i_rho2, i_soft, i_overlap],
+                axis=1,
+            )
 
         # Векторизованный расчёт моментов по всем FDM-точкам
         samples = fdm.sample(depth=depth, dim=1)  # (N, 1)
-        vals = moments_func(samples)              # (N, 5)
+        vals = moments_func(samples)              # (N, 8)
         m_vec = R_max * vals.mean(axis=0)
-        m0, m1, m2, m3, m4 = [float(x) for x in m_vec]
+        (
+            m0,
+            m1,
+            m2,
+            m3,
+            m4,
+            I_rho2,
+            I_soft,
+            I_overlap,
+        ) = [float(x) for x in m_vec]
+        # effective volume: (m0^2) / I_rho2
+        if not np.isfinite(I_rho2) or I_rho2 <= 0.0:
+            effective_volume_ws = float("nan")
+        else:
+            effective_volume_ws = (m0 * m0) / I_rho2
+        # softness integral: (1/m0) * ∫ exp(-β r^2) p(r) dr
+        if not np.isfinite(m0) or m0 <= 0.0:
+            softness_integral_ws = float("nan")
+        else:
+            softness_integral_ws = I_soft / m0
+        density_overlap_ws = I_overlap
         if not np.isfinite(m0) or m0 <= 0.0:
             kurt_ws = float("nan")
         else:
@@ -143,14 +192,25 @@ def get_shape_observables(Z: int, thermo_fp: Tuple) -> ShapeObs:
         r_grid = np.linspace(0.0, R_max, 4096)
         rho_grid = rho_fn(r_grid)
         kurt_ws = float(radial_kurtosis_excess_from_rho3d(r_grid, rho_grid))
-
-    beta = beta_effective(
-        int(Z),
-        getattr(cfg, "coupling_density", 0.0),
-        model=getattr(cfg, "density_model", "tf_radius"),
-        blend=getattr(cfg, "density_blend", "linear"),
-        Z_ref=getattr(cfg, "density_Z_ref", 10.0),
-    )
+        p_grid = 4.0 * math.pi * (r_grid ** 2) * rho_grid
+        # m0 and I_rho2 for effective volume
+        m0 = float(np.trapezoid(p_grid, r_grid))
+        rho2_grid = 4.0 * math.pi * (r_grid ** 2) * (rho_grid ** 2)
+        I_rho2 = float(np.trapezoid(rho2_grid, r_grid))
+        if not np.isfinite(I_rho2) or I_rho2 <= 0.0:
+            effective_volume_ws = float("nan")
+        else:
+            effective_volume_ws = (m0 * m0) / I_rho2
+        # softness integral: (1/m0) * ∫ exp(-β r^2) p(r) dr
+        soft_grid = np.exp(-beta * (r_grid ** 2)) * p_grid
+        if not np.isfinite(m0) or m0 <= 0.0:
+            softness_integral_ws = float("nan")
+        else:
+            softness_integral_ws = float(np.trapezoid(soft_grid, r_grid) / m0)
+        # overlap of WS and Gaussian densities in 3D
+        rho_g_grid = _gaussian_rho3d(r_grid)
+        overlap_grid = 4.0 * math.pi * (r_grid ** 2) * rho_grid * rho_g_grid
+        density_overlap_ws = float(np.trapezoid(overlap_grid, r_grid))
     r_rms_g = _gaussian_r_rms(beta)
     kurt_g = float(KURTOSIS_EXCESS_GAUSS_RADIAL)
 
@@ -164,4 +224,7 @@ def get_shape_observables(Z: int, thermo_fp: Tuple) -> ShapeObs:
         kurt_g=kurt_g,
         delta_r=delta_r,
         delta_k=delta_k,
+        effective_volume_ws=effective_volume_ws,
+        softness_integral_ws=softness_integral_ws,
+        density_overlap_ws=density_overlap_ws,
     )

@@ -1087,3 +1087,30 @@
 Инварианты:
 - Уже закоммиченные golden-baseline файлы остаются tracked и используются как эталон для принятия решений.
 - Новые экспериментальные выгрузки не добавляются в историю, чтобы не раздувать репозиторий и не смешивать код с данными.
+
+## [FAST-SPECTRUM-2] Shape observables FDM single-pass и бенч по get_shape_observables
+
+Дата: 2025-12-16
+
+Решение:
+- В `core/shape_observables.ShapeObs` добавлены новые WS-наблюдаемые: `effective_volume_ws`, `softness_integral_ws`, `density_overlap_ws`.
+- В `get_shape_observables` параметр `beta = beta_effective(...)` вычисляется один раз и используется согласованно для trapz/FDM и гауссовой ссылки.
+- FDM-ветка переведена в однопроходный режим: один набор FDM-сэмплов и многоканальный интегранд для моментов, softness и overlap без дополнительных циклов.
+- В `thermo_fingerprint_for_shape` к кортежу ключа кэша добавлены `coupling_density`, `density_model`, `density_blend`, `density_Z_ref`, чтобы shape-кэш отражал выбор плотности.
+- Добавлен тест согласия trapz/FDM по новым observables на Z ∈ {1, 6, 8, 14} с порогами `rel_err(volume) ≤ 10%`, `rel_err(softness) ≤ 5%`; для overlap проверяется только `>0` и конечность.
+- Реализован бенчмарк `analysis/ws/fast_spectrum_2_bench.py`, измеряющий время полного вызова `get_shape_observables()` при trapz/FDM с (base=2, depth=5) и принудительным `cache_clear()` перед замером.
+
+Цифры (из `results/fast_spectrum_2_bench_summary.txt`):
+- Z = [1, 6, 8, 14, 26], `ws_fdm_base=2`, `ws_fdm_depth=5`.
+- Для всех Z: `kurt_trapz ≈ -0.2271`, `kurt_fdm ≈ -0.2222`, `max_abs_err_kurt = 0.0049` (как в FAST-SPECTRUM-1).
+- Времена (сек): 
+  - Z=1: `t_trapz ≈ 6.51e-4`, `t_fdm ≈ 1.04e-4`, `speedup ≈ 6.27×`;
+  - Z=6: `t_trapz ≈ 2.92e-4`, `t_fdm ≈ 1.36e-4`, `speedup ≈ 2.15×`;
+  - Z=8: `t_trapz ≈ 2.92e-4`, `t_fdm ≈ 1.06e-4`, `speedup ≈ 2.76×`;
+  - Z=14: `t_trapz ≈ 9.13e-4`, `t_fdm ≈ 3.29e-4`, `speedup ≈ 2.78×`;
+  - Z=26: `t_trapz ≈ 6.33e-4`, `t_fdm ≈ 9.8e-5`, `speedup ≈ 6.49×`.
+- Медиана по Z: `median_speedup ≈ 2.78×`, `median_abs_err_kurt = 0.0049`.
+
+Инварианты:
+- WS-trapz (4096 точек) остаётся эталонным baseline по форме; FDM-параметры по-прежнему хранятся в ThermoConfig и могут переопределяться в R&D.
+- Файлы `results/fast_spectrum_2_bench*.csv/txt` игнорируются git согласно [RESULTS-1]; в истории остаются только код, тесты и данный decision log.
