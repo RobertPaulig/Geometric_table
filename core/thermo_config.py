@@ -73,6 +73,7 @@ class ThermoConfig:
 
     # Topo3D prefilter for trees (R&D)
     topo3d_prefilter_tree: bool = False
+    topo3d_prefilter_min_n: int = 0
 
     # MH-grower controls (R&D)
     temperature_T: float = 1.0
@@ -187,6 +188,9 @@ def _strict_from_mapping(d: Mapping[str, Any]) -> ThermoConfig:
         ws_fdm_base=int(d.get("ws_fdm_base", base.ws_fdm_base)),
         topo3d_prefilter_tree=bool(
             d.get("topo3d_prefilter_tree", base.topo3d_prefilter_tree)
+        ),
+        topo3d_prefilter_min_n=int(
+            d.get("topo3d_prefilter_min_n", base.topo3d_prefilter_min_n)
         ),
         temperature_T=float(d.get("temperature_T", base.temperature_T)),
         grower_use_mh=bool(d.get("grower_use_mh", base.grower_use_mh)),

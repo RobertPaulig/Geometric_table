@@ -1187,3 +1187,30 @@
 - RNG-детерминизм обеспечен: trapz и FDM видят идентичные сценарии роста (одинаковые seed’ы на каждый Z и индекс дерева), различия в метриках обусловлены только выбором интегратора и связанными изменениями в shape/энергетике.
 - Для обоих профилей SMALL/HEAVY доля времени, уходящая на `get_shape_observables`, на текущем стенде близка к нулю (shape_frac≈0.0), а основное время уходит в блок сложности/энергетики (`compute_complexity_features_v2`), причём FDM-реализация там даёт сопоставимую или меньшую долю времени.
 - Speedup_total колеблется вокруг 1× (от ≈0.87× до ≈1.04×) и не демонстрирует устойчивого выигрыша FDM над trapz на уровне полного MH-роста при заданных параметрах; turbo-atom остаётся локальной оптимизацией shape-слоя, а глобальный bottleneck лежит в complexity/энергетике и других частях пайплайна роста.
+
+## [FAST-COMPLEXITY-1] Prefilter для fdm_entanglement и ускорение complexity-слоя
+
+Дата: 2025-12-16
+
+Решение:
+- В `core.thermo_config.ThermoConfig` добавлен параметр `topo3d_prefilter_min_n` (по умолчанию 0), управляющий size-prefilter для 3D entanglement.
+- В `core.complexity.compute_complexity_features_v2` (backend `fdm_entanglement`) реализован prefilter:
+  - если `topo3d_prefilter_tree=True` и граф дерево (`cyclomatic==0`), возвращается чистый FDM (`fdm` backend) без вызова 3D layout/entanglement;
+  - если `topo3d_prefilter_min_n>0` и `n < topo3d_prefilter_min_n`, также используется чистый FDM без 3D entanglement.
+- Добавлен микробенч `analysis/complexity/fast_complexity_1_bench.py`, который:
+  - генерирует случайные графы шести классов: `small|medium|large` × `tree|cyclic`;
+  - сравнивает время `compute_complexity_features_v2(..., backend="fdm_entanglement")` в режимах `baseline` (без size-prefilter) и `optimized` (с `topo3d_prefilter_tree=True`, `topo3d_prefilter_min_n=N_MIN_PREFILTER`);
+  - сохраняет результаты в `results/fast_complexity_1_bench.csv|txt` (игнорируются git согласно [RESULTS-1]).
+- Для N_MIN_PREFILTER=10 микробенч даёт следующие speedup’ы (из `results/fast_complexity_1_bench.txt`, p50/p90/p99):
+  - `small_tree`: `speedup_p50≈538×`, `speedup_p90≈607×`, `speedup_p99≈678×`;
+  - `small_cyclic`: `speedup_p50≈413×`, `speedup_p90≈1.20×`, `speedup_p99≈1.40×`;
+  - `medium_tree`: `speedup_p50≈1414×`, `speedup_p90≈1254×`, `speedup_p99≈973×`;
+  - `medium_cyclic`: `speedup_p50≈1.24×`, `speedup_p90≈1.45×`, `speedup_p99≈1.07×`;
+  - `large_tree`: `speedup_p50≈4300×`, `speedup_p90≈3898×`, `speedup_p99≈2989×`;
+  - `large_cyclic`: `speedup_p50≈0.73×`, `speedup_p90≈0.79×`, `speedup_p99≈0.85×` (циклические крупные графы почти всегда проходят полный entanglement).
+- В `analysis/growth/smart_growth_2_bench.py` запущен HEAVY-профиль с учётом нового prefilter (та же конфигурация, coupling_topo_3d активен в ThermoConfig для R&D-сценариев по entanglement):
+  - HEAVY: `speedup_total` по Z ∈ {6,8,14,26} остаётся близким к 1× (≈0.91–1.01×), `speedup_shape≈1.00×`, `complexity_frac_trapz` и `complexity_frac_fdm` остаются сопоставимыми (в районе 1–4× total), что подтверждает: даже сильное ускорение entanglement-на части графов не становится доминирующим bottleneck’ом в общем MH-росте.
+
+Интерпретация:
+- Prefilter FAST-COMPLEXITY-1 радикально ускоряет `fdm_entanglement` на деревьях и малых графах (до 10³–10⁴× для tree-классов в микробенче) и даёт умеренный выигрыш на средних циклических графах, практически не ухудшая поведение на крупных циклических графах.
+- В end-to-end MH-росте (SMART-GROWTH-2 HEAVY) вклад entanglement в общее время по-прежнему невелик, поэтому общие speedup’ы остаются около 1×; это подтверждает, что главный bottleneck complexity-слоя в текущей конфигурации связан не столько с 3D entanglement, сколько с остальной частью FDM-complexity/энергетики и, возможно, с MH/proposal-логикой.

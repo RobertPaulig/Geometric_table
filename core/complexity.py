@@ -275,9 +275,14 @@ def compute_complexity_features_v2(
         if coupling == 0.0 or beta == 0.0:
             return feats_fdm
 
-        # TOPO-PREFILTER-0: если включён prefilter и граф дерево (cyclomatic==0),
-        # возвращаем чистый FDM без 3D layout/entanglement.
-        if bool(getattr(cfg, "topo3d_prefilter_tree", False)) and feats_fdm.cyclomatic == 0:
+        # FAST-COMPLEXITY-1 prefilter:
+        # - если включён prefilter и граф дерево (cyclomatic==0), возвращаем чистый FDM;
+        # - если задан topo3d_prefilter_min_n>0 и n < N_min, также пропускаем 3D layout/entanglement.
+        prefilter_tree = bool(getattr(cfg, "topo3d_prefilter_tree", False))
+        min_n = int(getattr(cfg, "topo3d_prefilter_min_n", 0))
+        if (prefilter_tree and feats_fdm.cyclomatic == 0) or (
+            min_n > 0 and feats_fdm.n < min_n
+        ):
             return feats_fdm
 
         from core.layout_3d import force_directed_layout_3d
