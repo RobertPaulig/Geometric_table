@@ -121,14 +121,10 @@ def get_shape_observables(Z: int, thermo_fp: Tuple) -> ShapeObs:
             m4 = (r ** 4) * p
             return np.stack([m0, m1, m2, m3, m4], axis=1)
 
-        # FDMIntegrator.integrate returns mean over u; true integral = R_max * mean
-        # Здесь moments_func возвращает (N, 5), поэтому используем vectorized=False
-        # и обрабатываем внутри по точкам.
-        samples = fdm.sample(depth=depth, dim=1)
-        vals = []
-        for u in samples:
-            vals.append(moments_func(u.reshape(1, -1))[0])
-        m_vec = R_max * np.mean(np.asarray(vals, dtype=float), axis=0)
+        # Векторизованный расчёт моментов по всем FDM-точкам
+        samples = fdm.sample(depth=depth, dim=1)  # (N, 1)
+        vals = moments_func(samples)              # (N, 5)
+        m_vec = R_max * vals.mean(axis=0)
         m0, m1, m2, m3, m4 = [float(x) for x in m_vec]
         if not np.isfinite(m0) or m0 <= 0.0:
             kurt_ws = float("nan")

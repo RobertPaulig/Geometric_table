@@ -1,0 +1,26 @@
+FAST-SPECTRUM-1 WS FDM depth/base sweep
+Z_values=[1, 6, 8, 14, 26]
+BASE_VALUES=[2, 3, 4]
+DEPTH_VALUES=[5, 6, 7, 8, 9, 10]
+repeats=5, warmup=2
+
+base=2, depth=5: max_abs_err_over_Z=0.00487, median_speedup_over_Z=2.63x
+base=2, depth=6: max_abs_err_over_Z=0.00028, median_speedup_over_Z=2.43x
+base=2, depth=7: max_abs_err_over_Z=0.00003, median_speedup_over_Z=2.18x
+base=2, depth=8: max_abs_err_over_Z=0.00001, median_speedup_over_Z=1.85x
+base=2, depth=9: max_abs_err_over_Z=0.00001, median_speedup_over_Z=1.66x
+base=2, depth=10: max_abs_err_over_Z=0.00000, median_speedup_over_Z=1.29x
+base=3, depth=5: max_abs_err_over_Z=0.00001, median_speedup_over_Z=2.00x
+base=3, depth=6: max_abs_err_over_Z=0.00000, median_speedup_over_Z=1.45x
+base=3, depth=7: max_abs_err_over_Z=0.00000, median_speedup_over_Z=0.86x
+base=3, depth=8: max_abs_err_over_Z=0.00000, median_speedup_over_Z=0.43x
+base=3, depth=9: max_abs_err_over_Z=0.00000, median_speedup_over_Z=0.18x
+base=3, depth=10: max_abs_err_over_Z=0.00000, median_speedup_over_Z=0.04x
+base=4, depth=5: max_abs_err_over_Z=0.00000, median_speedup_over_Z=1.39x
+base=4, depth=6: max_abs_err_over_Z=0.00000, median_speedup_over_Z=0.40x
+base=4, depth=7: max_abs_err_over_Z=0.00000, median_speedup_over_Z=0.14x
+base=4, depth=8: max_abs_err_over_Z=0.00000, median_speedup_over_Z=0.03x
+base=4, depth=9: max_abs_err_over_Z=0.00000, median_speedup_over_Z=0.01x
+base=4, depth=10: max_abs_err_over_Z=0.00000, median_speedup_over_Z=0.00x
+
+SELECTED base*, depth* = (2, 5) because max_abs_err=0.00487 <= 0.05 and median_speedup=2.63x >= 1.8x
