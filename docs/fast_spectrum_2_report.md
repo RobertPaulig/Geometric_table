@@ -1,6 +1,6 @@
 # FAST-SPECTRUM-2 CONSOLIDATED REPORT
 
-- Commit hash: `d21dedf353937da3d42eaec61e0c18fae36420b6`
+- Commit hash: `bc3de4e60fee38a0414d73af64b5b8c4ebd7b8d1`
 - Commands:
   - `python -m analysis.ws.fast_spectrum_2_bench`
 
@@ -44,5 +44,5 @@ WS FDM params: `ws_fdm_base=2`, `ws_fdm_depth=5`
 - В `thermo_fingerprint_for_shape` добавлены поля `coupling_density`, `density_model`, `density_blend`, `density_Z_ref` для корректного кэширования shape-подписей.  
 - Добавлен тест согласия trapz/FDM для новых observables на Z ∈ {1, 6, 8, 14} с порогами по относительной ошибке (volume ≤10%, softness ≤5%).  
 - Реализован бенчмарк `analysis/ws/fast_spectrum_2_bench.py`, измеряющий время полного вызова `get_shape_observables()` для trapz и FDM с параметрами (base=2, depth=5).  
-- По результатам бенчмарка достигается медианный ускоритель ≈2.45× при сохранении ошибки по kurtosis в диапазоне FAST-SPECTRUM-1 (max_abs_err_kurt ≈ 0.0049).  
+- По результатам бенчмарка достигается медианный ускоритель ≈2.78× при сохранении ошибки по kurtosis в диапазоне FAST-SPECTRUM-1 (max_abs_err_kurt ≈ 0.0049).  
 - Результаты бенча сохраняются в `results/fast_spectrum_2_bench.csv` и `results/fast_spectrum_2_bench_summary.txt`, которые игнорируются git согласно политике [RESULTS-1].  
