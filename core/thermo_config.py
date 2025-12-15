@@ -72,6 +72,9 @@ class ThermoConfig:
     deltaG_backend: str = "fdm_entanglement"
     consume_port_on_reject: bool = True
     max_attempts_per_port: int = 1
+    grower_proposal_policy: str = "uniform"  # uniform | ctt_biased
+    proposal_beta: float = 0.0
+    proposal_ports_gamma: float = 0.0
 
     experiment_name: str = "default_thermo"
 
@@ -179,6 +182,13 @@ def _strict_from_mapping(d: Mapping[str, Any]) -> ThermoConfig:
         ),
         max_attempts_per_port=int(
             d.get("max_attempts_per_port", base.max_attempts_per_port)
+        ),
+        grower_proposal_policy=str(
+            d.get("grower_proposal_policy", base.grower_proposal_policy)
+        ),
+        proposal_beta=float(d.get("proposal_beta", base.proposal_beta)),
+        proposal_ports_gamma=float(
+            d.get("proposal_ports_gamma", base.proposal_ports_gamma)
         ),
         experiment_name=str(d.get("experiment_name", base.experiment_name)),
     )

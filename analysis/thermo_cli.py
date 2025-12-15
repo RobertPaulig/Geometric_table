@@ -266,6 +266,25 @@ def add_thermo_args(parser) -> None:
         default=None,
         help="Backend for MH grower energy: fdm | fdm_entanglement.",
     )
+    parser.add_argument(
+        "--grower-proposal-policy",
+        type=str,
+        choices=["uniform", "ctt_biased"],
+        default=None,
+        help="Grower proposal policy: uniform | ctt_biased.",
+    )
+    parser.add_argument(
+        "--proposal-beta",
+        type=float,
+        default=None,
+        help="Bias strength for proposal softness (beta).",
+    )
+    parser.add_argument(
+        "--proposal-ports-gamma",
+        type=float,
+        default=None,
+        help="Ports-based weight exponent for proposals (gamma).",
+    )
 
 
 def apply_thermo_from_args(args, fallback_config_path: Optional[str] = None) -> None:
@@ -363,5 +382,11 @@ def apply_thermo_from_args(args, fallback_config_path: Optional[str] = None) -> 
         cfg = replace(cfg, ws_Z_ref=float(args.ws_z_ref))
     if getattr(args, "ws_z_alpha", None) is not None:
         cfg = replace(cfg, ws_Z_alpha=float(args.ws_z_alpha))
+    if getattr(args, "grower_proposal_policy", None):
+        cfg = replace(cfg, grower_proposal_policy=str(args.grower_proposal_policy))
+    if getattr(args, "proposal_beta", None) is not None:
+        cfg = replace(cfg, proposal_beta=float(args.proposal_beta))
+    if getattr(args, "proposal_ports_gamma", None) is not None:
+        cfg = replace(cfg, proposal_ports_gamma=float(args.proposal_ports_gamma))
 
     set_current_thermo_config(cfg)

@@ -250,7 +250,14 @@ def grow_molecule_christmas_tree(
                     break
 
                 # Grow! Pick a child (proposal stage).
-                child_sym = rng.choice(candidate_pool)
+                if getattr(thermo, "grower_proposal_policy", "uniform") == "uniform" and \
+                        float(getattr(thermo, "proposal_beta", 0.0)) == 0.0 and \
+                        float(getattr(thermo, "proposal_ports_gamma", 0.0)) == 0.0:
+                    # Legacy uniform proposal (RNG path preserved)
+                    child_sym = rng.choice(candidate_pool)
+                else:
+                    from core.proposal_policy import sample_child_symbol
+                    child_sym = sample_child_symbol(rng, candidate_pool, parent_atom, thermo)
                 child_atom_data = get_atom(child_sym)
 
                 # MH proposal: сформировать кандидата new_mol

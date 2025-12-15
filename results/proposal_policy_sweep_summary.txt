@@ -1,0 +1,27 @@
+SMART-GROWTH-0 proposal policy sweep
+N_seeds=50, policies=2, total_time_sec=215.16
+
+policy=uniform
+  acceptance_rate: p10=0.000, median=0.292, p90=0.750
+  cyclomatic: median=0.000, p90=3.000
+  E_3d: median=0.000, p90=0.109
+  penalty_factor_3d: median=1.000, p90=1.109
+  top-5 entangled:
+    seed=43, E_3d=0.199, penalty=1.199, n=7, m=9, cyclomatic=3
+    seed=39, E_3d=0.147, penalty=1.147, n=7, m=8, cyclomatic=2
+    seed=27, E_3d=0.147, penalty=1.147, n=5, m=7, cyclomatic=3
+    seed=26, E_3d=0.146, penalty=1.146, n=5, m=7, cyclomatic=3
+    seed=30, E_3d=0.127, penalty=1.127, n=8, m=10, cyclomatic=3
+
+policy=ctt_biased
+  acceptance_rate: p10=0.000, median=0.275, p90=0.830
+  cyclomatic: median=0.000, p90=3.000
+  E_3d: median=0.000, p90=0.097
+  penalty_factor_3d: median=1.000, p90=1.097
+  top-5 entangled:
+    seed=15, E_3d=0.348, penalty=1.348, n=5, m=7, cyclomatic=3
+    seed=49, E_3d=0.196, penalty=1.196, n=6, m=8, cyclomatic=3
+    seed=40, E_3d=0.185, penalty=1.185, n=9, m=11, cyclomatic=3
+    seed=43, E_3d=0.167, penalty=1.167, n=10, m=12, cyclomatic=3
+    seed=27, E_3d=0.155, penalty=1.155, n=6, m=8, cyclomatic=3
+
