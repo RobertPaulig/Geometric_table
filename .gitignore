@@ -18,3 +18,15 @@ name3.aux
 name3.log
 name3.out
 name3.toc
+
+# R&D results: ignore by default
+/results/*.csv
+/results/*.txt
+
+# Keep golden baselines already tracked
+!results/ws_fdm_sweep.csv
+!results/ws_fdm_sweep_summary.txt
+!results/topo3d_prefilter_bench.csv
+!results/topo3d_prefilter_bench_summary.txt
+!results/topo3d_entanglement_penalty.csv
+!results/topo3d_entanglement_penalty_summary.txt

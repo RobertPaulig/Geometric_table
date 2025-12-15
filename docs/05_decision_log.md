@@ -1051,3 +1051,39 @@
 Инварианты:
 - Trapz-baseline (4096 точек) сохранён как эталон; FDM-параметры хранятся в ThermoConfig и могут быть переопределены для R&D.
 - Публичный API `get_shape_observables` не менялся (возвращается тот же ShapeObs).
+
+## [RESULTS-1] Политика хранения артефактов в `results/`
+
+Дата: 2025-12-15
+
+Решение:
+- Введено правило: папка `results/` — это регенерируемые артефакты (CSV/TXT/PNG) из R&D-скриптов; в git по умолчанию храним только код, тесты и decision log.
+- Для ключевых “golden baselines”, которые являются частью зафиксированных экспериментов, допускается хранение в git:
+  - `results/ws_fdm_sweep.csv`
+  - `results/ws_fdm_sweep_summary.txt`
+  - `results/topo3d_prefilter_bench.csv`
+  - `results/topo3d_prefilter_bench_summary.txt`
+  - `results/topo3d_entanglement_penalty.csv`
+  - `results/topo3d_entanglement_penalty_summary.txt`
+- Все новые R&D-выгрузки (например, будущие `results/fast_spectrum_2_bench*.csv/txt`) игнорируются git’ом и должны регенерироваться при необходимости соответствующим скриптом.
+
+Техническая реализация:
+- В `.gitignore` добавлены строки:
+
+  ```gitignore
+  # R&D results: ignore by default
+  /results/*.csv
+  /results/*.txt
+
+  # Keep golden baselines already tracked
+  !results/ws_fdm_sweep.csv
+  !results/ws_fdm_sweep_summary.txt
+  !results/topo3d_prefilter_bench.csv
+  !results/topo3d_prefilter_bench_summary.txt
+  !results/topo3d_entanglement_penalty.csv
+  !results/topo3d_entanglement_penalty_summary.txt
+  ```
+
+Инварианты:
+- Уже закоммиченные golden-baseline файлы остаются tracked и используются как эталон для принятия решений.
+- Новые экспериментальные выгрузки не добавляются в историю, чтобы не раздувать репозиторий и не смешивать код с данными.
