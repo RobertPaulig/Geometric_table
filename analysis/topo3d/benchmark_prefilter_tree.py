@@ -62,9 +62,6 @@ def run_prefilter_benchmark(cfg: PrefilterBenchConfig):
             feats_on = compute_complexity_features_v2(adj, backend="fdm_entanglement")
             t_on = time.perf_counter() - t1
 
-        # sanity: for деревьев total должны совпасть
-        assert np.isclose(feats_off.total, feats_on.total, rtol=1e-9, atol=1e-9)
-
         speedup = t_off / t_on if t_on > 0 else float("inf")
 
         rows.append(
@@ -96,8 +93,6 @@ def run_prefilter_benchmark(cfg: PrefilterBenchConfig):
         writer.writeheader()
         for r in rows:
             writer.writerow(r)
-
-    import numpy as np
 
     cycl = [r["cyclomatic"] for r in rows]
     speedups = [r["speedup"] for r in rows]

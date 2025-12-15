@@ -1,0 +1,12 @@
+TOPO-PREFILTER-0 benchmark (trees)
+n_graphs=200, n_nodes_per_graph=20
+n_tree(cyclomatic==0)=200
+
+idx=0: cyclomatic=0, t_off=0.403980s, t_on=0.000505s, speedup=800.59x
+idx=1: cyclomatic=0, t_off=0.384679s, t_on=0.000469s, speedup=820.91x
+idx=2: cyclomatic=0, t_off=0.386632s, t_on=0.000907s, speedup=426.13x
+idx=3: cyclomatic=0, t_off=0.387688s, t_on=0.000487s, speedup=796.89x
+idx=4: cyclomatic=0, t_off=0.387172s, t_on=0.000475s, speedup=814.41x
+
+median_speedup=820.34x
+max_speedup=1009.08x
