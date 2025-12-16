@@ -199,6 +199,60 @@
   эксперименты и гипотезы для версий QSG v6.x и далее оформляются
   через Spectral Lab и соответствующие разделы Тома II.
 
+## [CHEM-VALIDATION-0] C4 butane skeleton (n-butane vs isobutane)
+
+**Конфиг.**
+
+- Скрипт: `analysis/chem/chem_validation_0_butane.py`.
+- Режим роста: `grow_molecule_christmas_tree` с параметрами
+  `stop_at_n_atoms=4`, `allowed_symbols=["C"]` (ровно 4 атома углерода, без H).
+- Атомный слой: стандартный `AtomGraph` для C (softness=0, жёсткий каркас).
+- Термоконфиги (через `override_thermo_config`):
+  - Mode A: только FDM-комплексность (`compute_complexity_features_v2(..., backend="fdm")`, `coupling_topo_3d=0`).
+  - Mode B: FDM + topo3d layout/entanglement (`backend="fdm_entanglement"`, `coupling_topo_3d=1`).
+- Запуск CHEM-VALIDATION-0:
+  - пример: `python -m analysis.chem.chem_validation_0_butane --n_runs 50 --seeds 0 1 --modes A B`.
+  - артефакты: `results/chem_validation_0_butane.csv`, `results/chem_validation_0_butane.txt` (git-ignored).
+
+**Метрики.**
+
+- Топология определяется по отсортированным степеням вершин `deg_sorted` (граф — чистое дерево по C–C):
+  - `deg_sorted = [1,1,2,2]` → `topology = "n_butane"`.
+  - `deg_sorted = [1,1,1,3]` → `topology = "isobutane"`.
+  - любое другое дерево на 4 вершинах → `topology = "other"`.
+- Для каждой траектории роста сохраняются:
+  - `mode`, `seed`, `run_idx`, `n_atoms` (ожидается 4),
+  - `topology`, `deg_sorted`,
+  - `complexity_fdm`, `complexity_fdm_entanglement`, `total_score`, `runtime_sec`.
+- В `results/chem_validation_0_butane.txt` сводятся:
+  - частоты `P(n_butane)`, `P(isobutane)` по каждому режиму,
+  - `median` / `p90` по `total_score` для каждой топологии,
+  - оценка стабильности `log(P(iso)/P(n))` (по суммарным счётчикам; разбивка по seed может быть добавлена позже).
+
+**Наблюдения (первый прогон, n_runs=50, seeds=[0,1]).**
+
+- Mode A (только FDM):
+  - `P(isobutane) ≈ 0.97` (97/100), `P(n_butane) ≈ 0.03` (3/100).
+  - `score[isobutane]: median ≈ 2.84, p90 ≈ 2.84`.
+  - `score[n_butane]: median ≈ 3.09, p90 ≈ 3.09`.
+  - `log(P(iso)/P(n)) ≈ 3.48` (сильный перекос сопряжённой цепочки в пользу изобутана по частоте роста).
+- Mode B (FDM + topo3d entanglement):
+  - `P(isobutane) ≈ 0.93` (93/100), `P(n_butane) ≈ 0.07` (7/100).
+  - `score[isobutane]: median ≈ 2.84, p90 ≈ 2.84`.
+  - `score[n_butane]: median ≈ 3.09, p90 ≈ 3.09`.
+  - `log(P(iso)/P(n)) ≈ 2.59`.
+
+**Выводы.**
+
+- В текущей конфигурации CHEM-VALIDATION-0 модель явно предпочитает изобутановый каркас по частоте генерации (`P(iso) >> P(n)`).
+- При этом FDM-слой сложности (как в чистом виде, так и с topo3d-модификацией) даёт более высокий `total_score` для n-butane (`deg=[1,1,2,2]`), чем для isobutane.
+- Это означает, что на уровне C4-деревьев текущий ростовой механизм и сложностной функционал не согласованы с интуитивным химическим порядком стабильностей (цепь vs ветвление):
+  - генератор почти всегда растит более ветвлённый каркас,
+  - но complexity/entanglement трактует линейный каркас как более «сложный» объект.
+- Следующий шаг после CHEM-VALIDATION-0:
+  - отделить вклад proposal-политики роста от энергий/сложности (CHEM-VALIDATION-1 на C5/C6),
+  - ввести более жёсткую проверку на согласованность порядка стабильностей по нескольким изомерным сериям.
+
 ## [Spectral Lab v1] Эксперимент SL-1 (resolution scan)
 
 **Решение.**
@@ -218,6 +272,73 @@
   $F_{\mathrm{levels}}^{(\mathrm{spec})} \approx 1.25$ стабильно по N,
   тогда как $F_{\mathrm{levels}}^{(\mathrm{FDM})} \approx 0.30$, и
   относительная ошибка $\varepsilon(N) \approx 0.75$ практически не
+
+## [CHEM-VALIDATION-0.2] Proposal vs Energy (C4 butane skeleton)
+
+**Конфиг.**
+
+- Базовый тест: тот же C4-скелет с ростом по `grow_molecule_christmas_tree` и параметрами
+  `stop_at_n_atoms=4`, `allowed_symbols=["C"]` (чистое дерево из 4 атомов углерода).
+- Скрипт: `analysis/chem/chem_validation_0_butane.py` с режимами:
+  - Mode R (proposal-only): `grower_use_mh = False`, все энергетические couplings = 0.
+  - Mode A (FDM-only): `grower_use_mh = True`, `coupling_complexity = 1.0`, `coupling_topo_3d = 0`.
+  - Mode B (FDM + topo3d): `grower_use_mh = True`, `coupling_complexity = 1.0`, `coupling_topo_3d = 1.0`.
+  - Mode C (FDM + topo3d + shape): как B, но с ненулевыми `coupling_shape_softness`, `coupling_shape_chi`
+    в `ThermoConfig` (для C4-скелета shape не дифференцирует топологии, но режим фиксируется для будущих тестов).
+- Запуск CHEM-VALIDATION-0.2:
+  - пример: `python -m analysis.chem.chem_validation_0_butane --n_runs 50 --seeds 0 1 --modes R A B C`.
+  - артефакты: `results/chem_validation_0_butane.csv`, `results/chem_validation_0_butane.txt`.
+
+**Метрики.**
+
+- Для каждого режима собираются:
+  - частоты топологий `P(mode, topology)` и `log(P(iso)/P(n))`;
+  - декомпозиция score по термам: `score_fdm`, `score_topo3d`, `score_shape`, `score_total`;
+  - MH-статистика по топологиям: `mh_proposals`, `mh_accepted`, `mh_accept_rate`.
+- Дополнительно в отчёте выводятся детерминированные эталоны:
+  - `score(path)` и `score(star)` для двух фиксированных adjacency (цепочка C4 vs звезда C3–C),
+  - `Δscore(n-iso) = score(path) - score(star)` по режимам R/A/B/C.
+
+**Наблюдения (пробный прогон, n_runs=50, seeds=[0,1]).**
+
+- Частоты топологий (P и log-отношения):
+  - Mode R (proposal-only):
+    - `P_R(isobutane) ≈ 0.94` (94/100), `P_R(n_butane) ≈ 0.06` (6/100).
+    - `log(P_R(iso)/P_R(n)) ≈ 2.75` — чистый генератор сильно предпочитает изобутан.
+  - Mode A (FDM-only, MH on):
+    - `P_A(isobutane) ≈ 0.19`, `P_A(n_butane) ≈ 0.23`, `P_A(other) ≈ 0.58`.
+    - `log(P_A(iso)/P_A(n)) ≈ -0.19` — после учёта энергии дерево чуть чаще стабилизируется в линейной топологии.
+  - Mode B (FDM + topo3d):
+    - `P_B(isobutane) ≈ 0.15`, `P_B(n_butane) ≈ 0.17`, `P_B(other) ≈ 0.68`.
+    - `log(P_B(iso)/P_B(n)) ≈ -0.13` — topo3d почти не меняет баланс n vs iso по сравнению с A.
+  - Mode C (FDM + topo3d + shape):
+    - `P_C(isobutane) ≈ 0.08`, `P_C(n_butane) ≈ 0.19`, `P_C(other) ≈ 0.73`.
+    - `log(P_C(iso)/P_C(n)) ≈ -0.87` — изобутан становится ещё менее вероятен; shape-режим усиливает bias против ветвления.
+
+- MH-acceptance по топологиям (A/B/C):
+  - В Mode A:
+    - `acc_iso ≈ 0.69`, `acc_n ≈ 0.51`, `acc_other ≈ 0.04`.
+  - В Mode B:
+    - `acc_iso ≈ 0.73`, `acc_n ≈ 0.52`, `acc_other ≈ 0.02`.
+  - В Mode C:
+    - `acc_iso ≈ 0.67`, `acc_n ≈ 0.55`, `acc_other ≈ 0.04`.
+  - Во всех режимах A/B/C деревья типа `other` почти всегда отклоняются (`accept_rate` на порядок ниже, чем у n/iso).
+
+- Детерминированные эталоны:
+  - Для всех режимов R/A/B/C:
+    - `score(path) ≈ 3.59`, `score(star) ≈ 2.84`,
+    - `Δscore(n-iso) ≈ +0.74` — линейный C4-скелет всегда получает более высокий `score_total`, чем изобутановая звезда.
+
+**Выводы.**
+
+- Генератор (Mode R) сам по себе сильно тянет в сторону изобутанового каркаса (`P_R(iso) >> P_R(n)`).
+- Энергетический слой (FDM-комплексность + topo3d + shape) систематически считает линейный каркас более «выгодным»
+  (`Δscore(n-iso) > 0` и `log(P_{A/B/C}(iso)/P_{A/B/C}(n)) < 0`), то есть толкает систему в сторону n-butane.
+- Таким образом, CHEM-VALIDATION-0.2 разделяет:
+  - **proposal-bias**: предпочитает изобутан (ветвление),
+  - **energy-bias**: на уровне C4 детерминированно и в MH-acceptance отдаёт приоритет линейному n-butane.
+- Для дальнейших этапов (CHEM-VALIDATION-1 на C5/C6) можно использовать Mode R как референс генератора,
+  а Modes A/B/C — как тест того, насколько энергетический слой исправляет или усиливает proposal-bias по более богатому набору изомеров.
   меняется при N = 100, 200, 400, 800.
 - Эксперимент SL-1 показывает, что текущая FDM-аппроксимация для
   $F_{\mathrm{levels}}$ даёт сильное систематическое смещение и не

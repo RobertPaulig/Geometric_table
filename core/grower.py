@@ -26,6 +26,12 @@ class GrowthParams:
     role_bonus_hub: float = 0.2   # надбавка к ветвлению для hubs
     role_penalty_terminator: float = -0.4 
     temperature: float = 1.0      # "температура" для софтмакса по χ
+    # Ограничение на точное число атомов (CHEM-VALIDATION-0).
+    # Если None, рост ограничивается только max_atoms (legacy-поведение).
+    stop_at_n_atoms: Optional[int] = None
+    # Опциональный список допустимых символов для роста; если None,
+    # используется стандартный пул candidate_pool (legacy-поведение).
+    allowed_symbols: Optional[List[str]] = None
     # --- CY-1: loopy-режим (R&D QSG v6.x) ---
     allow_cycles: bool = False
     max_extra_bonds: int = 0      # сколько "добавочных" рёбер максимум
@@ -189,13 +195,24 @@ def grow_molecule_christmas_tree(
     cached_energy: Optional[float] = None
 
     # Candidate atoms for growth (simplified subset of common elements)
-    candidate_pool = ["H", "C", "N", "O", "F", "Si", "P", "S", "Cl"]
+    if params.allowed_symbols is not None and len(params.allowed_symbols) > 0:
+        candidate_pool = list(params.allowed_symbols)
+    else:
+        candidate_pool = ["H", "C", "N", "O", "F", "Si", "P", "S", "Cl"]
     
     # Precompute chi for candidates to use in selection
     # (We could pull chi_spec from v4 model, but use rough Pauling or property from AtomGraph)
     # We will just use uniform or simple weighted selection for this demo R&D.
-    
-    while frontier and len(mol.atoms) < params.max_atoms:
+
+    # Эффективный лимит по числу атомов: для R&D-режима CHEM-VALIDATION-0
+    # допускаем режим "ровно N атомов", при этом legacy-код остаётся
+    # совместимым (если stop_at_n_atoms=None).
+    if params.stop_at_n_atoms is not None:
+        effective_max_atoms = min(params.max_atoms, int(params.stop_at_n_atoms))
+    else:
+        effective_max_atoms = params.max_atoms
+
+    while frontier and len(mol.atoms) < effective_max_atoms:
         # Pop a node (BFS or DFS behavior depends on index)
         # Random pick or FIFO? Let's do FIFO for breadth-first "Christmas Tree" layers.
         # But "Christmas Tree" often implies depth. Let's try FIFO (pop(0)).
@@ -237,13 +254,13 @@ def grow_molecule_christmas_tree(
         max_attempts_per_port = max(1, int(getattr(thermo, "max_attempts_per_port", 1)))
 
         for _ in range(orig_free_ports):
-            if len(mol.atoms) >= params.max_atoms:
+            if len(mol.atoms) >= effective_max_atoms:
                 break
 
             attempts_left = max_attempts_per_port
             grew_here = False
 
-            while attempts_left > 0 and not grew_here and len(mol.atoms) < params.max_atoms:
+            while attempts_left > 0 and not grew_here and len(mol.atoms) < effective_max_atoms:
                 # Roll dice
                 if rng.random() > p_continue_eff:
                     # Решили не расти на этом порту в этой попытке
