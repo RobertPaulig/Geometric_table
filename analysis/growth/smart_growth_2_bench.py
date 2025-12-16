@@ -170,6 +170,8 @@ def _run_profile_for_mode(
             mh_accepted = 0
             mh_rejected = 0
 
+            mols: List[Tuple[int, "object"]] = []
+
             with profile_shape_complexity_layout(timing_acc, call_counts):
                 for i_tree in range(profile.n_trees_per_Z):
                     seed = seeds[(int(Z), int(i_tree))]
@@ -183,15 +185,19 @@ def _run_profile_for_mode(
                     n_atoms = len(mol.atoms)
                     sizes.append(n_atoms)
 
-                    adj = mol.adjacency_matrix()
-                    feats_fdm = compute_complexity_features_v2(adj, backend="fdm")
-                    c_total.append(float(feats_fdm.total))
+                    mols.append((n_atoms, mol))
 
                     stats = getattr(mol, "mh_stats", None)
                     if isinstance(stats, dict):
                         mh_proposals += int(stats.get("proposals", 0))
                         mh_accepted += int(stats.get("accepted", 0))
                         mh_rejected += int(stats.get("rejected", 0))
+
+            # post-hoc complexity (fdm) считаем отдельно, вне профилирования entanglement/layout
+            for _n_atoms, mol in mols:
+                adj = mol.adjacency_matrix()
+                feats_fdm = compute_complexity_features_v2(adj, backend="fdm")
+                c_total.append(float(feats_fdm.total))
 
             runtimes_arr = np.array(runtimes, dtype=float)
             sizes_arr = np.array(sizes, dtype=float)
@@ -317,46 +323,80 @@ def run_smart_growth_2_bench(cfg: SmartGrowth2BenchConfig) -> Tuple[Path, Path]:
 
     for profile in cfg.profiles:
         lines.append(f"Profile={profile.name} (max_depth={profile.max_depth}, max_atoms={profile.max_atoms}, n_trees_per_Z={profile.n_trees_per_Z})")
-        for Z in cfg.z_elements:
-            key_trapz = (profile.name, "trapz", int(Z))
-            key_fdm = (profile.name, "fdm", int(Z))
-            row_trapz = by_key.get(key_trapz)
-            row_fdm = by_key.get(key_fdm)
-            if row_trapz is None or row_fdm is None:
-                continue
+        if profile.name == "SMALL":
+            for Z in cfg.z_elements:
+                key_trapz = (profile.name, "trapz", int(Z))
+                key_fdm = (profile.name, "fdm", int(Z))
+                row_trapz = by_key.get(key_trapz)
+                row_fdm = by_key.get(key_fdm)
+                if row_trapz is None or row_fdm is None:
+                    continue
 
-            speedup_total = row_trapz["runtime_per_tree_sec_mean"] / row_fdm["runtime_per_tree_sec_mean"]
-            # shape компонента
-            t_shape_trapz = row_trapz["t_shape_total_sec"]
-            t_shape_fdm = row_fdm["t_shape_total_sec"]
-            speedup_shape = (t_shape_trapz / t_shape_fdm) if t_shape_fdm > 0 else 1.0
+                speedup_total = row_trapz["runtime_per_tree_sec_mean"] / row_fdm["runtime_per_tree_sec_mean"]
+                # shape компонента
+                t_shape_trapz = row_trapz["t_shape_total_sec"]
+                t_shape_fdm = row_fdm["t_shape_total_sec"]
+                speedup_shape = (t_shape_trapz / t_shape_fdm) if t_shape_fdm > 0 else 1.0
 
-            # доли времени
-            t_tot_trapz = row_trapz["runtime_total_sec"]
-            t_tot_fdm = row_fdm["runtime_total_sec"]
-            frac_shape_trapz = (t_shape_trapz / t_tot_trapz) if t_tot_trapz > 0 else 0.0
-            frac_shape_fdm = (t_shape_fdm / t_tot_fdm) if t_tot_fdm > 0 else 0.0
+                # доли времени
+                t_tot_trapz = row_trapz["runtime_total_sec"]
+                t_tot_fdm = row_fdm["runtime_total_sec"]
+                frac_shape_trapz = (t_shape_trapz / t_tot_trapz) if t_tot_trapz > 0 else 0.0
+                frac_shape_fdm = (t_shape_fdm / t_tot_fdm) if t_tot_fdm > 0 else 0.0
 
-            t_cx_trapz = row_trapz["t_complexity_total_sec"]
-            t_cx_fdm = row_fdm["t_complexity_total_sec"]
-            frac_cx_trapz = (t_cx_trapz / t_tot_trapz) if t_tot_trapz > 0 else 0.0
-            frac_cx_fdm = (t_cx_fdm / t_tot_fdm) if t_tot_fdm > 0 else 0.0
+                t_cx_trapz = row_trapz["t_complexity_total_sec"]
+                t_cx_fdm = row_fdm["t_complexity_total_sec"]
+                frac_cx_trapz = (t_cx_trapz / t_tot_trapz) if t_tot_trapz > 0 else 0.0
+                frac_cx_fdm = (t_cx_fdm / t_tot_fdm) if t_tot_fdm > 0 else 0.0
 
-            lines.append(
-                f"Profile={profile.name}, Z={Z}: "
-                f"speedup_total={speedup_total:.2f}x, "
-                f"speedup_shape={speedup_shape:.2f}x, "
-                f"shape_frac_trapz={frac_shape_trapz:.2f}, "
-                f"shape_frac_fdm={frac_shape_fdm:.2f}, "
-                f"complexity_frac_trapz={frac_cx_trapz:.2f}, "
-                f"complexity_frac_fdm={frac_cx_fdm:.2f}, "
-                f"mh_accept_rate_trapz={row_trapz['mh_accept_rate']:.2f}, "
-                f"mh_accept_rate_fdm={row_fdm['mh_accept_rate']:.2f}, "
-                f"shape_hits_trapz={row_trapz['shape_cache_hits']:.0f}, "
-                f"shape_hits_fdm={row_fdm['shape_cache_hits']:.0f}, "
-                f"shape_misses_trapz={row_trapz['shape_cache_misses']:.0f}, "
-                f"shape_misses_fdm={row_fdm['shape_cache_misses']:.0f}"
-            )
+                lines.append(
+                    f"Profile={profile.name}, Z={Z}: "
+                    f"speedup_total={speedup_total:.2f}x, "
+                    f"speedup_shape={speedup_shape:.2f}x, "
+                    f"shape_frac_trapz={frac_shape_trapz:.2f}, "
+                    f"shape_frac_fdm={frac_shape_fdm:.2f}, "
+                    f"complexity_frac_trapz={frac_cx_trapz:.2f}, "
+                    f"complexity_frac_fdm={frac_cx_fdm:.2f}, "
+                    f"mh_accept_rate_trapz={row_trapz['mh_accept_rate']:.2f}, "
+                    f"mh_accept_rate_fdm={row_fdm['mh_accept_rate']:.2f}, "
+                    f"shape_hits_trapz={row_trapz['shape_cache_hits']:.0f}, "
+                    f"shape_hits_fdm={row_fdm['shape_cache_hits']:.0f}, "
+                    f"shape_misses_trapz={row_trapz['shape_cache_misses']:.0f}, "
+                    f"shape_misses_fdm={row_fdm['shape_cache_misses']:.0f}"
+                )
+        elif profile.name == "HEAVY":
+            lines.append("HEAVY baseline vs optimized (per Z):")
+            for Z in cfg.z_elements:
+                key_baseline = (profile.name, "baseline", int(Z))
+                key_opt = (profile.name, "optimized", int(Z))
+                row_b = by_key.get(key_baseline)
+                row_o = by_key.get(key_opt)
+                if row_b is None or row_o is None:
+                    continue
+
+                speedup_total = row_b["runtime_per_tree_sec_mean"] / row_o["runtime_per_tree_sec_mean"]
+                t_cx_b = row_b["t_complexity_total_sec"]
+                t_cx_o = row_o["t_complexity_total_sec"]
+                speedup_complexity = (t_cx_b / t_cx_o) if t_cx_o > 0 else float("inf")
+
+                t_layout_b = row_b["t_layout_total_sec"]
+                t_layout_o = row_o["t_layout_total_sec"]
+                n_layout_b = row_b["n_layout_calls"]
+                n_layout_o = row_o["n_layout_calls"]
+
+                if t_layout_o > 0 and n_layout_o > 0:
+                    speedup_layout_str = f"speedup_layout={t_layout_b / t_layout_o:.2f}x"
+                else:
+                    speedup_layout_str = f"layout_eliminated (n_layout_calls_baseline={int(n_layout_b)}, optimized=0)"
+
+                lines.append(
+                    f"Z={Z}: "
+                    f"speedup_total={speedup_total:.2f}x, "
+                    f"speedup_complexity={speedup_complexity:.2f}x, "
+                    f"{speedup_layout_str}; "
+                    f"mh_accept_rate_baseline={row_b['mh_accept_rate']:.2f}, "
+                    f"mh_accept_rate_optimized={row_o['mh_accept_rate']:.2f}"
+                )
         lines.append("")
 
     summary_path = write_growth_txt("smart_growth_2_bench", lines)

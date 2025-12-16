@@ -1239,10 +1239,10 @@
   - `optimized`: `topo3d_prefilter_tree=True`, `topo3d_prefilter_min_n=10`;
   при этом в обоих случаях используется `coupling_topo_3d=1.0`, `topo_3d_beta=1.0`, `deltaG_backend="fdm_entanglement"`.
 - По HEAVY-профилю SMART-GROWTH-2 (из `results/smart_growth_2_bench.csv|txt`) для Z ∈ {6,8,14,26} получены следующие оценки:
-  - Z=6: `speedup_total≈144×`, `speedup_complexity≈107×`, `speedup_layout ≫10³⁰×` (layout полностью выключен в optimized), `n_layout_calls_baseline=507` vs `n_layout_calls_optimized=0`;
-  - Z=8: `speedup_total≈176×`, `speedup_complexity≈134×`, `speedup_layout ≫10³⁰×`, `n_layout_calls_baseline=262` vs `0`;
-  - Z=14: `speedup_total≈108×`, `speedup_complexity≈83×`, `speedup_layout ≫10³⁰×`, `n_layout_calls_baseline=303` vs `0`;
-  - Z=26: `speedup_total≈426×`, `speedup_complexity≈307×`, `speedup_layout ≫10³¹×`, `n_layout_calls_baseline=843` vs `0`.
+  - Z=6: `speedup_total≈144×`, `speedup_complexity≈107×`, layout в optimized-режиме фактически устранён (`layout_eliminated`, `n_layout_calls_baseline=507`, `optimized=0`);
+  - Z=8: `speedup_total≈176×`, `speedup_complexity≈134×`, `layout_eliminated`, `n_layout_calls_baseline=262`, `optimized=0`;
+  - Z=14: `speedup_total≈108×`, `speedup_complexity≈83×`, `layout_eliminated`, `n_layout_calls_baseline=303`, `optimized=0`;
+  - Z=26: `speedup_total≈426×`, `speedup_complexity≈307×`, `layout_eliminated`, `n_layout_calls_baseline=843`, `optimized=0`.
 
 Интерпретация:
 - Paired-микробенч FAST-COMPLEXITY-2 подтверждает, что size/tree-prefilter для backend`a `fdm_entanglement` даёт колоссальные выигрыши на деревьях (до 10³–10⁴×) и умеренные/нейтральные эффекты на циклических графах, при этом результаты устойчивы при переходе к paired-сравнению baseline/optimized на одном и том же наборе графов.
