@@ -36,15 +36,27 @@ class SmartGrowth2BenchConfig:
     )
 
 
-def _make_thermo(ws_integrator: str) -> ThermoConfig:
+def _make_thermo(
+    ws_integrator: str,
+    *,
+    coupling_topo_3d: float = 0.0,
+    topo_3d_beta: float = 0.0,
+    topo3d_prefilter_tree: bool = False,
+    topo3d_prefilter_min_n: int = 0,
+    deltaG_backend: str = "fdm_entanglement",
+) -> ThermoConfig:
     return ThermoConfig(
         ws_integrator=ws_integrator,
         ws_fdm_base=2,
         ws_fdm_depth=5,
         coupling_shape_softness=1.0,
         coupling_shape_chi=1.0,
+        coupling_topo_3d=coupling_topo_3d,
+        topo_3d_beta=topo_3d_beta,
+        topo3d_prefilter_tree=topo3d_prefilter_tree,
+        topo3d_prefilter_min_n=topo3d_prefilter_min_n,
         grower_use_mh=True,
-        deltaG_backend="fdm_entanglement",
+        deltaG_backend=deltaG_backend,
         temperature_T=1.0,
     )
 
@@ -67,19 +79,29 @@ def _make_seeds(z_list: Iterable[int], n_trees_per_Z: int, label: str) -> Dict[T
 
 
 @contextmanager
-def profile_shape_and_complexity(
+def profile_shape_complexity_layout(
     timing_acc: Dict[str, float],
     call_counts: Dict[str, int],
-):
+) -> None:
     """
-    Monkeypatch get_shape_observables / compute_complexity_features_v2
-    to accumulate timings and counts in timing_acc / call_counts.
+    Monkeypatch:
+    - core.shape_observables.get_shape_observables
+    - core.complexity.compute_complexity_features_v2
+    - core.energy_model.compute_complexity_features_v2
+    - core.layout_3d.force_directed_layout_3d
+
+    to аккумулировать t_shape_total_sec / t_complexity_total_sec / t_layout_total_sec
+    и счётчики вызовов в timing_acc / call_counts.
     """
     from core import shape_observables as so
     from core import complexity as cx
+    from core import energy_model as em
+    from core import layout_3d as l3d
 
     orig_get_shape = so.get_shape_observables
     orig_complexity = cx.compute_complexity_features_v2
+    orig_energy_complexity = em.compute_complexity_features_v2
+    orig_layout = l3d.force_directed_layout_3d
 
     def wrapped_get_shape(Z, fp):
         t0 = time.perf_counter()
@@ -89,29 +111,41 @@ def profile_shape_and_complexity(
         call_counts["n_shape_calls"] = call_counts.get("n_shape_calls", 0) + 1
         return result
 
-    def wrapped_complexity(adj, backend="fdm"):
+    def wrapped_complexity(adj, backend="fdm", *args, **kwargs):
         t0 = time.perf_counter()
-        result = orig_complexity(adj, backend=backend)
+        result = orig_complexity(adj, backend=backend, *args, **kwargs)
         dt = time.perf_counter() - t0
         timing_acc["t_complexity_total"] = timing_acc.get("t_complexity_total", 0.0) + dt
         call_counts["n_complexity_calls"] = call_counts.get("n_complexity_calls", 0) + 1
         return result
 
+    def wrapped_layout(*args, **kwargs):
+        t0 = time.perf_counter()
+        result = orig_layout(*args, **kwargs)
+        dt = time.perf_counter() - t0
+        timing_acc["t_layout_total"] = timing_acc.get("t_layout_total", 0.0) + dt
+        call_counts["n_layout_calls"] = call_counts.get("n_layout_calls", 0) + 1
+        return result
+
     so.get_shape_observables = wrapped_get_shape  # type: ignore[assignment]
     cx.compute_complexity_features_v2 = wrapped_complexity  # type: ignore[assignment]
+    em.compute_complexity_features_v2 = wrapped_complexity  # type: ignore[assignment]
+    l3d.force_directed_layout_3d = wrapped_layout  # type: ignore[assignment]
     try:
         yield
     finally:
         so.get_shape_observables = orig_get_shape  # type: ignore[assignment]
         cx.compute_complexity_features_v2 = orig_complexity  # type: ignore[assignment]
+        em.compute_complexity_features_v2 = orig_energy_complexity  # type: ignore[assignment]
+        l3d.force_directed_layout_3d = orig_layout  # type: ignore[assignment]
 
 
 def _run_profile_for_mode(
     cfg: SmartGrowth2BenchConfig,
     profile: ProfileConfig,
-    ws_integrator: str,
+    mode: str,
+    thermo: ThermoConfig,
 ) -> List[Dict[str, float]]:
-    thermo = _make_thermo(ws_integrator)
     params = GrowthParams(max_depth=profile.max_depth, max_atoms=profile.max_atoms)
 
     # Shared seeds per (Z, tree_idx) — одинаковые для trapz/fdm.
@@ -122,12 +156,12 @@ def _run_profile_for_mode(
     # Сброс кэша ShapeObs и измерение hit/miss после профиля.
     _cached_get_shape_observables.cache_clear()
 
-    timing_acc: Dict[str, float] = {}
-    call_counts: Dict[str, int] = {}
-
-    with override_thermo_config(thermo), profile_shape_and_complexity(timing_acc, call_counts):
+    with override_thermo_config(thermo):
         for Z in cfg.z_elements:
             sym = _element_symbol(Z)
+
+            timing_acc: Dict[str, float] = {}
+            call_counts: Dict[str, int] = {}
 
             runtimes: List[float] = []
             sizes: List[int] = []
@@ -136,27 +170,28 @@ def _run_profile_for_mode(
             mh_accepted = 0
             mh_rejected = 0
 
-            for i_tree in range(profile.n_trees_per_Z):
-                seed = seeds[(int(Z), int(i_tree))]
-                rng = np.random.default_rng(seed)
+            with profile_shape_complexity_layout(timing_acc, call_counts):
+                for i_tree in range(profile.n_trees_per_Z):
+                    seed = seeds[(int(Z), int(i_tree))]
+                    rng = np.random.default_rng(seed)
 
-                t0 = time.perf_counter()
-                mol = grow_molecule_christmas_tree(sym, params, rng=rng)
-                dt = time.perf_counter() - t0
-                runtimes.append(dt)
+                    t0 = time.perf_counter()
+                    mol = grow_molecule_christmas_tree(sym, params, rng=rng)
+                    dt = time.perf_counter() - t0
+                    runtimes.append(dt)
 
-                n_atoms = len(mol.atoms)
-                sizes.append(n_atoms)
+                    n_atoms = len(mol.atoms)
+                    sizes.append(n_atoms)
 
-                adj = mol.adjacency_matrix()
-                feats_fdm = compute_complexity_features_v2(adj, backend="fdm")
-                c_total.append(float(feats_fdm.total))
+                    adj = mol.adjacency_matrix()
+                    feats_fdm = compute_complexity_features_v2(adj, backend="fdm")
+                    c_total.append(float(feats_fdm.total))
 
-                stats = getattr(mol, "mh_stats", None)
-                if isinstance(stats, dict):
-                    mh_proposals += int(stats.get("proposals", 0))
-                    mh_accepted += int(stats.get("accepted", 0))
-                    mh_rejected += int(stats.get("rejected", 0))
+                    stats = getattr(mol, "mh_stats", None)
+                    if isinstance(stats, dict):
+                        mh_proposals += int(stats.get("proposals", 0))
+                        mh_accepted += int(stats.get("accepted", 0))
+                        mh_rejected += int(stats.get("rejected", 0))
 
             runtimes_arr = np.array(runtimes, dtype=float)
             sizes_arr = np.array(sizes, dtype=float)
@@ -165,10 +200,12 @@ def _run_profile_for_mode(
             mh_total = mh_proposals if mh_proposals > 0 else 1
             mh_accept_rate = float(mh_accepted) / float(mh_total)
 
+            cache_info = _cached_get_shape_observables.cache_info()
+
             rows.append(
                 {
                     "profile": profile.name,
-                    "mode": ws_integrator,
+                    "mode": mode,
                     "Z": Z,
                     "Z_symbol": sym,
                     "n_trees": profile.n_trees_per_Z,
@@ -183,19 +220,16 @@ def _run_profile_for_mode(
                     "mh_accepted": float(mh_accepted),
                     "mh_rejected": float(mh_rejected),
                     "mh_accept_rate": mh_accept_rate,
+                    "t_shape_total_sec": float(timing_acc.get("t_shape_total", 0.0)),
+                    "t_complexity_total_sec": float(timing_acc.get("t_complexity_total", 0.0)),
+                    "t_layout_total_sec": float(timing_acc.get("t_layout_total", 0.0)),
+                    "n_shape_calls": float(call_counts.get("n_shape_calls", 0)),
+                    "n_complexity_calls": float(call_counts.get("n_complexity_calls", 0)),
+                    "n_layout_calls": float(call_counts.get("n_layout_calls", 0)),
+                    "shape_cache_hits": float(cache_info.hits),
+                    "shape_cache_misses": float(cache_info.misses),
                 }
             )
-
-    cache_info = _cached_get_shape_observables.cache_info()
-    # Добавляем агрегированные тайминги/счётчики в каждую строку профиля/режима.
-    for r in rows:
-        r["t_shape_total_sec"] = float(timing_acc.get("t_shape_total", 0.0))
-        r["t_complexity_total_sec"] = float(timing_acc.get("t_complexity_total", 0.0))
-        r["t_topo3d_total_sec"] = 0.0  # на текущем стенде topo3d/layout не используются
-        r["n_shape_calls"] = float(call_counts.get("n_shape_calls", 0))
-        r["n_complexity_calls"] = float(call_counts.get("n_complexity_calls", 0))
-        r["shape_cache_hits"] = float(cache_info.hits)
-        r["shape_cache_misses"] = float(cache_info.misses)
 
     return rows
 
@@ -204,8 +238,35 @@ def run_smart_growth_2_bench(cfg: SmartGrowth2BenchConfig) -> Tuple[Path, Path]:
     rows: List[Dict[str, float]] = []
 
     for profile in cfg.profiles:
-        for mode in ("trapz", "fdm"):
-            rows.extend(_run_profile_for_mode(cfg, profile, ws_integrator=mode))
+        if profile.name == "SMALL":
+            # Для SMALL сохраняем сравнение trapz vs fdm как раньше.
+            for mode in ("trapz", "fdm"):
+                thermo = _make_thermo(ws_integrator=mode)
+                rows.extend(_run_profile_for_mode(cfg, profile, mode=mode, thermo=thermo))
+        elif profile.name == "HEAVY":
+            # HEAVY: baseline vs optimized для entanglement/layout.
+            thermo_baseline = _make_thermo(
+                ws_integrator="fdm",
+                coupling_topo_3d=1.0,
+                topo_3d_beta=1.0,
+                topo3d_prefilter_tree=False,
+                topo3d_prefilter_min_n=0,
+                deltaG_backend="fdm_entanglement",
+            )
+            thermo_optimized = _make_thermo(
+                ws_integrator="fdm",
+                coupling_topo_3d=1.0,
+                topo_3d_beta=1.0,
+                topo3d_prefilter_tree=True,
+                topo3d_prefilter_min_n=10,
+                deltaG_backend="fdm_entanglement",
+            )
+            rows.extend(_run_profile_for_mode(cfg, profile, mode="baseline", thermo=thermo_baseline))
+            rows.extend(_run_profile_for_mode(cfg, profile, mode="optimized", thermo=thermo_optimized))
+        else:
+            for mode in ("trapz", "fdm"):
+                thermo = _make_thermo(ws_integrator=mode)
+                rows.extend(_run_profile_for_mode(cfg, profile, mode=mode, thermo=thermo))
 
     csv_path = results_path("smart_growth_2_bench.csv")
     fieldnames = [
@@ -227,9 +288,10 @@ def run_smart_growth_2_bench(cfg: SmartGrowth2BenchConfig) -> Tuple[Path, Path]:
         "mh_accept_rate",
         "t_shape_total_sec",
         "t_complexity_total_sec",
-        "t_topo3d_total_sec",
+        "t_layout_total_sec",
         "n_shape_calls",
         "n_complexity_calls",
+        "n_layout_calls",
         "shape_cache_hits",
         "shape_cache_misses",
     ]
@@ -311,4 +373,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

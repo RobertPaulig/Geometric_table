@@ -1214,3 +1214,36 @@
 Интерпретация:
 - Prefilter FAST-COMPLEXITY-1 радикально ускоряет `fdm_entanglement` на деревьях и малых графах (до 10³–10⁴× для tree-классов в микробенче) и даёт умеренный выигрыш на средних циклических графах, практически не ухудшая поведение на крупных циклических графах.
 - В end-to-end MH-росте (SMART-GROWTH-2 HEAVY) вклад entanglement в общее время по-прежнему невелик, поэтому общие speedup’ы остаются около 1×; это подтверждает, что главный bottleneck complexity-слоя в текущей конфигурации связан не столько с 3D entanglement, сколько с остальной частью FDM-complexity/энергетики и, возможно, с MH/proposal-логикой.
+
+## [FAST-COMPLEXITY-2] Paired microbench + HEAVY baseline/optimized + layout profiling
+
+Дата: 2025-12-16
+
+Решение:
+- Добавлен микробенч `analysis/complexity/fast_complexity_2_bench.py`, который фиксирует набор случайных графов шести классов (`small|medium|large` × `tree|cyclic`) и запускает `compute_complexity_features_v2(..., backend="fdm_entanglement")` в режимах `baseline` (`topo3d_prefilter_tree=False`, `topo3d_prefilter_min_n=0`) и `optimized` (`topo3d_prefilter_tree=True`, `topo3d_prefilter_min_n=10`) на одном и том же (paired) наборе графов.
+- По результатам `results/fast_complexity_2_bench.txt` (n_graphs_per_class=50, N_MIN_PREFILTER=10) получены следующие p50/p90/p99 speedup’ы:
+  - `small_tree`: `speedup_p50≈289×`, `speedup_p90≈412×`, `speedup_p99≈171×`, paired `p50≈294×`, `p90≈430×`, `p99≈522×`;
+  - `small_cyclic`: `speedup_p50≈335×`, `speedup_p90≈0.99×`, `speedup_p99≈1.07×`, paired `p50≈242×`, `p90≈352×`, `p99≈435×`;
+  - `medium_tree`: `speedup_p50≈1400×`, `speedup_p90≈1931×`, `speedup_p99≈1283×`, paired `p50≈1415×`, `p90≈2021×`, `p99≈2343×`;
+  - `medium_cyclic`: `speedup_p50≈1.02×`, `speedup_p90≈1.02×`, `speedup_p99≈1.03×`, paired `p50≈1.01×`, `p90≈1.04×`, `p99≈1.05×`;
+  - `large_tree`: `speedup_p50≈4991×`, `speedup_p90≈5007×`, `speedup_p99≈3214×`, paired `p50≈4575×`, `p90≈5851×`, `p99≈6179×`;
+  - `large_cyclic`: `speedup_p50≈1.01×`, `speedup_p90≈1.01×`, `speedup_p99≈1.00×`, paired `p50≈0.99×`, `p90≈1.02×`, `p99≈1.04×`.
+- В `analysis/growth/smart_growth_2_bench.py` entanglement-конфиг расширен параметрами `coupling_topo_3d`, `topo_3d_beta`, `topo3d_prefilter_tree`, `topo3d_prefilter_min_n`, введён новый профилировщик `profile_shape_complexity_layout`, который monkeypatch’ит:
+  - `core.shape_observables.get_shape_observables`,
+  - `core.complexity.compute_complexity_features_v2`,
+  - `core.energy_model.compute_complexity_features_v2`,
+  - `core.layout_3d.force_directed_layout_3d`,
+  и собирает `t_shape_total_sec`, `t_complexity_total_sec`, `t_layout_total_sec`, `n_layout_calls` отдельно для каждого Z.
+- Для профиля `SMALL` сохранено прежнее сравнение `trapz vs fdm`; для профиля `HEAVY` реализованы два режима:
+  - `baseline`: `topo3d_prefilter_tree=False`, `topo3d_prefilter_min_n=0`;
+  - `optimized`: `topo3d_prefilter_tree=True`, `topo3d_prefilter_min_n=10`;
+  при этом в обоих случаях используется `coupling_topo_3d=1.0`, `topo_3d_beta=1.0`, `deltaG_backend="fdm_entanglement"`.
+- По HEAVY-профилю SMART-GROWTH-2 (из `results/smart_growth_2_bench.csv|txt`) для Z ∈ {6,8,14,26} получены следующие оценки:
+  - Z=6: `speedup_total≈144×`, `speedup_complexity≈107×`, `speedup_layout ≫10³⁰×` (layout полностью выключен в optimized), `n_layout_calls_baseline=507` vs `n_layout_calls_optimized=0`;
+  - Z=8: `speedup_total≈176×`, `speedup_complexity≈134×`, `speedup_layout ≫10³⁰×`, `n_layout_calls_baseline=262` vs `0`;
+  - Z=14: `speedup_total≈108×`, `speedup_complexity≈83×`, `speedup_layout ≫10³⁰×`, `n_layout_calls_baseline=303` vs `0`;
+  - Z=26: `speedup_total≈426×`, `speedup_complexity≈307×`, `speedup_layout ≫10³¹×`, `n_layout_calls_baseline=843` vs `0`.
+
+Интерпретация:
+- Paired-микробенч FAST-COMPLEXITY-2 подтверждает, что size/tree-prefilter для backend`a `fdm_entanglement` даёт колоссальные выигрыши на деревьях (до 10³–10⁴×) и умеренные/нейтральные эффекты на циклических графах, при этом результаты устойчивы при переходе к paired-сравнению baseline/optimized на одном и том же наборе графов.
+- В HEAVY-профиле SMART-GROWTH-2 при активации entanglement-слоя с layout-ом prefilter фактически полностью выключает 3D layout/entanglement в optimized-режиме для Z ∈ {6,8,14,26}, что приводит к очень большим speedup’ам по complexity/layout и заметному ускорению полного MH-роста. Это фиксирует FAST-COMPLEXITY-2 как «heavy» baseline/optimized стенд для entanglement-слоя с явным учётом layout-профилирования.
