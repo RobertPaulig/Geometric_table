@@ -253,6 +253,65 @@
   - отделить вклад proposal-политики роста от энергий/сложности (CHEM-VALIDATION-1 на C5/C6),
   - ввести более жёсткую проверку на согласованность порядка стабильностей по нескольким изомерным сериям.
 
+## [CHEM-VALIDATION-1A] C5 pentane skeleton (n / iso / neo)
+
+**Конфиг.**
+
+- Скрипт: `analysis/chem/chem_validation_1a_pentane.py`.
+- Режим роста: `grow_molecule_christmas_tree` с параметрами
+  `stop_at_n_atoms=5`, `allowed_symbols=["C"]`, `max_depth=5`.
+- Терморежимы (абляции, через `override_thermo_config`):
+  - `R` (proposal-only): `grower_use_mh=False`, все couplings = 0.
+  - `A` (FDM-only): MH on, `compute_complexity_features_v2(..., backend="fdm")`, `coupling_topo_3d=0`.
+  - `B` (FDM + topo3d): как `A` + `compute_complexity_features_v2(..., backend="fdm_entanglement")`, `coupling_topo_3d=1`.
+  - `C` (FDM + topo3d + shape): как `B` + `coupling_shape_softness=1`, `coupling_shape_chi=1` (shape-часть пока R&D-заглушка в отчёте, `score_shape=0`).
+- Запуск CHEM-VALIDATION-1A (полный):
+  - `python -m analysis.chem.chem_validation_1a_pentane --n_runs 1000 --seeds 0 1 2 3 4 --modes R A B C`.
+  - артефакты (git-ignored): `results/chem_validation_1a_pentane.csv`, `results/chem_validation_1a_pentane.txt`.
+
+**Классификация топологий (degree multiset).**
+
+- `deg_sorted = [1,1,2,2,2]` → `topology="n_pentane"`.
+- `deg_sorted = [1,1,1,2,3]` → `topology="isopentane"`.
+- `deg_sorted = [1,1,1,1,4]` → `topology="neopentane"`.
+- иначе → `topology="other"`.
+
+**Результаты частот (n_runs=1000, seeds=[0..4], всего 5000 на режим).**
+
+- Mode `R`:
+  - `P(iso)=0.3334`, `P(n)=0.0024`, `P(neo)=0.6640`, `P(other)=0.0002`.
+  - `log(P(iso)/P(n))=4.9339`, `log(P(neo)/P(n))=5.6228`.
+- Mode `A`:
+  - `P(iso)=0.2502`, `P(n)=0.0740`, `P(neo)=0.0400`, `P(other)=0.6358`.
+  - `log(P(iso)/P(n))=1.2182`, `log(P(neo)/P(n))=-0.6152`.
+- Mode `B`:
+  - `P(iso)=0.2314`, `P(n)=0.0846`, `P(neo)=0.0492`, `P(other)=0.6348`.
+  - `log(P(iso)/P(n))=1.0062`, `log(P(neo)/P(n))=-0.5420`.
+- Mode `C`:
+  - `P(iso)=0.1666`, `P(n)=0.0780`, `P(neo)=0.0234`, `P(other)=0.7320`.
+  - `log(P(iso)/P(n))=0.7589`, `log(P(neo)/P(n))=-1.2040`.
+
+**Детерминированные эталоны (fixed adjacency; A/B/C).**
+
+- Edges:
+  - n-pentane (path): `(0-1,1-2,2-3,3-4)`
+  - isopentane: `(1-0,1-2,1-4,2-3)`
+  - neopentane (star): `(0-1,0-2,0-3,0-4)`
+- Scores/Δ:
+  - Mode `A`: `score(n)=4.2985`, `score(iso)=4.0633`, `score(neo)=3.1399`;
+    `Δ(n-iso)=0.2351`, `Δ(n-neo)=1.1586`, `Δ(iso-neo)=0.9235`.
+  - Mode `B`: `score(n)=4.2985`, `score(iso)=4.0804`, `score(neo)=3.1399`;
+    `Δ(n-iso)=0.2180`, `Δ(n-neo)=1.1586`, `Δ(iso-neo)=0.9406`.
+  - Mode `C`: `score(n)=4.2985`, `score(iso)=4.0804`, `score(neo)=3.1399`;
+    `Δ(n-iso)=0.2180`, `Δ(n-neo)=1.1586`, `Δ(iso-neo)=0.9406`.
+
+**Вывод.**
+
+- В `R` (proposal-only) ростовой генератор сильно смещён к ветвлённым C5-деревьям (`neo >> iso >> n`).
+- В энергетике FDM/entanglement (A/B/C) детерминированные эталоны дают порядок `score(n) > score(iso) > score(neo)`,
+  но наблюдаемая частота топологий определяется не только энергией: доля `other` остаётся доминирующей в A/B/C,
+  а `n_pentane` в среднем редок по сравнению с `iso` (хотя в C `P(n)` уже близко к `P(iso)`).
+
 ## [Spectral Lab v1] Эксперимент SL-1 (resolution scan)
 
 **Решение.**
