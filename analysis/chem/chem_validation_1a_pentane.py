@@ -48,6 +48,7 @@ class ChemValidation1AConfig:
     seeds: Tuple[int, ...] = (0, 1, 2, 3, 4)
     modes: Tuple[str, ...] = ("R", "A", "B", "C")
     max_depth: int = 5
+    max_resample_attempts: int = 200
 
 
 def _make_thermo_for_mode(mode: str) -> ThermoConfig:
@@ -277,6 +278,40 @@ def _make_thermo_for_mode(mode: str) -> ThermoConfig:
     raise ValueError(f"Unsupported CHEM-VALIDATION-1A mode: {mode!r}")
 
 
+def _is_connected_tree_with_valence_limit(
+    adj: np.ndarray, *, max_valence: int, expected_n: int
+) -> bool:
+    if adj.ndim != 2 or adj.shape[0] != adj.shape[1]:
+        return False
+    n = int(adj.shape[0])
+    if n != expected_n:
+        return False
+
+    degrees = np.asarray(adj.sum(axis=1), dtype=int)
+    if np.any(degrees < 1) or int(np.max(degrees)) > int(max_valence):
+        return False
+
+    m = int(np.sum(degrees) // 2)
+    if m != n - 1:
+        return False
+
+    visited = np.zeros(n, dtype=bool)
+    queue: List[int] = [0]
+    visited[0] = True
+    while queue:
+        u = queue.pop(0)
+        nbrs = np.where(adj[u] > 0)[0]
+        for v in nbrs:
+            if not visited[v]:
+                visited[v] = True
+                queue.append(int(v))
+    if not bool(np.all(visited)):
+        return False
+
+    cyclomatic = m - n + 1
+    return cyclomatic == 0
+
+
 def _run_single_mode(cfg: ChemValidation1AConfig, mode: str) -> List[Dict[str, object]]:
     thermo = _make_thermo_for_mode(mode)
     rows: List[Dict[str, object]] = []
@@ -291,14 +326,71 @@ def _run_single_mode(cfg: ChemValidation1AConfig, mode: str) -> List[Dict[str, o
                 max_atoms=12,
                 stop_at_n_atoms=5,
                 allowed_symbols=["C"],
+                p_continue_base=1.0,
+                chi_sensitivity=0.0,
+                role_bonus_hub=0.0,
+                role_penalty_terminator=0.0,
+                temperature=1.0,
             )
 
             for run_idx in range(cfg.n_runs):
+                # ALKANE-VALIDITY-0: keep only valid C5 alkane skeletons:
+                # - exactly 5 atoms
+                # - connected tree (cyclomatic==0, 1 component)
+                # - valence(C) <= 4
+                # - implicit "leaf-add" growth since it's a tree build
                 t0 = time.perf_counter()
-                mol = grow_molecule_christmas_tree("C", params, rng=rng)
+                mol = None
+                adj = None
+                for _ in range(int(cfg.max_resample_attempts)):
+                    candidate = grow_molecule_christmas_tree("C", params, rng=rng)
+                    candidate_adj = candidate.adjacency_matrix()
+                    if _is_connected_tree_with_valence_limit(
+                        candidate_adj, max_valence=4, expected_n=5
+                    ):
+                        mol = candidate
+                        adj = candidate_adj
+                        break
                 dt = time.perf_counter() - t0
 
-                adj = mol.adjacency_matrix()
+                if mol is None or adj is None:
+                    # Hard fail-safe: should never happen with reasonable params.
+                    adj = np.zeros((0, 0), dtype=float)
+                    degrees = np.zeros((0,), dtype=int)
+                    sorted_degrees = tuple()
+                    topology = "other"
+                    feats_fdm = compute_complexity_features_v2(adj, backend="fdm")
+                    feats_ent = compute_complexity_features_v2(
+                        adj, backend="fdm_entanglement"
+                    )
+                    score_fdm = float(feats_fdm.total)
+                    score_topo3d = float(feats_ent.total) - float(feats_fdm.total)
+                    score_shape = 0.0
+                    total_score = score_fdm + score_topo3d + score_shape
+                    mh_proposals = 0
+                    mh_accepted = 0
+                    mh_accept_rate = 0.0
+
+                    rows.append(
+                        {
+                            "mode": mode,
+                            "seed": seed,
+                            "run_idx": run_idx,
+                            "n_atoms": int(adj.shape[0]),
+                            "topology": topology,
+                            "deg_sorted": str(list(sorted_degrees)),
+                            "score_fdm": score_fdm,
+                            "score_topo3d": score_topo3d,
+                            "score_shape": score_shape,
+                            "score_total": total_score,
+                            "mh_proposals": mh_proposals,
+                            "mh_accepted": mh_accepted,
+                            "mh_accept_rate": mh_accept_rate,
+                            "runtime_sec": dt,
+                        }
+                    )
+                    continue
+
                 degrees = np.asarray(adj.sum(axis=1), dtype=int)
                 sorted_degrees = tuple(sorted(int(x) for x in degrees))
                 topology = classify_pentane_topology(sorted_degrees)
@@ -455,7 +547,9 @@ def run_chem_validation_1a(cfg: ChemValidation1AConfig) -> Tuple[Path, Path]:
 
     adj_n, adj_iso, adj_neo = _make_adj_refs()
 
-    def _score_for_mode(mode: str, adj: np.ndarray) -> float:
+    def _score_parts_for_mode(
+        mode: str, adj: np.ndarray
+    ) -> Tuple[float, float, float, float]:
         thermo = _make_thermo_for_mode(mode)
         with override_thermo_config(thermo):
             feats_fdm = compute_complexity_features_v2(adj, backend="fdm")
@@ -463,22 +557,77 @@ def run_chem_validation_1a(cfg: ChemValidation1AConfig) -> Tuple[Path, Path]:
         score_fdm = float(feats_fdm.total)
         score_topo3d = float(feats_ent.total) - float(feats_fdm.total)
         score_shape = 0.0
-        return score_fdm + score_topo3d + score_shape
+        score_total = score_fdm + score_topo3d + score_shape
+        return score_fdm, score_topo3d, score_shape, score_total
+
+    def _order_min_score(d: Dict[str, float]) -> List[str]:
+        return [k for k, _ in sorted(d.items(), key=lambda kv: (kv[1], kv[0]))]
+
+    def _order_max_score(d: Dict[str, float]) -> List[str]:
+        return [k for k, _ in sorted(d.items(), key=lambda kv: (-kv[1], kv[0]))]
 
     for mode in cfg.modes:
         m = mode.upper()
         if m not in {"A", "B", "C"}:
             continue
-        s_n = _score_for_mode(m, adj_n)
-        s_i = _score_for_mode(m, adj_iso)
-        s_neo = _score_for_mode(m, adj_neo)
-        lines.append(f"  Mode {m}: score(n)={s_n:.4f}, score(iso)={s_i:.4f}, score(neo)={s_neo:.4f}")
+        f_n, t_n, sh_n, s_n = _score_parts_for_mode(m, adj_n)
+        f_i, t_i, sh_i, s_i = _score_parts_for_mode(m, adj_iso)
+        f_neo, t_neo, sh_neo, s_neo = _score_parts_for_mode(m, adj_neo)
+
+        lines.append(
+            f"  Mode {m}: score_total(n)={s_n:.4f}, score_total(iso)={s_i:.4f}, score_total(neo)={s_neo:.4f}"
+        )
+        lines.append(
+            f"    n:   fdm={f_n:.4f}, topo3d={t_n:.4f}, shape={sh_n:.4f}, total={s_n:.4f}"
+        )
+        lines.append(
+            f"    iso: fdm={f_i:.4f}, topo3d={t_i:.4f}, shape={sh_i:.4f}, total={s_i:.4f}"
+        )
+        lines.append(
+            f"    neo: fdm={f_neo:.4f}, topo3d={t_neo:.4f}, shape={sh_neo:.4f}, total={s_neo:.4f}"
+        )
         lines.append(
             f"    Δ(n-iso)={float(s_n - s_i):.4f}, Δ(n-neo)={float(s_n - s_neo):.4f}, "
             f"Δ(iso-neo)={float(s_i - s_neo):.4f}"
         )
 
+        orders = {"n": s_n, "iso": s_i, "neo": s_neo}
+        lines.append(
+            "    Predicted order (min-score best): "
+            + " > ".join(_order_min_score(orders))
+        )
+        lines.append(
+            "    Predicted order (max-score best): "
+            + " > ".join(_order_max_score(orders))
+        )
+
     lines.append("")
+
+    # Sign & consistency check vs observed frequencies on valid tree-only C5 skeletons.
+    lines.append("Sign & consistency check (tree-only frequencies vs MH convention)")
+    for mode in cfg.modes:
+        m = mode.upper()
+        if m not in by_mode:
+            continue
+        rows = by_mode[m]
+        topo_counts: Dict[str, int] = {}
+        for r in rows:
+            topo = str(r["topology"])
+            topo_counts[topo] = topo_counts.get(topo, 0) + 1
+        n_n = topo_counts.get("n_pentane", 0)
+        n_i = topo_counts.get("isopentane", 0)
+        n_neo = topo_counts.get("neopentane", 0)
+        denom = float(n_n + n_i + n_neo) or 1.0
+        p_n = n_n / denom
+        p_i = n_i / denom
+        p_neo = n_neo / denom
+        observed = {"n": p_n, "iso": p_i, "neo": p_neo}
+        obs_order = [k for k, _ in sorted(observed.items(), key=lambda kv: (-kv[1], kv[0]))]
+        lines.append(
+            f"  Mode {m}: P_tree(n)={p_n:.4f}, P_tree(iso)={p_i:.4f}, P_tree(neo)={p_neo:.4f}; observed order: "
+            + " > ".join(obs_order)
+        )
+
     summary_path = write_growth_txt("chem_validation_1a_pentane", lines)
     return csv_path, summary_path
 
@@ -522,4 +671,3 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
 
 if __name__ == "__main__":
     main()
-

@@ -260,6 +260,11 @@
 - Скрипт: `analysis/chem/chem_validation_1a_pentane.py`.
 - Режим роста: `grow_molecule_christmas_tree` с параметрами
   `stop_at_n_atoms=5`, `allowed_symbols=["C"]`, `max_depth=5`.
+- ALKANE-VALIDITY-0 (жёсткая валидность proposal):
+  - принимаются только connected tree на 5 атомов (1 компонента, `m=n-1`, cyclomatic=0),
+  - валентность C ограничена `deg<=4`,
+  - рост форсирован до 5 атомов (`p_continue_base=1`, без роль- и χ-деформаций),
+  - при необходимости выполняется resample до валидного C5 (лимит `max_resample_attempts`).
 - Терморежимы (абляции, через `override_thermo_config`):
   - `R` (proposal-only): `grower_use_mh=False`, все couplings = 0.
   - `A` (FDM-only): MH on, `compute_complexity_features_v2(..., backend="fdm")`, `coupling_topo_3d=0`.
@@ -279,17 +284,17 @@
 **Результаты частот (n_runs=1000, seeds=[0..4], всего 5000 на режим).**
 
 - Mode `R`:
-  - `P(iso)=0.3334`, `P(n)=0.0024`, `P(neo)=0.6640`, `P(other)=0.0002`.
-  - `log(P(iso)/P(n))=4.9339`, `log(P(neo)/P(n))=5.6228`.
+  - `P(neo)=1.0000` (proposal-only форсированный рост даёт исключительно neo в текущей политике).
+  - `P(other)=0` (валдность tree-only).
 - Mode `A`:
-  - `P(iso)=0.2502`, `P(n)=0.0740`, `P(neo)=0.0400`, `P(other)=0.6358`.
-  - `log(P(iso)/P(n))=1.2182`, `log(P(neo)/P(n))=-0.6152`.
+  - `P(iso)=0.6848`, `P(n)=0.1572`, `P(neo)=0.1580`, `P(other)=0`.
+  - `log(P(iso)/P(n))=1.4716`, `log(P(neo)/P(n))=0.0051`.
 - Mode `B`:
-  - `P(iso)=0.2314`, `P(n)=0.0846`, `P(neo)=0.0492`, `P(other)=0.6348`.
-  - `log(P(iso)/P(n))=1.0062`, `log(P(neo)/P(n))=-0.5420`.
+  - `P(iso)=0.6714`, `P(n)=0.1670`, `P(neo)=0.1616`, `P(other)=0`.
+  - `log(P(iso)/P(n))=1.3914`, `log(P(neo)/P(n))=-0.0329`.
 - Mode `C`:
-  - `P(iso)=0.1666`, `P(n)=0.0780`, `P(neo)=0.0234`, `P(other)=0.7320`.
-  - `log(P(iso)/P(n))=0.7589`, `log(P(neo)/P(n))=-1.2040`.
+  - `P(iso)=0.6476`, `P(n)=0.2548`, `P(neo)=0.0976`, `P(other)=0`.
+  - `log(P(iso)/P(n))=0.9328`, `log(P(neo)/P(n))=-0.9596`.
 
 **Детерминированные эталоны (fixed adjacency; A/B/C).**
 
@@ -305,12 +310,14 @@
   - Mode `C`: `score(n)=4.2985`, `score(iso)=4.0804`, `score(neo)=3.1399`;
     `Δ(n-iso)=0.2180`, `Δ(n-neo)=1.1586`, `Δ(iso-neo)=0.9406`.
 
-**Вывод.**
+**Sign-check (что делает MH).**
 
-- В `R` (proposal-only) ростовой генератор сильно смещён к ветвлённым C5-деревьям (`neo >> iso >> n`).
-- В энергетике FDM/entanglement (A/B/C) детерминированные эталоны дают порядок `score(n) > score(iso) > score(neo)`,
-  но наблюдаемая частота топологий определяется не только энергией: доля `other` остаётся доминирующей в A/B/C,
-  а `n_pentane` в среднем редок по сравнению с `iso` (хотя в C `P(n)` уже близко к `P(iso)`).
+- В коде MH (`core/mh.py`) всегда принимается `ΔG<=0`, и для `ΔG>0` используется вероятность `exp(-ΔG/T)`.
+  С учётом `ΔG = coupling*(E_new - E_old)` и `E=compute_energy=complexity.total`, это означает:
+  **MH минимизирует score/energy** (меньший `score_total` считается стабильнее).
+- Для эталонов (A/B/C) это предсказывает порядок `neo > iso > n` в конвенции “min-score best”,
+  тогда как по частотам на tree-only состояниях наблюдается доминирование `iso` (и `neo` не доминирует).
+  Несостыковка “частоты/acceptance vs детерминированные score” сохраняется и требует отдельной калибровки/пересмотра proposal.
 
 ## [Spectral Lab v1] Эксперимент SL-1 (resolution scan)
 
