@@ -48,7 +48,7 @@ class ChemValidation1AConfig:
     seeds: Tuple[int, ...] = (0, 1, 2, 3, 4)
     modes: Tuple[str, ...] = ("R", "A", "B", "C")
     max_depth: int = 5
-    max_resample_attempts: int = 200
+    max_resample_attempts: int = 50
 
 
 def _make_thermo_for_mode(mode: str) -> ThermoConfig:
@@ -157,8 +157,8 @@ def _make_thermo_for_mode(mode: str) -> ThermoConfig:
             temperature_T=1.0,
             grower_use_mh=True,
             deltaG_backend="fdm_entanglement",
-            consume_port_on_reject=True,
-            max_attempts_per_port=1,
+            consume_port_on_reject=False,
+            max_attempts_per_port=50,
             grower_proposal_policy="uniform",
             proposal_beta=0.0,
             proposal_ports_gamma=0.0,
@@ -207,13 +207,13 @@ def _make_thermo_for_mode(mode: str) -> ThermoConfig:
             ws_integrator="fdm",
             ws_fdm_depth=base.ws_fdm_depth,
             ws_fdm_base=base.ws_fdm_base,
-            topo3d_prefilter_tree=False,
-            topo3d_prefilter_min_n=0,
+            topo3d_prefilter_tree=True,
+            topo3d_prefilter_min_n=10,
             temperature_T=1.0,
             grower_use_mh=True,
             deltaG_backend="fdm_entanglement",
-            consume_port_on_reject=True,
-            max_attempts_per_port=1,
+            consume_port_on_reject=False,
+            max_attempts_per_port=50,
             grower_proposal_policy="uniform",
             proposal_beta=0.0,
             proposal_ports_gamma=0.0,
@@ -262,13 +262,13 @@ def _make_thermo_for_mode(mode: str) -> ThermoConfig:
             ws_integrator="fdm",
             ws_fdm_depth=base.ws_fdm_depth,
             ws_fdm_base=base.ws_fdm_base,
-            topo3d_prefilter_tree=False,
-            topo3d_prefilter_min_n=0,
+            topo3d_prefilter_tree=True,
+            topo3d_prefilter_min_n=10,
             temperature_T=1.0,
             grower_use_mh=True,
             deltaG_backend="fdm_entanglement",
-            consume_port_on_reject=True,
-            max_attempts_per_port=1,
+            consume_port_on_reject=False,
+            max_attempts_per_port=50,
             grower_proposal_policy="uniform",
             proposal_beta=0.0,
             proposal_ports_gamma=0.0,
@@ -342,7 +342,9 @@ def _run_single_mode(cfg: ChemValidation1AConfig, mode: str) -> List[Dict[str, o
                 t0 = time.perf_counter()
                 mol = None
                 adj = None
-                for _ in range(int(cfg.max_resample_attempts)):
+                resample_attempts_used = 0
+                for attempt in range(int(cfg.max_resample_attempts)):
+                    resample_attempts_used = attempt + 1
                     candidate = grow_molecule_christmas_tree("C", params, rng=rng)
                     candidate_adj = candidate.adjacency_matrix()
                     if _is_connected_tree_with_valence_limit(
@@ -351,10 +353,10 @@ def _run_single_mode(cfg: ChemValidation1AConfig, mode: str) -> List[Dict[str, o
                         mol = candidate
                         adj = candidate_adj
                         break
-                dt = time.perf_counter() - t0
+                growth_sec = time.perf_counter() - t0
 
                 if mol is None or adj is None:
-                    # Hard fail-safe: should never happen with reasonable params.
+                    # Hard fail-safe: if MH/proposal can't complete a valid C5 tree in reasonable attempts.
                     adj = np.zeros((0, 0), dtype=float)
                     degrees = np.zeros((0,), dtype=int)
                     sorted_degrees = tuple()
@@ -386,7 +388,10 @@ def _run_single_mode(cfg: ChemValidation1AConfig, mode: str) -> List[Dict[str, o
                             "mh_proposals": mh_proposals,
                             "mh_accepted": mh_accepted,
                             "mh_accept_rate": mh_accept_rate,
-                            "runtime_sec": dt,
+                            "resample_attempts_used": resample_attempts_used,
+                            "runtime_growth_sec": growth_sec,
+                            "runtime_scoring_sec": 0.0,
+                            "runtime_total_sec": growth_sec,
                         }
                     )
                     continue
@@ -395,10 +400,10 @@ def _run_single_mode(cfg: ChemValidation1AConfig, mode: str) -> List[Dict[str, o
                 sorted_degrees = tuple(sorted(int(x) for x in degrees))
                 topology = classify_pentane_topology(sorted_degrees)
 
+                t1 = time.perf_counter()
                 feats_fdm = compute_complexity_features_v2(adj, backend="fdm")
-                feats_ent = compute_complexity_features_v2(
-                    adj, backend="fdm_entanglement"
-                )
+                feats_ent = compute_complexity_features_v2(adj, backend="fdm_entanglement")
+                scoring_sec = time.perf_counter() - t1
 
                 score_fdm = float(feats_fdm.total)
                 score_topo3d = float(feats_ent.total) - float(feats_fdm.total)
@@ -435,7 +440,10 @@ def _run_single_mode(cfg: ChemValidation1AConfig, mode: str) -> List[Dict[str, o
                         "mh_proposals": mh_proposals,
                         "mh_accepted": mh_accepted,
                         "mh_accept_rate": mh_accept_rate,
-                        "runtime_sec": dt,
+                        "resample_attempts_used": resample_attempts_used,
+                        "runtime_growth_sec": growth_sec,
+                        "runtime_scoring_sec": scoring_sec,
+                        "runtime_total_sec": growth_sec + scoring_sec,
                     }
                 )
     return rows
@@ -465,7 +473,10 @@ def run_chem_validation_1a(cfg: ChemValidation1AConfig) -> Tuple[Path, Path]:
         "mh_proposals",
         "mh_accepted",
         "mh_accept_rate",
-        "runtime_sec",
+        "resample_attempts_used",
+        "runtime_growth_sec",
+        "runtime_scoring_sec",
+        "runtime_total_sec",
     ]
     with open(csv_path, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=fieldnames)
@@ -477,6 +488,9 @@ def run_chem_validation_1a(cfg: ChemValidation1AConfig) -> Tuple[Path, Path]:
     lines.append("CHEM-VALIDATION-1A: C5 pentane skeleton (n/iso/neo)")
     lines.append("")
     lines.append(f"Config: n_runs={cfg.n_runs}, seeds={list(cfg.seeds)}, modes={list(cfg.modes)}")
+    lines.append(
+        f"ALKANE-VALIDITY-0: max_resample_attempts={cfg.max_resample_attempts}, tree-only, valence(C)<=4"
+    )
     lines.append("")
 
     for mode in cfg.modes:
@@ -487,6 +501,9 @@ def run_chem_validation_1a(cfg: ChemValidation1AConfig) -> Tuple[Path, Path]:
         topo_counts: Dict[str, int] = {}
         scores_by_topo: Dict[str, List[float]] = {}
         mh_by_topo: Dict[str, Tuple[int, int]] = {}
+        resamples: List[int] = []
+        growth_times: List[float] = []
+        scoring_times: List[float] = []
 
         for r in rows:
             topo = str(r["topology"])
@@ -496,6 +513,9 @@ def run_chem_validation_1a(cfg: ChemValidation1AConfig) -> Tuple[Path, Path]:
             a = int(r.get("mh_accepted", 0))
             old_p, old_a = mh_by_topo.get(topo, (0, 0))
             mh_by_topo[topo] = (old_p + p, old_a + a)
+            resamples.append(int(r.get("resample_attempts_used", 0)))
+            growth_times.append(float(r.get("runtime_growth_sec", 0.0)))
+            scoring_times.append(float(r.get("runtime_scoring_sec", 0.0)))
 
         total = sum(topo_counts.values()) or 1
         for topo in sorted(topo_counts.keys()):
@@ -527,6 +547,24 @@ def run_chem_validation_1a(cfg: ChemValidation1AConfig) -> Tuple[Path, Path]:
             lines.append(f"  log(P(neo)/P(n)) = {float(np.log(n_neo / n_n)):.4f}")
         else:
             lines.append("  log(P(neo)/P(n)) undefined (zero counts)")
+
+        if resamples:
+            arr = np.asarray(resamples, dtype=float)
+            lines.append(
+                f"  resample_attempts_used: mean={float(np.mean(arr)):.3f}, "
+                f"p90={float(np.percentile(arr, 90)):.1f}, p99={float(np.percentile(arr, 99)):.1f}"
+            )
+        if growth_times:
+            arr = np.asarray(growth_times, dtype=float)
+            lines.append(
+                f"  runtime_growth_sec: mean={float(np.mean(arr)):.4f}, p90={float(np.percentile(arr, 90)):.4f}"
+            )
+        if scoring_times:
+            arr = np.asarray(scoring_times, dtype=float)
+            lines.append(
+                f"  runtime_scoring_sec: mean={float(np.mean(arr)):.4f}, p90={float(np.percentile(arr, 90)):.4f}"
+            )
+
         lines.append("")
 
     lines.append("Deterministic reference scores (C5: path / iso / star)")
