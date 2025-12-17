@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import math
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -21,6 +22,7 @@ from core.thermo_config import ThermoConfig, override_thermo_config
 PENTANE_N_DEG: Tuple[int, ...] = (1, 1, 2, 2, 2)
 PENTANE_ISO_DEG: Tuple[int, ...] = (1, 1, 1, 2, 3)
 PENTANE_NEO_DEG: Tuple[int, ...] = (1, 1, 1, 1, 4)
+PENTANE_DEGENERACY: Dict[str, int] = {"n_pentane": 60, "isopentane": 60, "neopentane": 5}
 
 
 def classify_pentane_topology(sorted_degrees: Sequence[int]) -> str:
@@ -776,6 +778,72 @@ def run_chem_validation_1a(cfg: ChemValidation1AConfig) -> Tuple[Path, Path]:
         lines.append(
             f"  Mode {m}: P_tree(n)={p_n:.4f}, P_tree(iso)={p_i:.4f}, P_tree(neo)={p_neo:.4f}; observed order: "
             + " > ".join(obs_order)
+        )
+
+    lines.append("")
+
+    # CORE-1: degeneracy-aware predicted frequencies for tree-only unlabeled topologies.
+    lines.append("CORE-1: Degeneracy-aware predicted vs observed (tree-only)")
+    lines.append(
+        "  Model: P_pred(topo) ∝ g(topo) * exp(-coupling_delta_G * E_ref(topo) / temperature_T)"
+    )
+    lines.append(f"  g(topology)={PENTANE_DEGENERACY}")
+
+    def _safe_log(x: float) -> float:
+        if x <= 0.0:
+            return float("nan")
+        return float(math.log(x))
+
+    for mode in cfg.modes:
+        m = mode.upper()
+        if m not in {"A", "B", "C"}:
+            continue
+        thermo = _make_thermo_for_mode(m)
+        coupling = float(getattr(thermo, "coupling_delta_G", 1.0))
+        T = float(getattr(thermo, "temperature_T", 1.0))
+        beta = (coupling / T) if T > 0 else float("inf")
+
+        _, _, _, e_n = _score_parts_for_mode(m, adj_n)
+        _, _, _, e_i = _score_parts_for_mode(m, adj_iso)
+        _, _, _, e_neo = _score_parts_for_mode(m, adj_neo)
+
+        w_n = float(PENTANE_DEGENERACY["n_pentane"]) * math.exp(-beta * float(e_n))
+        w_i = float(PENTANE_DEGENERACY["isopentane"]) * math.exp(-beta * float(e_i))
+        w_neo = float(PENTANE_DEGENERACY["neopentane"]) * math.exp(-beta * float(e_neo))
+        z = w_n + w_i + w_neo
+        p_pred_n = w_n / z if z > 0 else 0.0
+        p_pred_i = w_i / z if z > 0 else 0.0
+        p_pred_neo = w_neo / z if z > 0 else 0.0
+
+        rows = by_mode.get(m, [])
+        topo_counts: Dict[str, int] = {}
+        for r in rows:
+            topo = str(r["topology"])
+            topo_counts[topo] = topo_counts.get(topo, 0) + 1
+        n_n = topo_counts.get("n_pentane", 0)
+        n_i = topo_counts.get("isopentane", 0)
+        n_neo = topo_counts.get("neopentane", 0)
+        denom = float(n_n + n_i + n_neo) or 1.0
+        p_obs_n = n_n / denom
+        p_obs_i = n_i / denom
+        p_obs_neo = n_neo / denom
+
+        lines.append(f"  [Mode {m}] coupling={coupling:.3f}, temperature_T={T:.3f}, beta={beta:.3f}")
+        lines.append(
+            f"    P_obs : n={p_obs_n:.4f}, iso={p_obs_i:.4f}, neo={p_obs_neo:.4f}"
+        )
+        lines.append(
+            f"    P_pred: n={p_pred_n:.4f}, iso={p_pred_i:.4f}, neo={p_pred_neo:.4f}"
+        )
+        lr_obs_iso = _safe_log(p_obs_i / p_obs_n) if p_obs_n > 0 else float("nan")
+        lr_pred_iso = _safe_log(p_pred_i / p_pred_n) if p_pred_n > 0 else float("nan")
+        lr_obs_neo = _safe_log(p_obs_neo / p_obs_n) if p_obs_n > 0 else float("nan")
+        lr_pred_neo = _safe_log(p_pred_neo / p_pred_n) if p_pred_n > 0 else float("nan")
+        lines.append(
+            f"    log(P(iso)/P(n)): obs={lr_obs_iso:.4f}, pred={lr_pred_iso:.4f}, Δ={float(lr_obs_iso - lr_pred_iso):.4f}"
+        )
+        lines.append(
+            f"    log(P(neo)/P(n)): obs={lr_obs_neo:.4f}, pred={lr_pred_neo:.4f}, Δ={float(lr_obs_neo - lr_pred_neo):.4f}"
         )
 
     summary_path = write_growth_txt("chem_validation_1a_pentane", lines)

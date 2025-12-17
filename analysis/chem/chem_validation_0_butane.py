@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import math
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,6 +21,7 @@ from core.thermo_config import ThermoConfig, override_thermo_config
 
 BUTANE_N_DEG: Tuple[int, ...] = (1, 1, 2, 2)
 BUTANE_ISO_DEG: Tuple[int, ...] = (1, 1, 1, 3)
+BUTANE_DEGENERACY: Dict[str, int] = {"n_butane": 12, "isobutane": 4}
 
 
 def classify_butane_topology(sorted_degrees: Sequence[int]) -> str:
@@ -610,6 +612,56 @@ def run_chem_validation_0(cfg: ChemValidation0Config) -> Tuple[Path, Path]:
         )
 
         lines.append("")
+
+    # CORE-1: degeneracy-aware predicted frequencies for tree-only unlabeled topologies.
+    lines.append("CORE-1: Degeneracy-aware predicted vs observed (tree-only)")
+    lines.append(
+        "  Model: P_pred(topo) ∝ g(topo) * exp(-coupling_delta_G * E_ref(topo) / temperature_T)"
+    )
+    lines.append(f"  g(topology)={BUTANE_DEGENERACY}")
+
+    def _safe_log(x: float) -> float:
+        if x <= 0.0:
+            return float("nan")
+        return float(math.log(x))
+
+    for mode in sorted(by_mode.keys()):
+        m = mode.upper()
+        if m not in {"A", "B", "C"}:
+            continue
+        thermo = _make_thermo_for_mode(m)
+        coupling = float(getattr(thermo, "coupling_delta_G", 1.0))
+        T = float(getattr(thermo, "temperature_T", 1.0))
+        beta = (coupling / T) if T > 0 else float("inf")
+
+        e_n = _score_for_mode(m, adj_path)
+        e_iso = _score_for_mode(m, adj_star)
+        w_n = float(BUTANE_DEGENERACY["n_butane"]) * math.exp(-beta * float(e_n))
+        w_iso = float(BUTANE_DEGENERACY["isobutane"]) * math.exp(-beta * float(e_iso))
+        z = w_n + w_iso
+        p_pred_n = w_n / z if z > 0 else 0.0
+        p_pred_iso = w_iso / z if z > 0 else 0.0
+
+        topo_counts: Dict[str, int] = {}
+        for r in by_mode.get(m, []):
+            topo = str(r["topology"])
+            topo_counts[topo] = topo_counts.get(topo, 0) + 1
+        n_n = topo_counts.get("n_butane", 0)
+        n_iso = topo_counts.get("isobutane", 0)
+        denom = float(n_n + n_iso) or 1.0
+        p_obs_n = n_n / denom
+        p_obs_iso = n_iso / denom
+
+        lines.append(f"  [Mode {m}] coupling={coupling:.3f}, temperature_T={T:.3f}, beta={beta:.3f}")
+        lines.append(f"    P_obs : n={p_obs_n:.4f}, iso={p_obs_iso:.4f}")
+        lines.append(f"    P_pred: n={p_pred_n:.4f}, iso={p_pred_iso:.4f}")
+        lr_obs = _safe_log(p_obs_iso / p_obs_n) if p_obs_n > 0 else float("nan")
+        lr_pred = _safe_log(p_pred_iso / p_pred_n) if p_pred_n > 0 else float("nan")
+        lines.append(
+            f"    log(P(iso)/P(n)): obs={lr_obs:.4f}, pred={lr_pred:.4f}, Δ={float(lr_obs - lr_pred):.4f}"
+        )
+
+    lines.append("")
 
     summary_path = write_growth_txt("chem_validation_0_butane", lines)
     return csv_path, summary_path

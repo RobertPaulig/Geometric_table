@@ -326,6 +326,14 @@
   тогда как по частотам на tree-only состояниях наблюдается доминирование `iso` (и `neo` не доминирует).
   Несостыковка “частоты/acceptance vs детерминированные score” сохраняется и требует отдельной калибровки/пересмотра proposal.
 
+**CORE-1 (degeneracy-aware прогноз частот).**
+
+- Для tree-only изомеров частоты определяются не только энергией, но и дегенерацией по разметкам (числом labeled-скелетов) `g(topology)`.
+- В отчётах `chem_validation_0_butane.py` и `chem_validation_1a_pentane.py` добавлен блок:
+  - `P_pred(topology) ∝ g(topology) * exp(-coupling_delta_G * E_ref(topology) / temperature_T)`,
+  - сравнение `P_pred` с наблюдаемыми `P_obs` и разности по `log(P(iso)/P(n))` (и `log(P(neo)/P(n))` для C5).
+  - референсные дегенерации: C4 `g(n)=12`, `g(iso)=4`; C5 `g(n)=60`, `g(iso)=60`, `g(neo)=5`.
+
 ## [Spectral Lab v1] Эксперимент SL-1 (resolution scan)
 
 **Решение.**
