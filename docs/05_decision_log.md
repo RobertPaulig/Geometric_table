@@ -260,18 +260,19 @@
 - Скрипт: `analysis/chem/chem_validation_1a_pentane.py`.
 - Режим роста: `grow_molecule_christmas_tree` с параметрами
   `stop_at_n_atoms=5`, `allowed_symbols=["C"]`, `max_depth=5`.
-- ALKANE-VALIDITY-0 (жёсткая валидность proposal):
-  - принимаются только connected tree на 5 атомов (1 компонента, `m=n-1`, cyclomatic=0),
-  - валентность C ограничена `deg<=4`,
-  - рост форсирован до 5 атомов (`p_continue_base=1`, без роль- и χ-деформаций),
-  - при необходимости выполняется resample до валидного C5 (лимит `max_resample_attempts`).
+- ALKANE-VALIDITY-0 (конструктивная валидность, без rejection-sampling по траектории):
+  - в `core/grower.py` добавлен флаг `GrowthParams.enforce_tree_alkane=True`,
+    который строит **связный tree-only** C-скелетон (ровно 1 ребро на новый атом, без циклов) с валентностью `deg(C)<=4`;
+  - при `stop_at_n_atoms=5` всегда получается валидный C5-алкановый каркас, поэтому `P(other)=0` и `resample_attempts_used==1`.
 - Терморежимы (абляции, через `override_thermo_config`):
   - `R` (proposal-only): `grower_use_mh=False`, все couplings = 0.
   - `A` (FDM-only): MH on, `compute_complexity_features_v2(..., backend="fdm")`, `coupling_topo_3d=0`.
   - `B` (FDM + topo3d): как `A` + `compute_complexity_features_v2(..., backend="fdm_entanglement")`, `coupling_topo_3d=1`.
   - `C` (FDM + topo3d + shape): как `B` + `coupling_shape_softness=1`, `coupling_shape_chi=1` (shape-часть пока R&D-заглушка в отчёте, `score_shape=0`).
+- SPEED-FIX-1: для `B/C` включён topo3d prefilter на деревьях/малых n (`topo3d_prefilter_tree=True`, `topo3d_prefilter_min_n=10`), чтобы не запускать layout/entanglement на C5-деревьях.
+- PROGRESS-UX-1: добавлен `analysis/utils/progress.py` и флаг `--progress` (default=True) для отображения прогресса (tqdm или fallback “N/Total”).
 - Запуск CHEM-VALIDATION-1A (полный):
-  - `python -m analysis.chem.chem_validation_1a_pentane --n_runs 1000 --seeds 0 1 2 3 4 --modes R A B C`.
+  - `python -m analysis.chem.chem_validation_1a_pentane --n_runs 1000 --seeds 0 1 2 3 4 --modes R A B C --progress`.
   - артефакты (git-ignored): `results/chem_validation_1a_pentane.csv`, `results/chem_validation_1a_pentane.txt`.
 
 **Классификация топологий (degree multiset).**
@@ -281,20 +282,26 @@
 - `deg_sorted = [1,1,1,1,4]` → `topology="neopentane"`.
 - иначе → `topology="other"`.
 
-**Результаты частот (n_runs=1000, seeds=[0..4], всего 5000 на режим).**
+**Результаты частот (n_runs=1000, seeds=[0..4], всего 5000 на режим; tree-only, `other=0`).**
 
 - Mode `R`:
-  - `P(neo)=1.0000` (proposal-only форсированный рост даёт исключительно neo в текущей политике).
-  - `P(other)=0` (валдность tree-only).
+  - `P(iso)=0.5762`, `P(n)=0.3372`, `P(neo)=0.0866`.
+  - `log(P(iso)/P(n))=0.5358`, `log(P(neo)/P(n))=-1.3594`.
 - Mode `A`:
-  - `P(iso)=0.6848`, `P(n)=0.1572`, `P(neo)=0.1580`, `P(other)=0`.
-  - `log(P(iso)/P(n))=1.4716`, `log(P(neo)/P(n))=0.0051`.
+  - `P(iso)=0.5790`, `P(n)=0.3394`, `P(neo)=0.0816`.
+  - `log(P(iso)/P(n))=0.5341`, `log(P(neo)/P(n))=-1.4254`.
 - Mode `B`:
-  - `P(iso)=0.6714`, `P(n)=0.1670`, `P(neo)=0.1616`, `P(other)=0`.
-  - `log(P(iso)/P(n))=1.3914`, `log(P(neo)/P(n))=-0.0329`.
+  - `P(iso)=0.5720`, `P(n)=0.3364`, `P(neo)=0.0916`.
+  - `log(P(iso)/P(n))=0.5308`, `log(P(neo)/P(n))=-1.3009`.
 - Mode `C`:
-  - `P(iso)=0.6476`, `P(n)=0.2548`, `P(neo)=0.0976`, `P(other)=0`.
-  - `log(P(iso)/P(n))=0.9328`, `log(P(neo)/P(n))=-0.9596`.
+  - `P(iso)=0.5810`, `P(n)=0.3336`, `P(neo)=0.0854`.
+  - `log(P(iso)/P(n))=0.5548`, `log(P(neo)/P(n))=-1.3626`.
+
+**Производительность/тайминги (полный прогон 20k runs).**
+
+- `elapsed_sec ≈ 43.1`, `runs_done=20000`.
+- `resample_attempts_used`: mean=1.000, p90=1, p99=1 (конструктивный генератор).
+- CSV содержит честные тайминги: `t_growth_sec`, `t_scoring_sec`, `t_total_sec`.
 
 **Детерминированные эталоны (fixed adjacency; A/B/C).**
 
