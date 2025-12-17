@@ -10,6 +10,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 import numpy as np
 
 from analysis.io_utils import results_path
+from analysis.utils.progress import progress_iter
 from analysis.growth.rng import make_rng
 from analysis.growth.reporting import write_growth_txt
 from core.complexity import compute_complexity_features_v2
@@ -48,7 +49,8 @@ class ChemValidation1AConfig:
     seeds: Tuple[int, ...] = (0, 1, 2, 3, 4)
     modes: Tuple[str, ...] = ("R", "A", "B", "C")
     max_depth: int = 5
-    max_resample_attempts: int = 50
+    max_resample_attempts: int = 1
+    progress: bool = True
 
 
 def _make_thermo_for_mode(mode: str) -> ThermoConfig:
@@ -326,6 +328,7 @@ def _run_single_mode(cfg: ChemValidation1AConfig, mode: str) -> List[Dict[str, o
                 max_atoms=12,
                 stop_at_n_atoms=5,
                 allowed_symbols=["C"],
+                enforce_tree_alkane=True,
                 p_continue_base=1.0,
                 chi_sensitivity=0.0,
                 role_bonus_hub=0.0,
@@ -340,23 +343,13 @@ def _run_single_mode(cfg: ChemValidation1AConfig, mode: str) -> List[Dict[str, o
                 # - valence(C) <= 4
                 # - implicit "leaf-add" growth since it's a tree build
                 t0 = time.perf_counter()
-                mol = None
-                adj = None
-                resample_attempts_used = 0
-                for attempt in range(int(cfg.max_resample_attempts)):
-                    resample_attempts_used = attempt + 1
-                    candidate = grow_molecule_christmas_tree("C", params, rng=rng)
-                    candidate_adj = candidate.adjacency_matrix()
-                    if _is_connected_tree_with_valence_limit(
-                        candidate_adj, max_valence=4, expected_n=5
-                    ):
-                        mol = candidate
-                        adj = candidate_adj
-                        break
+                resample_attempts_used = 1
+                mol = grow_molecule_christmas_tree("C", params, rng=rng)
+                adj = mol.adjacency_matrix()
                 growth_sec = time.perf_counter() - t0
 
-                if mol is None or adj is None:
-                    # Hard fail-safe: if MH/proposal can't complete a valid C5 tree in reasonable attempts.
+                if adj.shape != (5, 5):
+                    # Hard fail-safe: enforce_tree_alkane should always return 5 atoms here.
                     adj = np.zeros((0, 0), dtype=float)
                     degrees = np.zeros((0,), dtype=int)
                     sorted_degrees = tuple()
@@ -389,9 +382,9 @@ def _run_single_mode(cfg: ChemValidation1AConfig, mode: str) -> List[Dict[str, o
                             "mh_accepted": mh_accepted,
                             "mh_accept_rate": mh_accept_rate,
                             "resample_attempts_used": resample_attempts_used,
-                            "runtime_growth_sec": growth_sec,
-                            "runtime_scoring_sec": 0.0,
-                            "runtime_total_sec": growth_sec,
+                            "t_growth_sec": growth_sec,
+                            "t_scoring_sec": 0.0,
+                            "t_total_sec": growth_sec,
                         }
                     )
                     continue
@@ -441,20 +434,137 @@ def _run_single_mode(cfg: ChemValidation1AConfig, mode: str) -> List[Dict[str, o
                         "mh_accepted": mh_accepted,
                         "mh_accept_rate": mh_accept_rate,
                         "resample_attempts_used": resample_attempts_used,
-                        "runtime_growth_sec": growth_sec,
-                        "runtime_scoring_sec": scoring_sec,
-                        "runtime_total_sec": growth_sec + scoring_sec,
+                        "t_growth_sec": growth_sec,
+                        "t_scoring_sec": scoring_sec,
+                        "t_total_sec": growth_sec + scoring_sec,
                     }
                 )
     return rows
 
 
 def run_chem_validation_1a(cfg: ChemValidation1AConfig) -> Tuple[Path, Path]:
+    t_start = time.perf_counter()
     all_rows: List[Dict[str, object]] = []
     by_mode: Dict[str, List[Dict[str, object]]] = {}
+
+    total_runs = int(cfg.n_runs) * len(cfg.seeds) * len(cfg.modes)
+    run_plan: List[Tuple[str, int, int]] = []
     for mode in cfg.modes:
-        mode = mode.upper()
-        rows = _run_single_mode(cfg, mode)
+        for seed in cfg.seeds:
+            for run_idx in range(cfg.n_runs):
+                run_plan.append((str(mode).upper(), int(seed), int(run_idx)))
+
+    rows_by_mode: Dict[str, List[Dict[str, object]]] = {m.upper(): [] for m in cfg.modes}
+    rng_by_mode_seed: Dict[Tuple[str, int], np.random.Generator] = {}
+    for mode in cfg.modes:
+        m = str(mode).upper()
+        for seed in cfg.seeds:
+            base_rng = make_rng(f"chem_validation_1a_pentane_{m}_{seed}")
+            rng_by_mode_seed[(m, int(seed))] = np.random.default_rng(
+                base_rng.integers(0, 2**32 - 1)
+            )
+
+    current_mode: Optional[str] = None
+    current_ctx = None
+    current_thermo: Optional[ThermoConfig] = None
+
+    for mode, seed, run_idx in progress_iter(
+        run_plan, total=total_runs, desc="CHEM-VALIDATION-1A", enabled=bool(cfg.progress)
+    ):
+        if mode != current_mode:
+            if current_ctx is not None:
+                current_ctx.__exit__(None, None, None)
+            current_mode = mode
+            current_thermo = _make_thermo_for_mode(mode)
+            current_ctx = override_thermo_config(current_thermo)
+            current_ctx.__enter__()
+
+        rng = rng_by_mode_seed[(mode, seed)]
+        params = GrowthParams(
+            max_depth=cfg.max_depth,
+            max_atoms=12,
+            stop_at_n_atoms=5,
+            allowed_symbols=["C"],
+            enforce_tree_alkane=True,
+            p_continue_base=1.0,
+            chi_sensitivity=0.0,
+            role_bonus_hub=0.0,
+            role_penalty_terminator=0.0,
+            temperature=1.0,
+        )
+
+        t0 = time.perf_counter()
+        mol = grow_molecule_christmas_tree("C", params, rng=rng)
+        adj = mol.adjacency_matrix()
+        growth_sec = time.perf_counter() - t0
+
+        if adj.shape != (5, 5):
+            degrees = np.zeros((0,), dtype=int)
+            sorted_degrees: Tuple[int, ...] = tuple()
+            topology = "other"
+            feats_fdm = compute_complexity_features_v2(adj, backend="fdm")
+            feats_ent = compute_complexity_features_v2(adj, backend="fdm_entanglement")
+            score_fdm = float(feats_fdm.total)
+            score_topo3d = float(feats_ent.total) - float(feats_fdm.total)
+            score_shape = 0.0
+            total_score = score_fdm + score_topo3d + score_shape
+            mh_proposals = 0
+            mh_accepted = 0
+            mh_accept_rate = 0.0
+            scoring_sec = 0.0
+        else:
+            degrees = np.asarray(adj.sum(axis=1), dtype=int)
+            sorted_degrees = tuple(sorted(int(x) for x in degrees))
+            topology = classify_pentane_topology(sorted_degrees)
+
+            t1 = time.perf_counter()
+            feats_fdm = compute_complexity_features_v2(adj, backend="fdm")
+            feats_ent = compute_complexity_features_v2(adj, backend="fdm_entanglement")
+            scoring_sec = time.perf_counter() - t1
+
+            score_fdm = float(feats_fdm.total)
+            score_topo3d = float(feats_ent.total) - float(feats_fdm.total)
+            score_shape = 0.0
+            if mode == "R":
+                total_score = score_fdm
+            else:
+                total_score = score_fdm + score_topo3d + score_shape
+
+            mh_stats = getattr(mol, "mh_stats", None)
+            if isinstance(mh_stats, dict):
+                mh_proposals = int(mh_stats.get("proposals", 0))
+                mh_accepted = int(mh_stats.get("accepted", 0))
+            else:
+                mh_proposals = 0
+                mh_accepted = 0
+            mh_accept_rate = (mh_accepted / float(mh_proposals)) if mh_proposals > 0 else 0.0
+
+        rows_by_mode[mode].append(
+            {
+                "mode": mode,
+                "seed": seed,
+                "run_idx": run_idx,
+                "n_atoms": int(adj.shape[0]),
+                "topology": topology,
+                "deg_sorted": str(list(sorted_degrees)),
+                "score_fdm": score_fdm,
+                "score_topo3d": score_topo3d,
+                "score_shape": score_shape,
+                "score_total": float(total_score),
+                "mh_proposals": mh_proposals,
+                "mh_accepted": mh_accepted,
+                "mh_accept_rate": float(mh_accept_rate),
+                "resample_attempts_used": 1,
+                "t_growth_sec": float(growth_sec),
+                "t_scoring_sec": float(scoring_sec),
+                "t_total_sec": float(growth_sec + scoring_sec),
+            }
+        )
+
+    if current_ctx is not None:
+        current_ctx.__exit__(None, None, None)
+
+    for mode, rows in rows_by_mode.items():
         by_mode[mode] = rows
         all_rows.extend(rows)
 
@@ -474,9 +584,9 @@ def run_chem_validation_1a(cfg: ChemValidation1AConfig) -> Tuple[Path, Path]:
         "mh_accepted",
         "mh_accept_rate",
         "resample_attempts_used",
-        "runtime_growth_sec",
-        "runtime_scoring_sec",
-        "runtime_total_sec",
+        "t_growth_sec",
+        "t_scoring_sec",
+        "t_total_sec",
     ]
     with open(csv_path, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=fieldnames)
@@ -489,8 +599,10 @@ def run_chem_validation_1a(cfg: ChemValidation1AConfig) -> Tuple[Path, Path]:
     lines.append("")
     lines.append(f"Config: n_runs={cfg.n_runs}, seeds={list(cfg.seeds)}, modes={list(cfg.modes)}")
     lines.append(
-        f"ALKANE-VALIDITY-0: max_resample_attempts={cfg.max_resample_attempts}, tree-only, valence(C)<=4"
+        "ALKANE-VALIDITY-0: constructive tree-only proposal (no per-run grower resample), valence(C)<=4"
     )
+    elapsed_sec = time.perf_counter() - t_start
+    lines.append(f"elapsed_sec={elapsed_sec:.3f}, runs_done={len(all_rows)}")
     lines.append("")
 
     for mode in cfg.modes:
@@ -514,8 +626,8 @@ def run_chem_validation_1a(cfg: ChemValidation1AConfig) -> Tuple[Path, Path]:
             old_p, old_a = mh_by_topo.get(topo, (0, 0))
             mh_by_topo[topo] = (old_p + p, old_a + a)
             resamples.append(int(r.get("resample_attempts_used", 0)))
-            growth_times.append(float(r.get("runtime_growth_sec", 0.0)))
-            scoring_times.append(float(r.get("runtime_scoring_sec", 0.0)))
+            growth_times.append(float(r.get("t_growth_sec", 0.0)))
+            scoring_times.append(float(r.get("t_scoring_sec", 0.0)))
 
         total = sum(topo_counts.values()) or 1
         for topo in sorted(topo_counts.keys()):
@@ -557,12 +669,12 @@ def run_chem_validation_1a(cfg: ChemValidation1AConfig) -> Tuple[Path, Path]:
         if growth_times:
             arr = np.asarray(growth_times, dtype=float)
             lines.append(
-                f"  runtime_growth_sec: mean={float(np.mean(arr)):.4f}, p90={float(np.percentile(arr, 90)):.4f}"
+                f"  t_growth_sec: mean={float(np.mean(arr)):.4f}, p90={float(np.percentile(arr, 90)):.4f}"
             )
         if scoring_times:
             arr = np.asarray(scoring_times, dtype=float)
             lines.append(
-                f"  runtime_scoring_sec: mean={float(np.mean(arr)):.4f}, p90={float(np.percentile(arr, 90)):.4f}"
+                f"  t_scoring_sec: mean={float(np.mean(arr)):.4f}, p90={float(np.percentile(arr, 90)):.4f}"
             )
 
         lines.append("")
@@ -690,12 +802,19 @@ def _parse_args(argv: Optional[Sequence[str]] = None) -> ChemValidation1AConfig:
         help="Ablation modes: R (proposal-only), A (FDM), B (FDM+topo3d), C (FDM+topo3d+shape).",
     )
     parser.add_argument("--max_depth", type=int, default=5, help="Max depth for grower.")
+    parser.add_argument(
+        "--progress",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Show progress bar / periodic progress output.",
+    )
     args = parser.parse_args(argv)
     return ChemValidation1AConfig(
         n_runs=int(args.n_runs),
         seeds=tuple(int(x) for x in args.seeds),
         modes=tuple(str(m).upper() for m in args.modes),
         max_depth=int(args.max_depth),
+        progress=bool(args.progress),
     )
 
 

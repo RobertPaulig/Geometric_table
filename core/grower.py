@@ -32,6 +32,10 @@ class GrowthParams:
     # Опциональный список допустимых символов для роста; если None,
     # используется стандартный пул candidate_pool (legacy-поведение).
     allowed_symbols: Optional[List[str]] = None
+    # ALKANE-VALIDITY-0: конструктивный режим для tree-only алканов (C-skelteton).
+    # Если True, grower строит связное дерево без циклов и с valence(C)<=4,
+    # гарантируя достижение stop_at_n_atoms (если задан).
+    enforce_tree_alkane: bool = False
     # --- CY-1: loopy-режим (R&D QSG v6.x) ---
     allow_cycles: bool = False
     max_extra_bonds: int = 0      # сколько "добавочных" рёбер максимум
@@ -193,6 +197,69 @@ def grow_molecule_christmas_tree(
     temperature_T = float(getattr(thermo, "temperature_T", 1.0))
     always_accept = coupling_delta_G == 0.0 or temperature_T >= 1e8
     cached_energy: Optional[float] = None
+
+    # ALKANE-VALIDITY-0: fast constructive tree-only alkane skeleton generator.
+    if bool(getattr(params, "enforce_tree_alkane", False)) and params.stop_at_n_atoms is not None:
+        target_n = int(params.stop_at_n_atoms)
+        # Only enforce for pure-carbon skeletons.
+        if params.allowed_symbols is None or list(params.allowed_symbols) != ["C"]:
+            raise ValueError("enforce_tree_alkane=True requires allowed_symbols=['C']")
+        if root_symbol != "C":
+            raise ValueError("enforce_tree_alkane=True currently supports root_symbol='C' only")
+
+        max_valence = 4
+        max_attempts_per_atom = max(1, int(getattr(thermo, "max_attempts_per_port", 50)))
+
+        while len(mol.atoms) < target_n:
+            # Pick a parent with available valence.
+            degrees = [0] * len(mol.atoms)
+            for i, j in mol.bonds:
+                degrees[int(i)] += 1
+                degrees[int(j)] += 1
+            candidates = [i for i, d in enumerate(degrees) if d < max_valence]
+            if not candidates:
+                break
+            parent_idx = int(rng.choice(candidates))
+
+            attempts_left = max_attempts_per_atom
+            while attempts_left > 0:
+                attempts_left -= 1
+
+                # Propose adding a new carbon leaf.
+                if getattr(thermo, "grower_use_mh", False):
+                    coupling = float(getattr(thermo, "coupling_delta_G", 1.0))
+                    T = float(getattr(thermo, "temperature_T", 1.0))
+                    mh_stats["proposals"] += 1
+
+                    if not (coupling == 0.0 or T >= 1e8):
+                        if cached_energy is None:
+                            cached_energy = compute_energy(mol, thermo)
+                        proposed_atoms = list(mol.atoms)
+                        proposed_bonds = list(mol.bonds)
+                        child_idx_prop = len(proposed_atoms)
+                        proposed_atoms.append("C")
+                        proposed_bonds.append((parent_idx, child_idx_prop))
+                        proposed_mol = Molecule(
+                            name=mol.name, atoms=proposed_atoms, bonds=proposed_bonds
+                        )
+                        e_new = compute_energy(proposed_mol, thermo)
+                        deltaG = coupling * float(e_new - cached_energy)
+                        if not mh_accept(deltaG, thermo, rng):
+                            mh_stats["rejected"] += 1
+                            continue
+                        cached_energy = e_new
+                    mh_stats["accepted"] += 1
+
+                # Accept (MH disabled or MH accepted).
+                child_idx = add_atom_to_mol("C")
+                mol.bonds.append((parent_idx, child_idx))
+                break
+
+        try:
+            mol.mh_stats = dict(mh_stats)
+        except Exception:
+            pass
+        return mol
 
     # Candidate atoms for growth (simplified subset of common elements)
     if params.allowed_symbols is not None and len(params.allowed_symbols) > 0:
