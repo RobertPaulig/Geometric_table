@@ -34,14 +34,19 @@ def _tree_centers(adj_list: List[List[int]]) -> List[int]:
     return leaves if leaves else [0]
 
 
-def _rooted_ahu_encoding(
-    root: int, parent: int, adj_list: List[List[int]], labels: Dict[int, str]
-) -> str:
-    children = [v for v in adj_list[root] if v != parent]
-    encs = [_rooted_ahu_encoding(v, root, adj_list, labels) for v in children]
+def _rooted_ahu_code(
+    root: int, parent: int, adj_list: Sequence[Sequence[int]], labels: Dict[int, Tuple]
+) -> Tuple:
+    """
+    AHU code for rooted trees as a nested tuple (much cheaper than string encoding).
+
+    The empty tuple represents a leaf. Internal nodes are tuples of child codes, sorted.
+    """
+    children = [int(v) for v in adj_list[int(root)] if int(v) != int(parent)]
+    encs = [_rooted_ahu_code(v, root, adj_list, labels) for v in children]
     encs.sort()
-    code = "(" + "".join(encs) + ")"
-    labels[root] = code
+    code = tuple(encs)
+    labels[int(root)] = code
     return code
 
 
@@ -60,22 +65,24 @@ def canonical_tree_permutation(adj_list: Sequence[Sequence[int]]) -> List[int]:
 
     best_root = int(centers[0])
     best_code = None
-    best_labels: Dict[int, str] = {}
+    best_labels: Dict[int, Tuple] = {}
     for c in centers:
-        labels: Dict[int, str] = {}
-        code = _rooted_ahu_encoding(int(c), -1, adj_list_local, labels)
+        labels: Dict[int, Tuple] = {}
+        code = _rooted_ahu_code(int(c), -1, adj_list_local, labels)
         if best_code is None or code < best_code:
             best_code = code
             best_root = int(c)
             best_labels = labels
 
     perm: List[int] = []
-    queue: List[Tuple[int, int]] = [(best_root, -1)]
+    from collections import deque
+
+    queue: deque[Tuple[int, int]] = deque([(best_root, -1)])
     while queue:
-        u, parent = queue.pop(0)
+        u, parent = queue.popleft()
         perm.append(int(u))
         children = [int(v) for v in adj_list_local[int(u)] if int(v) != int(parent)]
-        children.sort(key=lambda x: best_labels.get(int(x), ""))
+        children.sort(key=lambda x: best_labels.get(int(x), ()))
         for v in children:
             queue.append((int(v), int(u)))
 

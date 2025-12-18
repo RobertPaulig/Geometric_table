@@ -111,6 +111,8 @@ class BenchRow:
     N: int
     t_fdm_dense_mean: float
     t_fdm_opt_mean: float
+    t_fdm_raw_mean: float
+    canon_overhead_mean: float
     speedup_mean: float
 
 
@@ -136,6 +138,8 @@ def main() -> None:
                 "n_samples",
                 "t_fdm_dense_mean",
                 "t_fdm_opt_mean",
+                "t_fdm_raw_mean",
+                "canon_overhead_mean",
                 "speedup_mean",
             ],
         )
@@ -144,6 +148,7 @@ def main() -> None:
         for n in n_values:
             t_dense: List[float] = []
             t_opt: List[float] = []
+            t_raw: List[float] = []
             for _ in range(n_trees):
                 adj = _random_tree_adj(int(n), rng)
 
@@ -155,9 +160,15 @@ def main() -> None:
                 _ = compute_fdm_complexity(adj, canonicalize_tree=True)
                 t_opt.append(time.perf_counter() - t1)
 
+                t2 = time.perf_counter()
+                _ = compute_fdm_complexity(adj, canonicalize_tree=False)
+                t_raw.append(time.perf_counter() - t2)
+
             dense_mean = float(np.mean(np.asarray(t_dense)))
             opt_mean = float(np.mean(np.asarray(t_opt)))
+            raw_mean = float(np.mean(np.asarray(t_raw)))
             speedup = (dense_mean / opt_mean) if opt_mean > 0 else float("inf")
+            canon_overhead = ((opt_mean - raw_mean) / opt_mean) if opt_mean > 0 else 0.0
 
             w.writerow(
                 {
@@ -165,15 +176,28 @@ def main() -> None:
                     "n_samples": int(n_trees),
                     "t_fdm_dense_mean": dense_mean,
                     "t_fdm_opt_mean": opt_mean,
+                    "t_fdm_raw_mean": raw_mean,
+                    "canon_overhead_mean": canon_overhead,
                     "speedup_mean": speedup,
                 }
             )
 
-            rows.append(BenchRow(N=int(n), t_fdm_dense_mean=dense_mean, t_fdm_opt_mean=opt_mean, speedup_mean=speedup))
+            rows.append(
+                BenchRow(
+                    N=int(n),
+                    t_fdm_dense_mean=dense_mean,
+                    t_fdm_opt_mean=opt_mean,
+                    t_fdm_raw_mean=raw_mean,
+                    canon_overhead_mean=canon_overhead,
+                    speedup_mean=speedup,
+                )
+            )
 
             lines.append(f"[N={int(n)}]")
             lines.append(f"  dense_mean_sec={dense_mean:.6f}")
             lines.append(f"  opt_mean_sec={opt_mean:.6f}")
+            lines.append(f"  raw_mean_sec={raw_mean:.6f}")
+            lines.append(f"  canon_overhead_mean={(100.0 * canon_overhead):.2f}%")
             lines.append(f"  speedup_mean={speedup:.2f}x")
             lines.append("")
 

@@ -67,7 +67,7 @@ def compute_fdm_complexity(
 
     if canonicalize_tree:
         try:
-            m = int(np.sum(adj_matrix) // 2)
+            m = int(sum(len(nei) for nei in adj_list) // 2)
             if m == n - 1:
                 # Confirm connectivity (should hold for trees, but be safe).
                 seen = [False] * n
