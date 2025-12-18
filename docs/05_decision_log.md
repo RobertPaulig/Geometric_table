@@ -437,6 +437,101 @@
 
 - В отчёте печатаются `λ*`, `KL_min`, `P_obs` vs `P_pred(λ*)` и Δlog-отношения относительно `n_hexane`.
 
+**Наблюдение (красный флаг).**
+
+- В CHEM-VALIDATION-1B наблюдается `KL(P_obs||P_pred) ~ 0.09–0.11` и слабая зависимость частот от режимов `R/A/B/C`.
+- Это несовместимо с интерпретацией `P_obs` как equilibrium-распределения по топологиям при фиксированном `N=6`:
+  - после [LABEL-INVARIANCE-1] энергия для tree-only стала функцией **топологии**,
+  - значит семейство `P_eq(topo;λ) ∝ g(topo) * exp(-λ E(topo)/T)` должно описывать равновесие (при корректном fixed-N sampler’е).
+- Следствие: ростовой процесс (growth) даёт **kernel-biased proposal distribution** `Q(topology)` и не является корректным fixed-N sampler’ом по финальным деревьям.
+
+## [MH-KERNEL-3] C6 exact baseline (Prüfer) + fixed-N MCMC vs growth
+
+**Решение.**
+
+- Для `N=6` введён exact baseline по labeled деревьям (через Prüfer, всего `6^(6-2)=1296`) с фильтром алкан-валидности `deg<=4` (остаётся `1290`):
+  - `analysis/chem/mh_kernel_3_c6_exact.py`: считает `P_exact(state) ∝ exp(-λ E(state)/T)` и агрегирует до `P_exact(topology)` (Mode A).
+- Введён fixed-N MCMC на деревьях `N=6` с move `leaf-rewire` + Hastings и ограничением `deg<=4`:
+  - `analysis/chem/mh_kernel_3_c6_mcmc.py`: считает `P_mcmc(topology)` и печатает `KL(P_mcmc||P_exact)`.
+- Сделано сравнение `P_obs_growth` (из CHEM-VALIDATION-1B) vs `P_mcmc` vs `P_exact`, плюс контроль `P_pred(λ)` (CORE-2).
+
+**Результаты (Mode A, N=6).**
+
+- Энергетическая модель (после LABEL-INVARIANCE-1) согласована с exact:
+  - `P_pred ≈ P_exact` (по топологиям).
+- MCMC корректен:
+  - `KL(P_mcmc||P_exact) ≈ 1.6e-4`.
+- Growth-частоты не равновесные:
+  - `KL(P_obs_growth||P_exact) ≈ 0.096`,
+  - `P_obs_growth` почти не меняется между `R/A/B/C` → доминирует **kernel bias** ростового процесса.
+
+**Вывод.**
+
+- Частоты топологий, полученные “по финальным деревьям” из growth, нельзя интерпретировать как термодинамические.
+- Growth остаётся как диагностический слой для `Q(topology)` (proposal/kernal bias), а equilibrium оценивается fixed-N MCMC (или exact там, где возможно).
+
+## [TIMING-UX-1] Wall-clock + breakdown (growth/scoring/io)
+
+**Решение.**
+
+- Введена общая утилита тайминга `analysis/utils/timing.py`:
+  - `now_iso()`, `format_sec(x)`, контекст `timed(name, acc)`.
+- Скрипты CHEM-VALIDATION / MH-KERNEL / benches печатают финальные строки:
+  - `Wall-clock: start=<...> end=<...> elapsed_total_sec=<...>`
+  - `Breakdown: growth=<...> scoring=<...> io=<...>` (где применимо),
+  - и записывают эти значения в TXT-артефакты в `results/`.
+
+**Ключевой вывод (почему “equilibrate-per-run” запрещён как стандарт).**
+
+- Baseline C6 (Mode A, `5000` runs): `elapsed_total≈18.4s`, из них `growth≈14.6s`.
+- Equilibrated-per-run (добавить `equilibrate_steps=2000` на каждый run): `elapsed_total≈1181.6s` (~19m 42s), почти всё — рост (fixed-N MCMC внутри каждого run).
+- Стоимость растёт как `O(#runs × steps)`, поэтому per-run equilibration не подходит как стандартный протокол CHEM-VALIDATION.
+
+## [CHEM-VALIDATION-EQ-2] Equilibrium runner (fixed-N) + сравнение с growth
+
+**Решение (новый протокол CHEM-VALIDATION).**
+
+- Разделяем две сущности:
+  1) `Q(topology)` — proposal distribution от growth (kernel bias диагностируется, не “термодинамика”).
+  2) `P_eq(topology)` — equilibrium distribution от fixed-N MCMC при заданной энергии (термодинамический объект).
+  3) Для `N<=6`: сравнение `P_eq` с `P_exact` как ground truth.
+- Добавлен раннер равновесия:
+  - `analysis/chem/chem_validation_eq_runner.py` (`--N`, `--mode`, `--steps`, `--burnin`, `--thin`, `--chains`, `--progress`, стартовые топологии).
+- CHEM-VALIDATION-1B обновлён так, что печатает:
+  - `P_growth` (proposal),
+  - `P_eq` (из eq-runner),
+  - `KL(P_growth||P_eq)`,
+  - и для C6 Mode A (если доступен exact): `KL(P_eq||P_exact)`.
+
+## [EQ-TARGET-1] Steps→KL калибровка (worst-case starts)
+
+**Решение.**
+
+- Введён скан “сколько шагов нужно для заданного качества”:
+  - `analysis/chem/eq_target_1_scan.py`: прогоняет fixed-N MCMC на сетке `steps` и печатает `KL_max/KL_mean` по “плохим стартам”.
+- Guardrail: старт фиксируем явно, чтобы KL не зависел от удачного старта.
+  - Дефолтные “плохие” старты для `N=6`: `n_hexane` и `2,2_dimethylbutane`.
+
+**Наблюдение (Mode A, N=6).**
+
+- Уже при `steps=2000` достигается `KL_max ≈ 0.00236` за ~2 секунды.
+- При `steps=20000`: `KL ≈ 4.9e-4` за ~6 секунд (убывающая отдача).
+- Следствие: для `N=6` стандартный бюджет может быть `steps=2000` (KL≪0.01), а для `N>=7` сначала делается аналогичный “EQ-TARGET scan” и выбирается `steps` по таргету.
+
+## [ENERGY-CACHE-1] Memoization энергии в fixed-N MCMC (tree-only)
+
+**Решение.**
+
+- В fixed-N MCMC добавлено кэширование `energy(state)` по каноническому коду/топологии (для tree-only после LABEL-INVARIANCE-1 энергия топологична).
+- В отчётности MCMC/eq-runner печатаются:
+  - `steps/sec`,
+  - `cache_hit_rate` (hits/misses),
+  - acceptance.
+
+**Статус.**
+
+- Кэш обязателен для масштабирования на `N=7/8+` и для режимов с более дорогим scoring.
+
 ## [INVARIANCE-BENCH-0] Overhead canonical tree relabeling (AHU)
 
 **Решение.**
