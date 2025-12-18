@@ -10,6 +10,7 @@ import numpy as np
 from analysis.chem.exact_trees import edges_to_adj, prufer_to_edges
 from analysis.growth.reporting import write_growth_txt
 from analysis.io_utils import results_path
+from analysis.utils.timing import now_iso
 from core.complexity import compute_complexity_features_v2
 from core.complexity_fdm import compute_fdm_complexity
 from core.tree_canonical import canonical_relabel_tree
@@ -45,6 +46,8 @@ def _pcts(x: List[float]) -> Dict[str, float]:
 
 
 def main() -> None:
+    start_ts = now_iso()
+    t0_total = time.perf_counter()
     cfg = BenchConfig()
     rng = np.random.default_rng(cfg.seed)
 
@@ -118,12 +121,19 @@ def main() -> None:
         for r in rows:
             w.writerow(r)
 
+    end_ts = now_iso()
+    elapsed_total = time.perf_counter() - t0_total
+    lines.append("TIMING")
+    lines.append(f"START_TS={start_ts}")
+    lines.append(f"END_TS={end_ts}")
+    lines.append(f"ELAPSED_TOTAL_SEC={elapsed_total:.6f}")
+
     out_txt = write_growth_txt("invariance_bench_0", lines)
     print("[INVARIANCE-BENCH-0] done.")
     print(f"CSV: {out_csv}")
     print(f"Summary: {out_txt}")
+    print(f"Wall-clock: start={start_ts} end={end_ts} elapsed_total_sec={elapsed_total:.3f}")
 
 
 if __name__ == "__main__":
     main()
-

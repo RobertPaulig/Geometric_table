@@ -15,6 +15,7 @@ from analysis.chem.chem_validation_1b_hexane import HEXANE_DEGENERACY, classify_
 from analysis.io_utils import results_path
 from analysis.utils.progress import progress_iter
 from analysis.growth.reporting import write_growth_txt
+from analysis.utils.timing import now_iso
 from core.complexity import compute_complexity_features_v2
 from core.thermo_config import override_thermo_config
 
@@ -118,6 +119,8 @@ def _normalize(weights: Dict[str, float]) -> Dict[str, float]:
 
 
 def main() -> None:
+    start_ts = now_iso()
+    t0_total = time.perf_counter()
     ap = argparse.ArgumentParser()
     ap.add_argument("--mode", default="A", choices=["A", "B", "C"])
     ap.add_argument("--lambda", dest="lam", type=float, default=None)
@@ -153,6 +156,8 @@ def main() -> None:
         weights_by_topo[topo] = weights_by_topo.get(topo, 0.0) + float(w)
         counts_by_topo[topo] = counts_by_topo.get(topo, 0) + 1
     dt = time.perf_counter() - t0
+    elapsed_total = time.perf_counter() - t0_total
+    end_ts = now_iso()
 
     p_exact = _normalize(weights_by_topo)
     p_mcmc = _load_mcmc_distribution(mode)
@@ -179,6 +184,11 @@ def main() -> None:
     lines.append(f"mode={mode}, lambda={lam:.6g}, T={temperature_T:.3f}")
     lines.append(f"N=6 labeled trees total={len(trees)}, alkane(deg<=4)={len(trees_alkane)} (expected 1290)")
     lines.append(f"elapsed_sec={dt:.3f}")
+    lines.append("")
+    lines.append("TIMING")
+    lines.append(f"START_TS={start_ts}")
+    lines.append(f"END_TS={end_ts}")
+    lines.append(f"ELAPSED_TOTAL_SEC={elapsed_total:.6f}")
     lines.append("")
     lines.append("Counts per topology (alkane labeled states):")
     for k in topologies:
@@ -208,6 +218,7 @@ def main() -> None:
 
     write_growth_txt(out_name, lines)
     print(f"[MH-KERNEL-3:C6:EXACT] wrote {results_path(out_name + '.txt')}")
+    print(f"Wall-clock: start={start_ts} end={end_ts} elapsed_total_sec={elapsed_total:.3f}")
 
 
 if __name__ == "__main__":

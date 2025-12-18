@@ -11,6 +11,7 @@ from analysis.chem.topology_mcmc import run_fixed_n_tree_mcmc
 from analysis.chem.chem_validation_1b_hexane import classify_hexane_topology
 from analysis.io_utils import results_path
 from analysis.growth.reporting import write_growth_txt
+from analysis.utils.timing import now_iso
 
 
 def _load_lambda_star_from_hexane(mode: str) -> Optional[float]:
@@ -45,6 +46,8 @@ def _summarize_counts(samples: list[dict[str, object]]) -> Dict[str, float]:
 
 
 def main() -> None:
+    start_ts = now_iso()
+    t0_total = time.perf_counter()
     ap = argparse.ArgumentParser()
     ap.add_argument("--mode", default="A", choices=["A", "B", "C"])
     ap.add_argument("--steps", type=int, default=200_000)
@@ -113,6 +116,8 @@ def main() -> None:
         except Exception:
             pass
     dt = time.perf_counter() - t0
+    elapsed_total = time.perf_counter() - t0_total
+    end_ts = now_iso()
 
     p_mcmc = _summarize_counts(samples)
     out_name = f"mh_kernel_3_c6_mcmc_mode{mode}"
@@ -133,6 +138,11 @@ def main() -> None:
     lines.append(f"steps={int(args.steps)}, burnin={int(args.burnin)}, thin={int(args.thin)}, seed={int(args.seed)}")
     lines.append(f"elapsed_sec={dt:.3f}")
     lines.append("")
+    lines.append("TIMING")
+    lines.append(f"START_TS={start_ts}")
+    lines.append(f"END_TS={end_ts}")
+    lines.append(f"ELAPSED_TOTAL_SEC={elapsed_total:.6f}")
+    lines.append("")
     lines.append("MCMC acceptance:")
     accept_rate = (float(summary.accepted) / float(summary.proposals)) if summary.proposals > 0 else 0.0
     lines.append(f"  proposals={summary.proposals}, accepted={summary.accepted}, rate={accept_rate:.6f}")
@@ -146,6 +156,7 @@ def main() -> None:
     write_growth_txt(out_name, lines)
     print(f"[MH-KERNEL-3:C6:MCMC] wrote {results_path(out_name + '.txt')}")
     print(f"[MH-KERNEL-3:C6:MCMC] wrote {out_csv}")
+    print(f"Wall-clock: start={start_ts} end={end_ts} elapsed_total_sec={elapsed_total:.3f}")
 
 
 if __name__ == "__main__":

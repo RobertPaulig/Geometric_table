@@ -9,6 +9,7 @@ import numpy as np
 
 from analysis.io_utils import results_path
 from analysis.growth.reporting import write_growth_txt
+from analysis.utils.timing import now_iso
 from core.complexity_fdm import compute_fdm_complexity
 from core.tree_canonical import canonical_relabel_tree
 
@@ -117,6 +118,8 @@ class BenchRow:
 
 
 def main() -> None:
+    start_ts = now_iso()
+    t0_total = time.perf_counter()
     rng = np.random.default_rng(0)
     n_values = [6, 10, 20, 40, 80, 160]
     n_trees = 200
@@ -201,12 +204,20 @@ def main() -> None:
             lines.append(f"  speedup_mean={speedup:.2f}x")
             lines.append("")
 
+    end_ts = now_iso()
+    elapsed_total = time.perf_counter() - t0_total
+    lines.append("TIMING")
+    lines.append(f"START_TS={start_ts}")
+    lines.append(f"END_TS={end_ts}")
+    lines.append(f"ELAPSED_TOTAL_SEC={elapsed_total:.6f}")
+
     write_growth_txt("invariance_bench_1", lines)
     out_txt = results_path("invariance_bench_1.txt")
     print(f"[ANALYSIS-IO] Saved text: {out_txt}")
     print(f"[INVARIANCE-BENCH-1] done.")
     print(f"CSV: {out_csv}")
     print(f"Summary: {out_txt}")
+    print(f"Wall-clock: start={start_ts} end={end_ts} elapsed_total_sec={elapsed_total:.3f}")
 
 
 if __name__ == "__main__":

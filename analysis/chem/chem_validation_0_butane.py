@@ -15,6 +15,7 @@ from analysis.utils.progress import progress_iter
 from analysis.growth.rng import make_rng
 from analysis.growth.reporting import write_growth_txt
 from analysis.chem.core2_fit import compute_p_pred, fit_lambda, kl_divergence
+from analysis.utils.timing import format_sec, now_iso, timed
 from core.complexity import compute_complexity_features_v2
 from core.grower import GrowthParams, grow_molecule_christmas_tree
 from core.thermo_config import ThermoConfig, override_thermo_config
@@ -380,7 +381,9 @@ def _run_single_mode(cfg: ChemValidation0Config, mode: str) -> List[Dict[str, ob
 
 
 def run_chem_validation_0(cfg: ChemValidation0Config) -> Tuple[Path, Path]:
-    t_start = time.perf_counter()
+    start_ts = now_iso()
+    t0_total = time.perf_counter()
+    acc: Dict[str, float] = {}
     all_rows: List[Dict[str, object]] = []
     by_mode: Dict[str, List[Dict[str, object]]] = {m.upper(): [] for m in cfg.modes}
 
@@ -429,7 +432,8 @@ def run_chem_validation_0(cfg: ChemValidation0Config) -> Tuple[Path, Path]:
         )
 
         t0 = time.perf_counter()
-        mol = grow_molecule_christmas_tree("C", params, rng=rng)
+        with timed("growth_total", acc):
+            mol = grow_molecule_christmas_tree("C", params, rng=rng)
         adj = mol.adjacency_matrix()
         growth_sec = time.perf_counter() - t0
 
@@ -438,8 +442,9 @@ def run_chem_validation_0(cfg: ChemValidation0Config) -> Tuple[Path, Path]:
         topology = classify_butane_topology(sorted_degrees)
 
         t1 = time.perf_counter()
-        feats_fdm = compute_complexity_features_v2(adj, backend="fdm")
-        feats_ent = compute_complexity_features_v2(adj, backend="fdm_entanglement")
+        with timed("scoring_total", acc):
+            feats_fdm = compute_complexity_features_v2(adj, backend="fdm")
+            feats_ent = compute_complexity_features_v2(adj, backend="fdm_entanglement")
         scoring_sec = time.perf_counter() - t1
 
         score_fdm = float(feats_fdm.total)
@@ -508,11 +513,12 @@ def run_chem_validation_0(cfg: ChemValidation0Config) -> Tuple[Path, Path]:
         "t_total_sec",
     ]
 
-    with csv_path.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        for r in all_rows:
-            writer.writerow(r)
+    with timed("io_total", acc):
+        with csv_path.open("w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            for r in all_rows:
+                writer.writerow(r)
 
     # Aggregate statistics for summary TXT.
     lines: List[str] = []
@@ -520,7 +526,9 @@ def run_chem_validation_0(cfg: ChemValidation0Config) -> Tuple[Path, Path]:
     lines.append(f"n_runs_per_seed={cfg.n_runs}")
     lines.append(f"seeds={list(cfg.seeds)}")
     lines.append(f"modes={list(cfg.modes)}")
-    lines.append(f"elapsed_sec={time.perf_counter() - t_start:.3f}, runs_done={len(all_rows)}")
+    elapsed_total = time.perf_counter() - t0_total
+    end_ts = now_iso()
+    lines.append(f"elapsed_sec={elapsed_total:.3f}, runs_done={len(all_rows)}")
     lines.append("")
 
     # group by mode
@@ -701,7 +709,25 @@ def run_chem_validation_0(cfg: ChemValidation0Config) -> Tuple[Path, Path]:
             )
         lines.append("")
 
-    summary_path = write_growth_txt("chem_validation_0_butane", lines)
+    lines.append("")
+    lines.append("TIMING")
+    lines.append(f"START_TS={start_ts}")
+    lines.append(f"END_TS={end_ts}")
+    lines.append(f"ELAPSED_TOTAL_SEC={elapsed_total:.6f}")
+    lines.append(f"ELAPSED_GROWTH_SEC={float(acc.get('growth_total', 0.0)):.6f}")
+    lines.append(f"ELAPSED_SCORING_SEC={float(acc.get('scoring_total', 0.0)):.6f}")
+    lines.append(f"ELAPSED_IO_SEC={float(acc.get('io_total', 0.0)):.6f}")
+
+    with timed("io_total", acc):
+        summary_path = write_growth_txt("chem_validation_0_butane", lines)
+
+    print(f"Wall-clock: start={start_ts} end={end_ts} elapsed_total_sec={elapsed_total:.3f}")
+    print(
+        "Breakdown: "
+        f"growth={format_sec(acc.get('growth_total', 0.0))} "
+        f"scoring={format_sec(acc.get('scoring_total', 0.0))} "
+        f"io={format_sec(acc.get('io_total', 0.0))}"
+    )
     return csv_path, summary_path
 
 

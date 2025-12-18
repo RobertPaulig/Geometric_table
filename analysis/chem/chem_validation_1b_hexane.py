@@ -19,6 +19,7 @@ from core.complexity import compute_complexity_features_v2
 from core.grower import GrowthParams, grow_molecule_christmas_tree
 from core.thermo_config import ThermoConfig, override_thermo_config
 from analysis.chem.core2_fit import kl_divergence
+from analysis.utils.timing import format_sec, now_iso, timed
 
 
 HEXANE_DEGENERACY: Dict[str, int] = {
@@ -388,7 +389,9 @@ def _load_p_exact_hexane_mode_a() -> Optional[Dict[str, float]]:
 
 
 def run_chem_validation_1b(cfg: ChemValidation1BConfig) -> Tuple[Path, Path]:
-    t_start = time.perf_counter()
+    start_ts = now_iso()
+    t0_total = time.perf_counter()
+    acc: Dict[str, float] = {}
     all_rows: List[Dict[str, object]] = []
     by_mode: Dict[str, List[Dict[str, object]]] = {m.upper(): [] for m in cfg.modes}
 
@@ -441,7 +444,8 @@ def run_chem_validation_1b(cfg: ChemValidation1BConfig) -> Tuple[Path, Path]:
         )
 
         t0 = time.perf_counter()
-        mol = grow_molecule_christmas_tree("C", params, rng=rng)
+        with timed("growth_total", acc):
+            mol = grow_molecule_christmas_tree("C", params, rng=rng)
         bonds_before = getattr(mol, "bonds_before_eq", None)
         if isinstance(bonds_before, list) and bonds_before:
             n = len(mol.atoms)
@@ -473,8 +477,9 @@ def run_chem_validation_1b(cfg: ChemValidation1BConfig) -> Tuple[Path, Path]:
         if adj.shape != (6, 6):
             topology = "other"
             deg_sorted = str([])
-            feats_fdm = compute_complexity_features_v2(adj, backend="fdm")
-            feats_ent = compute_complexity_features_v2(adj, backend="fdm_entanglement")
+            with timed("scoring_total", acc):
+                feats_fdm = compute_complexity_features_v2(adj, backend="fdm")
+                feats_ent = compute_complexity_features_v2(adj, backend="fdm_entanglement")
             score_fdm = float(feats_fdm.total)
             score_topo3d = float(feats_ent.total) - float(feats_fdm.total)
             score_shape = 0.0
@@ -490,8 +495,9 @@ def run_chem_validation_1b(cfg: ChemValidation1BConfig) -> Tuple[Path, Path]:
             topology = classify_hexane_topology(adj)
 
             t1 = time.perf_counter()
-            feats_fdm = compute_complexity_features_v2(adj, backend="fdm")
-            feats_ent = compute_complexity_features_v2(adj, backend="fdm_entanglement")
+            with timed("scoring_total", acc):
+                feats_fdm = compute_complexity_features_v2(adj, backend="fdm")
+                feats_ent = compute_complexity_features_v2(adj, backend="fdm_entanglement")
             scoring_sec = time.perf_counter() - t1
 
             score_fdm = float(feats_fdm.total)
@@ -560,13 +566,14 @@ def run_chem_validation_1b(cfg: ChemValidation1BConfig) -> Tuple[Path, Path]:
         "runtime_scoring_sec",
         "runtime_total_sec",
     ]
-    with csv_path.open("w", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fieldnames=fieldnames)
-        w.writeheader()
-        for r in all_rows:
-            w.writerow({k: r.get(k, "") for k in fieldnames})
+    with timed("io_total", acc):
+        with csv_path.open("w", newline="", encoding="utf-8") as f:
+            w = csv.DictWriter(f, fieldnames=fieldnames)
+            w.writeheader()
+            for r in all_rows:
+                w.writerow({k: r.get(k, "") for k in fieldnames})
 
-    elapsed = time.perf_counter() - t_start
+    elapsed = time.perf_counter() - t0_total
     lines: List[str] = []
     lines.append("CHEM-VALIDATION-1B: C6 hexane skeleton (tree-only)")
     lines.append("")
@@ -734,7 +741,26 @@ def run_chem_validation_1b(cfg: ChemValidation1BConfig) -> Tuple[Path, Path]:
             lines.append(f"    log(P({k})/P(n_hexane)): obs={lr_obs:.4f}, pred={lr_pred:.4f}, Δ={float(lr_obs-lr_pred):.4f}")
         lines.append("")
 
-    summary_path = write_growth_txt("chem_validation_1b_hexane", lines)
+    end_ts = now_iso()
+    lines.append("")
+    lines.append("TIMING")
+    lines.append(f"START_TS={start_ts}")
+    lines.append(f"END_TS={end_ts}")
+    lines.append(f"ELAPSED_TOTAL_SEC={elapsed:.6f}")
+    lines.append(f"ELAPSED_GROWTH_SEC={float(acc.get('growth_total', 0.0)):.6f}")
+    lines.append(f"ELAPSED_SCORING_SEC={float(acc.get('scoring_total', 0.0)):.6f}")
+    lines.append(f"ELAPSED_IO_SEC={float(acc.get('io_total', 0.0)):.6f}")
+
+    with timed("io_total", acc):
+        summary_path = write_growth_txt("chem_validation_1b_hexane", lines)
+
+    print(f"Wall-clock: start={start_ts} end={end_ts} elapsed_total_sec={elapsed:.3f}")
+    print(
+        "Breakdown: "
+        f"growth={format_sec(acc.get('growth_total', 0.0))} "
+        f"scoring={format_sec(acc.get('scoring_total', 0.0))} "
+        f"io={format_sec(acc.get('io_total', 0.0))}"
+    )
     return csv_path, summary_path
 
 
