@@ -613,7 +613,7 @@ def run_chem_validation_1b(cfg: ChemValidation1BConfig) -> Tuple[Path, Path]:
     lines.append("")
     lines.append(f"Config: n_runs={cfg.n_runs}, seeds={list(cfg.seeds)}, modes={list(cfg.modes)}")
     lines.append(
-        f"Equilibrate: steps={cfg.equilibrate_steps}, burnin={cfg.equilibrate_burnin}, thin={cfg.equilibrate_thin}"
+        f"Equilibrate (DEV, not standard): steps={cfg.equilibrate_steps}, burnin={cfg.equilibrate_burnin}, thin={cfg.equilibrate_thin}"
     )
     lines.append(f"elapsed_sec={elapsed:.3f}, runs_done={len(all_rows)}")
     lines.append("")
@@ -707,6 +707,9 @@ def run_chem_validation_1b(cfg: ChemValidation1BConfig) -> Tuple[Path, Path]:
                 lines.append("  P_eq(topology) from chem_eq_N6_modeA.txt:")
                 for k in HEXANE_DEGENERACY.keys():
                     lines.append(f"    {k} = {p_eq_vec[k]:.6f}")
+                if p_exact is not None:
+                    # p_growth exists only when p_exact is loaded (same if-block).
+                    lines.append(f"  KL(P_growth||P_eq) = {kl_divergence(p_growth, p_eq_vec):.6f}")
                 if p_exact is not None:
                     p_exact_vec = {k: float(p_exact.get(k, 0.0)) for k in HEXANE_DEGENERACY.keys()}
                     lines.append(f"  KL(P_eq||P_exact) = {kl_divergence(p_eq_vec, p_exact_vec):.6f}")

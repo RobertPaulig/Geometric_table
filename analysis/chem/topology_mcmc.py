@@ -161,6 +161,7 @@ def run_fixed_n_tree_mcmc(
     seed: int,
     max_valence: int = 4,
     topology_classifier: Optional[Callable[[np.ndarray], str]] = None,
+    start_edges: Optional[Sequence[Edge]] = None,
     progress: Optional[callable] = None,
 ) -> Tuple[List[Dict[str, object]], MCMCSummary]:
     """
@@ -170,8 +171,11 @@ def run_fixed_n_tree_mcmc(
     """
     rng = np.random.default_rng(int(seed))
 
-    # Start from a path tree.
-    edges: List[Edge] = [(_canonical_edge(i, i + 1)) for i in range(n - 1)]
+    # Start from a path tree unless an explicit start state is provided.
+    if start_edges is None:
+        edges: List[Edge] = [(_canonical_edge(i, i + 1)) for i in range(n - 1)]
+    else:
+        edges = [(_canonical_edge(int(i), int(j))) for (i, j) in start_edges]
     assert is_tree(n, edges)
 
     t0_total = time.perf_counter()

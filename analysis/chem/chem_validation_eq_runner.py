@@ -9,7 +9,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
-from analysis.chem.chem_validation_1b_hexane import HEXANE_DEGENERACY, classify_hexane_topology
+from analysis.chem.chem_validation_1b_hexane import HEXANE_DEGENERACY, classify_hexane_topology, _make_reference_adjs
 from analysis.chem.core2_fit import kl_divergence
 from analysis.chem.topology_mcmc import run_fixed_n_tree_mcmc
 from analysis.io_utils import results_path
@@ -77,6 +77,7 @@ class RunnerConfig:
     chains: int = 3
     seed: int = 0
     lam: Optional[float] = None
+    start_topology: str = "n_hexane"
     progress: bool = True
 
 
@@ -90,6 +91,13 @@ def _parse_args(argv: Optional[Sequence[str]] = None) -> RunnerConfig:
     ap.add_argument("--chains", type=int, default=3)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--lambda", dest="lam", type=float, default=None)
+    ap.add_argument(
+        "--start_topology",
+        type=str,
+        default="n_hexane",
+        choices=["n_hexane", "2_methylpentane", "3_methylpentane", "2,2_dimethylbutane", "2,3_dimethylbutane"],
+        help="Initial labeled state for each chain (sanity against optimistic starts).",
+    )
     ap.add_argument(
         "--progress",
         action=argparse.BooleanOptionalAction,
@@ -106,6 +114,7 @@ def _parse_args(argv: Optional[Sequence[str]] = None) -> RunnerConfig:
         chains=int(args.chains),
         seed=int(args.seed),
         lam=float(args.lam) if args.lam is not None else None,
+        start_topology=str(args.start_topology),
         progress=bool(args.progress),
     )
 
@@ -125,6 +134,10 @@ def run_runner(cfg: RunnerConfig) -> Tuple[Dict[str, float], Path]:
     backend = "fdm_entanglement"
     temperature_T = 1.0
 
+    refs = _make_reference_adjs()
+    if cfg.start_topology not in refs:
+        raise ValueError(f"Unknown start_topology: {cfg.start_topology!r}")
+
     # Multiple independent chains.
     chain_probs: List[Dict[str, float]] = []
     chain_summaries: List[Dict[str, float]] = []
@@ -135,6 +148,14 @@ def run_runner(cfg: RunnerConfig) -> Tuple[Dict[str, float], Path]:
         desc=f"CHEM-EQ N{cfg.N} mode{mode}",
         enabled=bool(cfg.progress),
     ):
+        # Start each chain from the requested topology (encoded as edges).
+        adj0 = np.asarray(refs[cfg.start_topology], dtype=float)
+        edges0: List[Tuple[int, int]] = []
+        for a in range(int(adj0.shape[0])):
+            for b in range(a + 1, int(adj0.shape[0])):
+                if adj0[a, b] > 0:
+                    edges0.append((int(a), int(b)))
+
         _, summary = run_fixed_n_tree_mcmc(
             n=int(cfg.N),
             steps=int(cfg.steps),
@@ -146,6 +167,7 @@ def run_runner(cfg: RunnerConfig) -> Tuple[Dict[str, float], Path]:
             seed=int(cfg.seed) + 101 * int(chain_idx),
             max_valence=4,
             topology_classifier=classify_hexane_topology,
+            start_edges=edges0,
             progress=None,
         )
         chain_probs.append(dict(summary.p_topology))
@@ -190,6 +212,7 @@ def run_runner(cfg: RunnerConfig) -> Tuple[Dict[str, float], Path]:
     lines.append("CHEM-VALIDATION-EQ-2: equilibrium runner (fixed-N MCMC on trees)")
     lines.append(f"N={cfg.N}, mode={mode}, backend={backend}, lambda={lam:.6g}, T={temperature_T:.3f}")
     lines.append(f"steps={cfg.steps}, burnin={cfg.burnin}, thin={cfg.thin}, chains={cfg.chains}, seed={cfg.seed}")
+    lines.append(f"start_topology={cfg.start_topology}")
     lines.append("")
     lines.append("Per-chain summary:")
     for i, ssum in enumerate(chain_summaries):
@@ -224,4 +247,3 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
 
 if __name__ == "__main__":
     main()
-

@@ -64,6 +64,7 @@ class ScanConfig:
     chains: int = 3
     seed: int = 0
     lam: Optional[float] = None
+    start_topologies: Tuple[str, ...] = ("n_hexane", "2,2_dimethylbutane")
     progress: bool = True
 
 
@@ -77,6 +78,13 @@ def _parse_args(argv: Optional[Sequence[str]] = None) -> ScanConfig:
     ap.add_argument("--chains", type=int, default=3)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--lambda", dest="lam", type=float, default=None)
+    ap.add_argument(
+        "--start_topologies",
+        type=str,
+        nargs="*",
+        default=["n_hexane", "2,2_dimethylbutane"],
+        help="Compute KL for each start and report max(KL) as a guardrail.",
+    )
     ap.add_argument("--progress", action=argparse.BooleanOptionalAction, default=True)
     args = ap.parse_args(argv)
     return ScanConfig(
@@ -88,6 +96,7 @@ def _parse_args(argv: Optional[Sequence[str]] = None) -> ScanConfig:
         chains=int(args.chains),
         seed=int(args.seed),
         lam=float(args.lam) if args.lam is not None else None,
+        start_topologies=tuple(str(x) for x in args.start_topologies),
         progress=bool(args.progress),
     )
 
@@ -115,7 +124,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     lines: List[str] = []
     lines.append("EQ-TARGET-1: steps -> KL(P_eq || P_exact) curve (N=6, mode A)")
     lines.append(
-        f"steps_list={list(cfg.steps_list)}, chains={cfg.chains}, thin={cfg.thin}, burnin_frac={cfg.burnin_frac}, lambda={lam}"
+        f"steps_list={list(cfg.steps_list)}, chains={cfg.chains}, thin={cfg.thin}, burnin_frac={cfg.burnin_frac}, lambda={lam}, start_topologies={list(cfg.start_topologies)}"
     )
     lines.append("")
 
@@ -124,39 +133,49 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
 
     for steps in cfg.steps_list:
         burnin = int(max(0, round(float(cfg.burnin_frac) * float(steps))))
-        runner_cfg = RunnerConfig(
-            N=int(cfg.N),
-            mode=str(cfg.mode).upper(),
-            steps=int(steps),
-            burnin=int(burnin),
-            thin=int(cfg.thin),
-            chains=int(cfg.chains),
-            seed=int(cfg.seed),
-            lam=float(lam) if lam is not None else None,
-            progress=bool(cfg.progress),
-        )
+        per_start: List[Tuple[str, float, float]] = []
+        elapsed_accum = 0.0
+        for start_topo in cfg.start_topologies:
+            runner_cfg = RunnerConfig(
+                N=int(cfg.N),
+                mode=str(cfg.mode).upper(),
+                steps=int(steps),
+                burnin=int(burnin),
+                thin=int(cfg.thin),
+                chains=int(cfg.chains),
+                seed=int(cfg.seed),
+                lam=float(lam) if lam is not None else None,
+                start_topology=str(start_topo),
+                progress=bool(cfg.progress),
+            )
+            t0 = time.perf_counter()
+            p_eq, _ = run_runner(runner_cfg)
+            elapsed = time.perf_counter() - t0
+            elapsed_accum += float(elapsed)
+            p_eq_vec = {k: float(p_eq.get(k, 0.0)) for k in keys}
+            kl = float(kl_divergence(p_eq_vec, p_exact_vec))
+            per_start.append((str(start_topo), float(kl), float(elapsed)))
 
-        t0 = time.perf_counter()
-        p_eq, _ = run_runner(runner_cfg)
-        elapsed = time.perf_counter() - t0
-
-        p_eq_vec = {k: float(p_eq.get(k, 0.0)) for k in keys}
-        kl = float(kl_divergence(p_eq_vec, p_exact_vec))
+        kl_max = max(float(x[1]) for x in per_start) if per_start else float("nan")
+        kl_mean = float(np.mean(np.asarray([x[1] for x in per_start], dtype=float))) if per_start else float("nan")
 
         row = {
             "steps": int(steps),
             "burnin": int(burnin),
             "thin": int(cfg.thin),
             "chains": int(cfg.chains),
-            "elapsed_sec": float(elapsed),
-            "steps_per_sec": float((int(steps) * int(cfg.chains)) / max(1e-9, elapsed)),
-            "kl_mcmc_exact": float(kl),
+            "elapsed_sec": float(elapsed_accum),
+            "steps_per_sec": float((int(steps) * int(cfg.chains) * max(1, len(cfg.start_topologies))) / max(1e-9, elapsed_accum)),
+            "kl_mcmc_exact_max": float(kl_max),
+            "kl_mcmc_exact_mean": float(kl_mean),
         }
         rows.append(row)
         lines.append(
-            f"steps={steps:6d} burnin={burnin:5d} elapsed={elapsed:7.3f}s "
-            f"steps/sec={row['steps_per_sec']:.1f} KL={kl:.6f}"
+            f"steps={steps:6d} burnin={burnin:5d} elapsed={elapsed_accum:7.3f}s "
+            f"steps/sec={row['steps_per_sec']:.1f} KL_max={kl_max:.6f} KL_mean={kl_mean:.6f}"
         )
+        for start_topo, kl, el in per_start:
+            lines.append(f"  start={start_topo}: KL={kl:.6f}, elapsed={el:.3f}s")
 
     with out_csv.open("w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0].keys()) if rows else ["steps"])
