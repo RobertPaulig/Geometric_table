@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
+from typing import Callable, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -151,6 +151,7 @@ def run_fixed_n_tree_mcmc(
     temperature_T: float,
     seed: int,
     max_valence: int = 4,
+    topology_classifier: Optional[Callable[[np.ndarray], str]] = None,
     progress: Optional[callable] = None,
 ) -> Tuple[List[Dict[str, object]], MCMCSummary]:
     """
@@ -216,13 +217,17 @@ def run_fixed_n_tree_mcmc(
             progress(1)
 
         if step >= burnin and ((step - burnin) % max(1, thin) == 0):
-            deg = degrees(n, edges)
-            topo = classify_tree_topology_by_deg_sorted(sorted(deg))
+            if topology_classifier is None:
+                deg = degrees(n, edges)
+                topo = classify_tree_topology_by_deg_sorted(sorted(deg))
+            else:
+                adj = edges_to_adj(n, edges)
+                topo = str(topology_classifier(adj))
             samples.append(
                 {
                     "step": int(step),
                     "topology": topo,
-                    "deg_sorted": str(sorted(deg)),
+                    "deg_sorted": str(sorted(degrees(n, edges))),
                     "energy": float(e_x),
                     "accepted": int(accepted),
                     "proposals": int(proposals),
@@ -255,4 +260,3 @@ def run_fixed_n_tree_mcmc(
         p_topology=p_topo,
     )
     return samples, summary
-

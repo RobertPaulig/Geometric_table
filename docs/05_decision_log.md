@@ -451,6 +451,35 @@
 - Это приемлемо как плата за строгую инвариантность в tree-only слое, но для больших N может потребовать оптимизаций
   (ускорение канонизации/кэширование/перенос части вычислений в numpy).
 
+## [MH-KERNEL-3] C6 exact baseline (deg≤4) vs fixed-N MCMC vs growth
+
+**Мотивация.**
+
+- В CHEM-VALIDATION-1B наблюдается `KL(P_obs||P_pred) ~ 0.09–0.11` и слабая зависимость частот от режимов R/A/B/C → это типичный симптом того, что ростовой процесс не является корректным fixed-N sampler по финальным деревьям.
+
+**Метод.**
+
+- Перечислить все labeled деревья N=6 через Prüfer (1296) и отфильтровать алканы `deg≤4` (ожидаемо 1290, исключая star).
+- Посчитать точное распределение `P_exact(state) ∝ exp(-λ E(state)/T)` тем же кодом энергии, что и в MCMC.
+- Запустить leaf-rewire fixed-N MCMC с Hastings при ограничении `deg≤4` и сравнить `P_mcmc(topology)` с `P_exact(topology)`.
+- Сравнить с `P_obs_growth(topology)` из `chem_validation_1b_hexane.csv` и с `P_pred(topology) ∝ g*exp(-λ E_ref/T)`.
+
+**Интерпретация DoD.**
+
+- Если `P_mcmc ≈ P_exact`, но `P_obs_growth` далеко, то рост — это generator/proposal, а не равновесный sampler по финальным деревьям, и частоты из CHEM-VALIDATION нужно оценивать через fixed-N MCMC/exact baseline.
+
+## [INVARIANCE-OPT-1] Avoid dense NxN relabeling in tree-canonical FDM path
+
+**Мотивация.**
+
+- INVARIANCE-BENCH-0 показал overhead до ~55–60% на N=160, что указывает на доминирование затрат плотной перестановки adjacency (O(N²)), аллокаций и `np.where`-сканов.
+
+**Решение.**
+
+- Ввести AHU-канонизацию как перестановку вершин и применять её к adjacency-list (O(N+E)), без построения плотной NxN матрицы.
+- Перевести BFS/остовное дерево для FDM на adjacency-list, избегая `np.where` по строкам.
+- Добавить INVARIANCE-BENCH-1 для сравнения legacy dense baseline vs оптимизированного пути.
+
 ## [Spectral Lab v1] Эксперимент SL-1 (resolution scan)
 
 **Решение.**

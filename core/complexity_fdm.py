@@ -11,7 +11,7 @@ from collections import deque
 
 import numpy as np
 
-from core.tree_canonical import canonical_relabel_tree
+from core.tree_canonical import canonical_tree_permutation, relabel_adj_list
 
 # Default FDM parameters for tree complexity (v1 calibration):
 # lambda controls depth penalty (0 < lambda < 1),
@@ -54,10 +54,34 @@ def compute_fdm_complexity(
     if canonicalize_tree:
         # Make the complexity invariant to vertex labels for connected trees.
         # (For cycles/general graphs, we keep legacy behavior.)
+        # Optimization: avoid dense NxN permutation; operate on adjacency lists.
+        pass
+
+    def build_adj_list(a: np.ndarray) -> list[list[int]]:
+        out: list[list[int]] = [[] for _ in range(int(a.shape[0]))]
+        for i in range(int(a.shape[0])):
+            out[i] = [int(x) for x in np.flatnonzero(a[i] > 0).tolist()]
+        return out
+
+    adj_list = build_adj_list(adj_matrix)
+
+    if canonicalize_tree:
         try:
             m = int(np.sum(adj_matrix) // 2)
             if m == n - 1:
-                adj_matrix = canonical_relabel_tree(adj_matrix)
+                # Confirm connectivity (should hold for trees, but be safe).
+                seen = [False] * n
+                stack = [0]
+                seen[0] = True
+                while stack:
+                    u = stack.pop()
+                    for v in adj_list[u]:
+                        if not seen[v]:
+                            seen[v] = True
+                            stack.append(v)
+                if all(seen):
+                    perm = canonical_tree_permutation(adj_list)
+                    adj_list = relabel_adj_list(adj_list, perm)
         except Exception:
             pass
 
@@ -75,8 +99,7 @@ def compute_fdm_complexity(
 
     while queue:
         u = queue.popleft()
-        neighbors = np.where(adj_matrix[u] > 0)[0]
-        for v in neighbors:
+        for v in adj_list[int(u)]:
             if not visited[v]:
                 visited[v] = True
                 parent[v] = u

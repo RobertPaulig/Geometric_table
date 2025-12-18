@@ -45,6 +45,63 @@ def _rooted_ahu_encoding(
     return code
 
 
+def canonical_tree_permutation(adj_list: Sequence[Sequence[int]]) -> List[int]:
+    """
+    Canonical relabeling permutation for a connected tree using AHU encoding.
+
+    Returns `perm` where `perm[new_index] = old_index`.
+    """
+    n = int(len(adj_list))
+    if n <= 2:
+        return list(range(n))
+
+    adj_list_local = [list(nei) for nei in adj_list]
+    centers = _tree_centers(adj_list_local)
+
+    best_root = int(centers[0])
+    best_code = None
+    best_labels: Dict[int, str] = {}
+    for c in centers:
+        labels: Dict[int, str] = {}
+        code = _rooted_ahu_encoding(int(c), -1, adj_list_local, labels)
+        if best_code is None or code < best_code:
+            best_code = code
+            best_root = int(c)
+            best_labels = labels
+
+    perm: List[int] = []
+    queue: List[Tuple[int, int]] = [(best_root, -1)]
+    while queue:
+        u, parent = queue.pop(0)
+        perm.append(int(u))
+        children = [int(v) for v in adj_list_local[int(u)] if int(v) != int(parent)]
+        children.sort(key=lambda x: best_labels.get(int(x), ""))
+        for v in children:
+            queue.append((int(v), int(u)))
+
+    return perm
+
+
+def relabel_adj_list(adj_list: Sequence[Sequence[int]], perm: Sequence[int]) -> List[List[int]]:
+    """
+    Apply permutation `perm[new]=old` to an undirected adjacency list.
+
+    Returns adjacency list in new labeling (neighbors sorted).
+    """
+    n = int(len(adj_list))
+    if len(perm) != n:
+        raise ValueError("perm length must match adj_list length")
+
+    inv = [0] * n
+    for new_i, old_i in enumerate(perm):
+        inv[int(old_i)] = int(new_i)
+
+    out: List[List[int]] = [[] for _ in range(n)]
+    for new_u, old_u in enumerate(perm):
+        out[new_u] = sorted(inv[int(v)] for v in adj_list[int(old_u)])
+    return out
+
+
 def canonical_relabel_tree(adj: np.ndarray) -> np.ndarray:
     """
     Canonical relabeling for a connected tree using AHU encoding.
@@ -58,39 +115,15 @@ def canonical_relabel_tree(adj: np.ndarray) -> np.ndarray:
         return np.asarray(adj, dtype=float)
 
     adj_list = _adj_list_from_adj(adj)
-    centers = _tree_centers(adj_list)
-
-    # Choose canonical center by minimal AHU code.
-    best_root = centers[0]
-    best_code = None
-    best_labels: Dict[int, str] = {}
-    for c in centers:
-        labels: Dict[int, str] = {}
-        code = _rooted_ahu_encoding(c, -1, adj_list, labels)
-        if best_code is None or code < best_code:
-            best_code = code
-            best_root = c
-            best_labels = labels
-
-    # Deterministic BFS order from best_root, ordering children by AHU labels.
-    perm: List[int] = []
-    queue: List[Tuple[int, int]] = [(best_root, -1)]
-    while queue:
-        u, parent = queue.pop(0)
-        perm.append(u)
-        children = [v for v in adj_list[u] if v != parent]
-        children.sort(key=lambda x: best_labels.get(x, ""))
-        for v in children:
-            queue.append((v, u))
+    perm = canonical_tree_permutation(adj_list)
 
     if len(perm) != n:
         raise ValueError("Tree relabeling failed (not connected tree?)")
 
-    inv = {old: new for new, old in enumerate(perm)}
+    inv = {int(old): int(new) for new, old in enumerate(perm)}
     new_adj = np.zeros_like(adj, dtype=float)
     for i in range(n):
         for j in range(n):
             if adj[i, j] > 0:
                 new_adj[inv[i], inv[j]] = 1.0
     return new_adj
-
