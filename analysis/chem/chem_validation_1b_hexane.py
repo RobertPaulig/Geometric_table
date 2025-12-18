@@ -18,6 +18,7 @@ from analysis.growth.reporting import write_growth_txt
 from core.complexity import compute_complexity_features_v2
 from core.grower import GrowthParams, grow_molecule_christmas_tree
 from core.thermo_config import ThermoConfig, override_thermo_config
+from analysis.chem.core2_fit import kl_divergence
 
 
 HEXANE_DEGENERACY: Dict[str, int] = {
@@ -319,6 +320,9 @@ class ChemValidation1BConfig:
     seeds: Tuple[int, ...] = (0, 1, 2, 3, 4)
     modes: Tuple[str, ...] = ("R", "A", "B", "C")
     max_depth: int = 6
+    equilibrate_steps: int = 0
+    equilibrate_burnin: int = 0
+    equilibrate_thin: int = 1
     progress: bool = True
 
 
@@ -356,6 +360,31 @@ def _make_reference_adjs() -> Dict[str, np.ndarray]:
     refs["2,3_dimethylbutane"] = adj_23
 
     return refs
+
+
+def _load_p_exact_hexane_mode_a() -> Optional[Dict[str, float]]:
+    """
+    Parse P_exact(topology) from MH-KERNEL-3 exact report (if present).
+    """
+    try:
+        txt = results_path("mh_kernel_3_c6_exact_modeA.txt").read_text(encoding="utf-8", errors="replace")
+    except Exception:
+        return None
+    if "P_exact(topology):" not in txt:
+        return None
+    tail = txt.split("P_exact(topology):", 1)[1]
+    block = tail.split("\n\n", 1)[0]
+    out: Dict[str, float] = {}
+    for line in block.splitlines():
+        line = line.strip()
+        if not line or "=" not in line:
+            continue
+        k, v = [x.strip() for x in line.split("=", 1)]
+        try:
+            out[k] = float(v)
+        except Exception:
+            continue
+    return out or None
 
 
 def run_chem_validation_1b(cfg: ChemValidation1BConfig) -> Tuple[Path, Path]:
@@ -400,6 +429,10 @@ def run_chem_validation_1b(cfg: ChemValidation1BConfig) -> Tuple[Path, Path]:
             stop_at_n_atoms=6,
             allowed_symbols=["C"],
             enforce_tree_alkane=True,
+            equilibrate_fixed_n_steps=int(cfg.equilibrate_steps),
+            equilibrate_burnin=int(cfg.equilibrate_burnin),
+            equilibrate_thin=int(cfg.equilibrate_thin),
+            equilibrate_max_degree=4,
             p_continue_base=1.0,
             chi_sensitivity=0.0,
             role_bonus_hub=0.0,
@@ -409,8 +442,33 @@ def run_chem_validation_1b(cfg: ChemValidation1BConfig) -> Tuple[Path, Path]:
 
         t0 = time.perf_counter()
         mol = grow_molecule_christmas_tree("C", params, rng=rng)
+        bonds_before = getattr(mol, "bonds_before_eq", None)
+        if isinstance(bonds_before, list) and bonds_before:
+            n = len(mol.atoms)
+            adj_before = np.zeros((n, n), dtype=float)
+            for i, j in bonds_before:
+                a = int(i)
+                b = int(j)
+                adj_before[a, b] = 1.0
+                adj_before[b, a] = 1.0
+        else:
+            adj_before = mol.adjacency_matrix()
+
         adj = mol.adjacency_matrix()
         growth_sec = time.perf_counter() - t0
+
+        topology_before = classify_hexane_topology(adj_before) if adj_before.shape == (6, 6) else "other"
+        topology_after = classify_hexane_topology(adj) if adj.shape == (6, 6) else "other"
+
+        eq_stats = getattr(mol, "eq_stats", None)
+        if isinstance(eq_stats, dict):
+            eq_steps = int(eq_stats.get("eq_steps", 0))
+            eq_accept_rate = float(eq_stats.get("eq_accept_rate", 0.0))
+            eq_moves_mean = float(eq_stats.get("eq_moves_mean", 0.0))
+        else:
+            eq_steps = 0
+            eq_accept_rate = 0.0
+            eq_moves_mean = 0.0
 
         if adj.shape != (6, 6):
             topology = "other"
@@ -454,6 +512,8 @@ def run_chem_validation_1b(cfg: ChemValidation1BConfig) -> Tuple[Path, Path]:
             "mode": mode,
             "seed": seed,
             "run_idx": run_idx,
+            "topology_before_eq": str(topology_before),
+            "topology_after_eq": str(topology_after),
             "topology": topology,
             "deg_sorted": deg_sorted,
             "score_fdm": float(score_fdm),
@@ -463,6 +523,9 @@ def run_chem_validation_1b(cfg: ChemValidation1BConfig) -> Tuple[Path, Path]:
             "mh_proposals": int(mh_proposals),
             "mh_accepted": int(mh_accepted),
             "mh_accept_rate": float(mh_accept_rate),
+            "eq_steps": int(eq_steps),
+            "eq_accept_rate": float(eq_accept_rate),
+            "eq_moves_mean": float(eq_moves_mean),
             "runtime_growth_sec": float(growth_sec),
             "runtime_scoring_sec": float(scoring_sec),
             "runtime_total_sec": float(growth_sec + scoring_sec),
@@ -479,6 +542,8 @@ def run_chem_validation_1b(cfg: ChemValidation1BConfig) -> Tuple[Path, Path]:
         "mode",
         "seed",
         "run_idx",
+        "topology_before_eq",
+        "topology_after_eq",
         "topology",
         "deg_sorted",
         "score_fdm",
@@ -488,6 +553,9 @@ def run_chem_validation_1b(cfg: ChemValidation1BConfig) -> Tuple[Path, Path]:
         "mh_proposals",
         "mh_accepted",
         "mh_accept_rate",
+        "eq_steps",
+        "eq_accept_rate",
+        "eq_moves_mean",
         "runtime_growth_sec",
         "runtime_scoring_sec",
         "runtime_total_sec",
@@ -503,6 +571,9 @@ def run_chem_validation_1b(cfg: ChemValidation1BConfig) -> Tuple[Path, Path]:
     lines.append("CHEM-VALIDATION-1B: C6 hexane skeleton (tree-only)")
     lines.append("")
     lines.append(f"Config: n_runs={cfg.n_runs}, seeds={list(cfg.seeds)}, modes={list(cfg.modes)}")
+    lines.append(
+        f"Equilibrate: steps={cfg.equilibrate_steps}, burnin={cfg.equilibrate_burnin}, thin={cfg.equilibrate_thin}"
+    )
     lines.append(f"elapsed_sec={elapsed:.3f}, runs_done={len(all_rows)}")
     lines.append("")
 
@@ -521,24 +592,46 @@ def run_chem_validation_1b(cfg: ChemValidation1BConfig) -> Tuple[Path, Path]:
             continue
         lines.append(f"[Mode {m}]")
         topo_counts: Dict[str, int] = {}
+        topo_counts_growth: Dict[str, int] = {}
+        topo_counts_eq: Dict[str, int] = {}
         scores_by_topo: Dict[str, List[float]] = {}
         mh_by_topo: Dict[str, Tuple[int, int]] = {}
+        eq_steps_vals: List[int] = []
+        eq_moves_vals: List[float] = []
+        eq_accept_vals: List[float] = []
         growth_times: List[float] = []
         scoring_times: List[float] = []
         for r in rows:
             topo = str(r["topology"])
             topo_counts[topo] = topo_counts.get(topo, 0) + 1
+            topo_g = str(r.get("topology_before_eq", topo))
+            topo_e = str(r.get("topology_after_eq", topo))
+            topo_counts_growth[topo_g] = topo_counts_growth.get(topo_g, 0) + 1
+            topo_counts_eq[topo_e] = topo_counts_eq.get(topo_e, 0) + 1
             scores_by_topo.setdefault(topo, []).append(float(r["score_total"]))
             p = int(r.get("mh_proposals", 0))
             a = int(r.get("mh_accepted", 0))
             old_p, old_a = mh_by_topo.get(topo, (0, 0))
             mh_by_topo[topo] = (old_p + p, old_a + a)
+            eq_steps_vals.append(int(r.get("eq_steps", 0)))
+            eq_moves_vals.append(float(r.get("eq_moves_mean", 0.0)))
+            eq_accept_vals.append(float(r.get("eq_accept_rate", 0.0)))
             growth_times.append(float(r.get("runtime_growth_sec", 0.0)))
             scoring_times.append(float(r.get("runtime_scoring_sec", 0.0)))
 
         total = sum(topo_counts.values()) or 1
         for topo in sorted(topo_counts.keys()):
             lines.append(f"  P({topo}) = {topo_counts[topo] / float(total):.4f} (count={topo_counts[topo]})")
+
+        if any(int(x) > 0 for x in eq_steps_vals):
+            lines.append("  Proposal vs equilibrated:")
+            for topo in sorted(set(list(topo_counts_growth.keys()) + list(topo_counts_eq.keys()))):
+                pg = topo_counts_growth.get(topo, 0) / float(total)
+                pe = topo_counts_eq.get(topo, 0) / float(total)
+                lines.append(f"    P_growth({topo})={pg:.4f}, P_equilibrated({topo})={pe:.4f}")
+            lines.append(
+                f"  EQ stats: mean_accept_rate={float(np.mean(eq_accept_vals)):.4f}, mean_moves={float(np.mean(eq_moves_vals)):.3f}"
+            )
 
         for topo, vals in scores_by_topo.items():
             arr = np.asarray(vals, dtype=float)
@@ -557,6 +650,15 @@ def run_chem_validation_1b(cfg: ChemValidation1BConfig) -> Tuple[Path, Path]:
                 lines.append(f"  log(P({k})/P(n_hexane)) = {float(np.log(nk / n0)):.4f}")
             else:
                 lines.append(f"  log(P({k})/P(n_hexane)) undefined (zero counts)")
+
+        if m == "A":
+            p_exact = _load_p_exact_hexane_mode_a()
+            if p_exact is not None:
+                p_growth = {k: topo_counts_growth.get(k, 0) / float(total) for k in HEXANE_DEGENERACY.keys()}
+                p_equil = {k: topo_counts_eq.get(k, 0) / float(total) for k in HEXANE_DEGENERACY.keys()}
+                p_exact_vec = {k: float(p_exact.get(k, 0.0)) for k in HEXANE_DEGENERACY.keys()}
+                lines.append(f"  KL(P_growth||P_exact) = {kl_divergence(p_growth, p_exact_vec):.6f}")
+                lines.append(f"  KL(P_equilibrated||P_exact) = {kl_divergence(p_equil, p_exact_vec):.6f}")
 
         if growth_times:
             arr = np.asarray(growth_times, dtype=float)
@@ -642,6 +744,9 @@ def _parse_args(argv: Optional[Sequence[str]] = None) -> ChemValidation1BConfig:
     parser.add_argument("--seeds", type=int, nargs="*", default=[0, 1, 2, 3, 4])
     parser.add_argument("--modes", type=str, nargs="*", default=["R", "A", "B", "C"])
     parser.add_argument("--max_depth", type=int, default=6)
+    parser.add_argument("--equilibrate_steps", type=int, default=0)
+    parser.add_argument("--equilibrate_burnin", type=int, default=0)
+    parser.add_argument("--equilibrate_thin", type=int, default=1)
     parser.add_argument(
         "--progress",
         action=argparse.BooleanOptionalAction,
@@ -654,6 +759,9 @@ def _parse_args(argv: Optional[Sequence[str]] = None) -> ChemValidation1BConfig:
         seeds=tuple(int(x) for x in args.seeds),
         modes=tuple(str(m).upper() for m in args.modes),
         max_depth=int(args.max_depth),
+        equilibrate_steps=int(args.equilibrate_steps),
+        equilibrate_burnin=int(args.equilibrate_burnin),
+        equilibrate_thin=int(args.equilibrate_thin),
         progress=bool(args.progress),
     )
 
@@ -668,4 +776,3 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
 
 if __name__ == "__main__":
     main()
-

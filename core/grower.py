@@ -36,6 +36,13 @@ class GrowthParams:
     # Если True, grower строит связное дерево без циклов и с valence(C)<=4,
     # гарантируя достижение stop_at_n_atoms (если задан).
     enforce_tree_alkane: bool = False
+    # GROWTH-EQUILIBRATE-1: optional fixed-N equilibration on the final tree (post-growth).
+    equilibrate_fixed_n_steps: int = 0
+    equilibrate_burnin: int = 0
+    equilibrate_thin: int = 1
+    equilibrate_max_degree: int = 4
+    # Optional progress callback: (step, proposals, accepted) -> None
+    equilibrate_progress_cb: Any = None
     # --- CY-1: loopy-режим (R&D QSG v6.x) ---
     allow_cycles: bool = False
     max_extra_bonds: int = 0      # сколько "добавочных" рёбер максимум
@@ -161,6 +168,14 @@ def grow_molecule_christmas_tree(
     if rng is None:
         rng = np.random.default_rng()
 
+    # Global cache for fixed-N equilibration energy on small trees (avoid recomputing features millions of times).
+    # Keyed by (thermo experiment_name, canonical edge tuple).
+    global _EQUIL_ENERGY_CACHE  # type: ignore[name-defined]
+    try:
+        _EQUIL_ENERGY_CACHE
+    except Exception:
+        _EQUIL_ENERGY_CACHE = {}
+
     # 1. Initialize Molecule
     mol_name = f"GrowTree_{root_symbol}_{params.max_depth}"
     mol = Molecule(name=mol_name, atoms=[], bonds=[])
@@ -254,6 +269,83 @@ def grow_molecule_christmas_tree(
                 child_idx = add_atom_to_mol("C")
                 mol.bonds.append((parent_idx, child_idx))
                 break
+
+        # Optional fixed-N equilibration on the final adjacency (tree-only).
+        eq_steps = int(getattr(params, "equilibrate_fixed_n_steps", 0) or 0)
+        if eq_steps > 0:
+            try:
+                from core.fixedn_tree_mcmc import fixedn_mcmc_equilibrate
+                from core.complexity import compute_complexity_features_v2
+
+                n = len(mol.atoms)
+                try:
+                    mol.bonds_before_eq = list(mol.bonds)
+                except Exception:
+                    pass
+                adj0 = np.zeros((n, n), dtype=float)
+                for i, j in mol.bonds:
+                    a = int(i)
+                    b = int(j)
+                    adj0[a, b] = 1.0
+                    adj0[b, a] = 1.0
+
+                def energy_fn(adj: np.ndarray) -> float:
+                    # Cache only for small trees (N<=8) to keep memory bounded.
+                    n_local = int(adj.shape[0])
+                    if n_local <= 8:
+                        # Canonical edge tuple as cache key.
+                        edges = []
+                        for a in range(n_local):
+                            for b in range(a + 1, n_local):
+                                if adj[a, b] > 0:
+                                    edges.append((a, b))
+                        key = (str(getattr(thermo, "experiment_name", "")), tuple(edges))
+                        if key in _EQUIL_ENERGY_CACHE:
+                            return float(_EQUIL_ENERGY_CACHE[key])
+                        feats = compute_complexity_features_v2(adj, backend="fdm_entanglement")
+                        val = float(feats.total)
+                        _EQUIL_ENERGY_CACHE[key] = val
+                        return val
+
+                    feats = compute_complexity_features_v2(adj, backend="fdm_entanglement")
+                    return float(feats.total)
+
+                eq_adj, eq_stats = fixedn_mcmc_equilibrate(
+                    adj0,
+                    energy_fn=energy_fn,
+                    steps=eq_steps,
+                    burnin=(
+                        int(getattr(params, "equilibrate_burnin", 0) or 0)
+                        if int(getattr(params, "equilibrate_burnin", 0) or 0) > 0
+                        else max(0, min(200, eq_steps // 5))
+                    ),
+                    thin=int(getattr(params, "equilibrate_thin", 1) or 1),
+                    rng=rng,
+                    max_degree=int(getattr(params, "equilibrate_max_degree", 4) or 4),
+                    temperature_T=float(getattr(thermo, "temperature_T", 1.0)),
+                    lam=float(getattr(thermo, "coupling_delta_G", 1.0)),
+                    progress_cb=getattr(params, "equilibrate_progress_cb", None),
+                )
+
+                new_bonds = []
+                for a in range(n):
+                    for b in range(a + 1, n):
+                        if eq_adj[a, b] > 0:
+                            new_bonds.append((a, b))
+                mol.bonds = new_bonds
+                try:
+                    mol.eq_stats = {
+                        "eq_steps": int(eq_stats.steps),
+                        "eq_proposals": int(eq_stats.proposals),
+                        "eq_accepted": int(eq_stats.accepted),
+                        "eq_accept_rate": float(eq_stats.accept_rate),
+                        "eq_moves_mean": float(eq_stats.mean_moves),
+                    }
+                except Exception:
+                    pass
+            except Exception:
+                # Equilibration must never break legacy generation.
+                pass
 
         try:
             mol.mh_stats = dict(mh_stats)
