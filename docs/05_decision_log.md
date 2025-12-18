@@ -603,6 +603,26 @@
 - Для `N=7/8` exact baseline дешевле и точнее, чем EQ-цепи (энергия после LABEL-INVARIANCE-1 топологична на деревьях).
 - Ростовой sampler остаётся существенно смещённым относительно равновесия, и этот bias растёт с N.
 
+## [CHEM-VALIDATION-EXACT-UX-1] P_exact as default reference for N<=8 + per-topology bias table
+
+**Решение.**
+
+- Скрипты `analysis/chem/chem_validation_1c_heptane.py` и `analysis/chem/chem_validation_1d_octane.py` читают
+  exact baseline из `results/alkane_exact_1_N{7,8}.csv` (если файл существует) и печатают дополнительно:
+  - `KL(P_eq||P_exact)` и `KL(P_growth||P_exact)` по каждому mode,
+  - таблицу bias по топологиям: `bias = log(P_growth/P_exact)` (top-K по `|bias|`).
+- Таким образом, для `N<=8` “истина” фиксируется как `P_exact`, а `P_eq` остаётся sanity/диагностикой.
+
+## [GROWTH-KERNEL-BIAS-1] Bias vector + correlations vs simple tree invariants
+
+**Решение.**
+
+- Добавлен диагностический скрипт `analysis/chem/growth_kernel_bias_1.py`, который строит:
+  - bias-вектор `log(P_growth/P_exact)` по топологиям,
+  - Spearman-корреляции bias с простыми инвариантами деревьев:
+    `diameter`, `max_degree`, `n_leaves`, `Wiener index`.
+- Это даёт быстрый ориентир, *какие структурные факторы* систематически пере/недо-производит ростовой kernel.
+
 ## [INVARIANCE-BENCH-0] Overhead canonical tree relabeling (AHU)
 
 **Решение.**

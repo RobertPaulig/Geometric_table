@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import math
 import time
 from dataclasses import dataclass
 from typing import Dict, List, Mapping, Optional, Sequence, Tuple
@@ -123,6 +124,28 @@ def _kl(P: Mapping[str, float], Q: Mapping[str, float], eps: float = 1e-12) -> f
     p = p / float(p.sum())
     q = q / float(q.sum())
     return float(np.sum(p * np.log(p / q)))
+
+
+def _load_p_exact_from_csv(n: int, mode: str) -> Dict[str, float]:
+    import csv
+
+    path = results_path(f"alkane_exact_1_N{int(n)}.csv")
+    if not path.exists():
+        return {}
+    out: Dict[str, float] = {}
+    with path.open("r", newline="", encoding="utf-8") as f:
+        r = csv.DictReader(f)
+        for row in r:
+            if int(row.get("N", 0)) != int(n):
+                continue
+            if str(row.get("mode", "")).upper() != str(mode).upper():
+                continue
+            topo = str(row.get("topology", ""))
+            try:
+                out[topo] = float(row.get("p_exact", 0.0))
+            except Exception:
+                continue
+    return out
 
 
 @dataclass
@@ -334,9 +357,16 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
 
             p_eq = eq_by_mode.get(mode, {})
             n_unique_eq = int(len(p_eq))
+            p_exact = _load_p_exact_from_csv(n_atoms, mode)
+            n_unique_exact = int(len(p_exact)) if p_exact else 0
 
             lines.append(f"[Mode {mode}]")
-            lines.append(f"  n_unique_growth={n_unique_growth}, n_unique_eq={n_unique_eq}")
+            if p_exact:
+                lines.append(
+                    f"  n_unique_growth={n_unique_growth}, n_unique_eq={n_unique_eq}, n_unique_exact={n_unique_exact}"
+                )
+            else:
+                lines.append(f"  n_unique_growth={n_unique_growth}, n_unique_eq={n_unique_eq}")
 
             lines.append("  P_growth(topology):")
             growth_sorted = sorted(mode_counts.items(), key=lambda kv: (-kv[1], kv[0]))
@@ -358,6 +388,9 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
             lines.append(f"  mass_topK_eq={mass_topk_eq:.6f}")
 
             lines.append(f"  KL(P_growth||P_eq) = {_kl(p_growth, p_eq):.6f}")
+            if p_exact:
+                lines.append(f"  KL(P_eq||P_exact) = {_kl(p_eq, p_exact):.6f}")
+                lines.append(f"  KL(P_growth||P_exact) = {_kl(p_growth, p_exact):.6f}")
             guard = eq_guardrail_by_mode.get(mode, {})
             lines.append(
                 f"  Guardrail: KL_max_pairwise={guard.get('kl_max_pairwise', float('nan')):.6f}, "
@@ -373,6 +406,18 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
                 f"  ENERGY-CACHE: hit_rate={eqm.get('energy_cache_hit_rate', 0.0):.3f}, "
                 f"hits={int(eqm.get('energy_cache_hits', 0.0))}, misses={int(eqm.get('energy_cache_misses', 0.0))}"
             )
+            if p_exact:
+                eps = 1e-12
+                bias_rows: List[Tuple[str, float, float, float]] = []
+                for topo in sorted(set(p_growth.keys()) | set(p_exact.keys())):
+                    pg = float(p_growth.get(topo, 0.0))
+                    pe = float(p_exact.get(topo, 0.0))
+                    bias = float(math.log((pg + eps) / (pe + eps)))
+                    bias_rows.append((topo, bias, pg, pe))
+                bias_rows.sort(key=lambda x: (-abs(x[1]), x[0]))
+                lines.append("  Bias log(P_growth/P_exact):")
+                for topo, b, pg, pe in bias_rows[:top_k]:
+                    lines.append(f"    {topo}: bias={b:+.6f} P_growth={pg:.6f} P_exact={pe:.6f}")
             lines.append("")
 
         elapsed_total = time.perf_counter() - t0_total
