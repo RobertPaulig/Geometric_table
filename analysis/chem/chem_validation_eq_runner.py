@@ -78,6 +78,7 @@ class RunnerConfig:
     seed: int = 0
     lam: Optional[float] = None
     start_topology: str = "n_hexane"
+    start_topologies: Optional[Tuple[str, ...]] = None
     progress: bool = True
 
 
@@ -99,6 +100,13 @@ def _parse_args(argv: Optional[Sequence[str]] = None) -> RunnerConfig:
         help="Initial labeled state for each chain (sanity against optimistic starts).",
     )
     ap.add_argument(
+        "--start_topologies",
+        type=str,
+        nargs="*",
+        default=None,
+        help="If provided, run a separate multi-chain estimate per start and report KL_max/KL_mean across starts.",
+    )
+    ap.add_argument(
         "--progress",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -115,6 +123,7 @@ def _parse_args(argv: Optional[Sequence[str]] = None) -> RunnerConfig:
         seed=int(args.seed),
         lam=float(args.lam) if args.lam is not None else None,
         start_topology=str(args.start_topology),
+        start_topologies=tuple(str(x) for x in args.start_topologies) if args.start_topologies is not None else None,
         progress=bool(args.progress),
     )
 
@@ -135,72 +144,84 @@ def run_runner(cfg: RunnerConfig) -> Tuple[Dict[str, float], Path]:
     temperature_T = 1.0
 
     refs = _make_reference_adjs()
-    if cfg.start_topology not in refs:
-        raise ValueError(f"Unknown start_topology: {cfg.start_topology!r}")
+    start_list = (
+        list(cfg.start_topologies)
+        if cfg.start_topologies is not None and len(cfg.start_topologies) > 0
+        else [cfg.start_topology]
+    )
+    for st in start_list:
+        if st not in refs:
+            raise ValueError(f"Unknown start_topology: {st!r}")
 
-    # Multiple independent chains.
-    chain_probs: List[Dict[str, float]] = []
-    chain_summaries: List[Dict[str, float]] = []
+    # For each start topology, run multiple independent chains and aggregate.
+    start_results: List[Tuple[str, Dict[str, float], Dict[str, float], List[Dict[str, float]]]] = []
 
-    for chain_idx in progress_iter(
-        range(int(cfg.chains)),
-        total=int(cfg.chains),
-        desc=f"CHEM-EQ N{cfg.N} mode{mode}",
-        enabled=bool(cfg.progress),
-    ):
-        # Start each chain from the requested topology (encoded as edges).
-        adj0 = np.asarray(refs[cfg.start_topology], dtype=float)
-        edges0: List[Tuple[int, int]] = []
-        for a in range(int(adj0.shape[0])):
-            for b in range(a + 1, int(adj0.shape[0])):
-                if adj0[a, b] > 0:
-                    edges0.append((int(a), int(b)))
+    for start_topology in start_list:
+        chain_probs: List[Dict[str, float]] = []
+        chain_summaries: List[Dict[str, float]] = []
 
-        _, summary = run_fixed_n_tree_mcmc(
-            n=int(cfg.N),
-            steps=int(cfg.steps),
-            burnin=int(cfg.burnin),
-            thin=int(cfg.thin),
-            backend=backend,
-            lam=float(lam),
-            temperature_T=float(temperature_T),
-            seed=int(cfg.seed) + 101 * int(chain_idx),
-            max_valence=4,
-            topology_classifier=classify_hexane_topology,
-            start_edges=edges0,
-            progress=None,
-        )
-        chain_probs.append(dict(summary.p_topology))
-        chain_summaries.append(
-            {
-                "accept_rate": (float(summary.accepted) / float(summary.proposals)) if summary.proposals > 0 else 0.0,
-                "moves_mean": float(summary.mean_moves),
-                "cache_hit_rate": float(getattr(summary, "energy_cache_hit_rate", 0.0)),
-                "steps_per_sec": float(getattr(summary, "steps_per_sec", 0.0)),
-            }
-        )
+        for chain_idx in progress_iter(
+            range(int(cfg.chains)),
+            total=int(cfg.chains),
+            desc=f"CHEM-EQ N{cfg.N} mode{mode} start={start_topology}",
+            enabled=bool(cfg.progress),
+        ):
+            adj0 = np.asarray(refs[start_topology], dtype=float)
+            edges0: List[Tuple[int, int]] = []
+            for a in range(int(adj0.shape[0])):
+                for b in range(a + 1, int(adj0.shape[0])):
+                    if adj0[a, b] > 0:
+                        edges0.append((int(a), int(b)))
 
-    # Aggregate P across chains (mean of per-chain proportions).
-    topologies = list(HEXANE_DEGENERACY.keys())
-    p_mean: Dict[str, float] = {}
-    p_ci: Dict[str, float] = {}
-    for topo in topologies:
-        vals = [float(p.get(topo, 0.0)) for p in chain_probs]
-        mu, ci = _mean_ci(vals)
-        p_mean[topo] = mu
-        p_ci[topo] = ci
+            _, summary = run_fixed_n_tree_mcmc(
+                n=int(cfg.N),
+                steps=int(cfg.steps),
+                burnin=int(cfg.burnin),
+                thin=int(cfg.thin),
+                backend=backend,
+                lam=float(lam),
+                temperature_T=float(temperature_T),
+                seed=int(cfg.seed) + 101 * int(chain_idx),
+                max_valence=4,
+                topology_classifier=classify_hexane_topology,
+                start_edges=edges0,
+                progress=None,
+            )
+            chain_probs.append(dict(summary.p_topology))
+            chain_summaries.append(
+                {
+                    "accept_rate": (float(summary.accepted) / float(summary.proposals)) if summary.proposals > 0 else 0.0,
+                    "moves_mean": float(summary.mean_moves),
+                    "cache_hit_rate": float(getattr(summary, "energy_cache_hit_rate", 0.0)),
+                    "steps_per_sec": float(getattr(summary, "steps_per_sec", 0.0)),
+                }
+            )
 
-    # Normalize mean (numerical).
-    s = float(sum(p_mean.values()))
-    if s > 0:
-        p_mean = {k: float(v) / s for k, v in p_mean.items()}
+        topologies = list(HEXANE_DEGENERACY.keys())
+        p_mean: Dict[str, float] = {}
+        p_ci: Dict[str, float] = {}
+        for topo in topologies:
+            vals = [float(p.get(topo, 0.0)) for p in chain_probs]
+            mu, ci = _mean_ci(vals)
+            p_mean[topo] = mu
+            p_ci[topo] = ci
+        s = float(sum(p_mean.values()))
+        if s > 0:
+            p_mean = {k: float(v) / s for k, v in p_mean.items()}
+
+        start_results.append((str(start_topology), p_mean, p_ci, chain_summaries))
+
+    # Primary P_eq output: first start (stable default).
+    p_mean = start_results[0][1]
+    p_ci = start_results[0][2]
 
     p_exact = _load_p_exact_hexane_mode_a() if mode == "A" else None
+    topologies = list(HEXANE_DEGENERACY.keys())
+    kl_by_start: List[Tuple[str, float]] = []
     if p_exact is not None:
         p_exact_vec = {k: float(p_exact.get(k, 0.0)) for k in topologies}
-        kl_mcmc_exact = kl_divergence(p_mean, p_exact_vec)
-    else:
-        kl_mcmc_exact = float("nan")
+        for st, p_st, _, _ in start_results:
+            kl_by_start.append((st, float(kl_divergence(p_st, p_exact_vec))))
 
     elapsed_total = time.perf_counter() - t0_total
     end_ts = now_iso()
@@ -212,21 +233,28 @@ def run_runner(cfg: RunnerConfig) -> Tuple[Dict[str, float], Path]:
     lines.append("CHEM-VALIDATION-EQ-2: equilibrium runner (fixed-N MCMC on trees)")
     lines.append(f"N={cfg.N}, mode={mode}, backend={backend}, lambda={lam:.6g}, T={temperature_T:.3f}")
     lines.append(f"steps={cfg.steps}, burnin={cfg.burnin}, thin={cfg.thin}, chains={cfg.chains}, seed={cfg.seed}")
-    lines.append(f"start_topology={cfg.start_topology}")
+    lines.append(f"start_topologies={start_list}")
     lines.append("")
-    lines.append("Per-chain summary:")
-    for i, ssum in enumerate(chain_summaries):
-        lines.append(
-            f"  chain={i}: accept_rate={ssum['accept_rate']:.4f}, moves_mean={ssum['moves_mean']:.3f}, "
-            f"energy_cache_hit_rate={ssum['cache_hit_rate']:.3f}, steps_per_sec={ssum['steps_per_sec']:.1f}"
-        )
-    lines.append("")
-    lines.append("P_eq(topology): mean ± 95% CI across chains")
-    for topo in topologies:
-        lines.append(f"  {topo} = {p_mean[topo]:.6f} ± {p_ci[topo]:.6f}")
-    if p_exact is not None:
+    for st, p_st, ci_st, chain_summaries in start_results:
+        lines.append(f"[Start {st}]")
+        lines.append("  Per-chain summary:")
+        for i, ssum in enumerate(chain_summaries):
+            lines.append(
+                f"    chain={i}: accept_rate={ssum['accept_rate']:.4f}, moves_mean={ssum['moves_mean']:.3f}, "
+                f"energy_cache_hit_rate={ssum['cache_hit_rate']:.3f}, steps_per_sec={ssum['steps_per_sec']:.1f}"
+            )
+        lines.append("  P_eq(topology): mean ± 95% CI across chains")
+        for topo in topologies:
+            lines.append(f"    {topo} = {p_st[topo]:.6f} ± {ci_st[topo]:.6f}")
+        if p_exact is not None:
+            p_exact_vec = {k: float(p_exact.get(k, 0.0)) for k in topologies}
+            lines.append(f"  KL(P_eq||P_exact) = {float(kl_divergence(p_st, p_exact_vec)):.6f}")
         lines.append("")
-        lines.append(f"KL(P_eq||P_exact) = {kl_mcmc_exact:.6f}")
+
+    if kl_by_start:
+        vals = [x[1] for x in kl_by_start]
+        lines.append(f"KL_max(P_eq||P_exact) = {float(max(vals)):.6f}")
+        lines.append(f"KL_mean(P_eq||P_exact) = {float(np.mean(np.asarray(vals, dtype=float))):.6f}")
     lines.append("")
     lines.append("TIMING")
     lines.append(f"START_TS={start_ts}")

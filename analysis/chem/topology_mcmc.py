@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 import time
 from dataclasses import dataclass
-from typing import Callable, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
+from typing import Callable, Dict, Iterable, List, Mapping, MutableMapping, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -12,6 +12,9 @@ from core.complexity import compute_complexity_features_v2
 
 
 Edge = Tuple[int, int]
+
+
+_GLOBAL_ENERGY_CACHE_BY_TOPOLOGY: Dict[Tuple[str, str], float] = {}
 
 
 def _canonical_edge(i: int, j: int) -> Edge:
@@ -162,6 +165,7 @@ def run_fixed_n_tree_mcmc(
     max_valence: int = 4,
     topology_classifier: Optional[Callable[[np.ndarray], str]] = None,
     start_edges: Optional[Sequence[Edge]] = None,
+    energy_cache: Optional[MutableMapping[Tuple[str, str], float]] = None,
     progress: Optional[callable] = None,
 ) -> Tuple[List[Dict[str, object]], MCMCSummary]:
     """
@@ -180,21 +184,36 @@ def run_fixed_n_tree_mcmc(
 
     t0_total = time.perf_counter()
 
-    # Cache energies for speed.
-    e_cache: Dict[Tuple[Edge, ...], float] = {}
+    # Cache energies for speed (two-level):
+    # - global cache by (backend, topology) when topology_classifier is provided (label-invariant energy on trees)
+    # - fallback per-run cache by labeled edge tuple otherwise
+    e_cache_edges: Dict[Tuple[Edge, ...], float] = {}
+    topo_cache = energy_cache if energy_cache is not None else _GLOBAL_ENERGY_CACHE_BY_TOPOLOGY
     cache_hits = 0
     cache_misses = 0
 
     def energy(e: Sequence[Edge]) -> float:
-        key = tuple(sorted(_canonical_edge(i, j) for i, j in e))
-        if key in e_cache:
-            nonlocal cache_hits
+        nonlocal cache_hits, cache_misses
+        key_edges = tuple(sorted(_canonical_edge(i, j) for i, j in e))
+        if topology_classifier is not None:
+            # Topology-keyed cache gives maximal reuse for label-invariant tree energies.
+            adj = edges_to_adj(n, key_edges)
+            topo = str(topology_classifier(adj))
+            key_topo = (str(backend), topo)
+            if key_topo in topo_cache:
+                cache_hits += 1
+                return float(topo_cache[key_topo])
+            cache_misses += 1
+            val = compute_energy_for_tree(key_edges, backend=backend)
+            topo_cache[key_topo] = float(val)
+            return float(val)
+
+        if key_edges in e_cache_edges:
             cache_hits += 1
-            return e_cache[key]
-        nonlocal cache_misses
+            return float(e_cache_edges[key_edges])
         cache_misses += 1
-        val = compute_energy_for_tree(key, backend=backend)
-        e_cache[key] = float(val)
+        val = compute_energy_for_tree(key_edges, backend=backend)
+        e_cache_edges[key_edges] = float(val)
         return float(val)
 
     T = float(temperature_T)
