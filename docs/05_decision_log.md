@@ -532,6 +532,46 @@
 
 - Кэш обязателен для масштабирования на `N=7/8+` и для режимов с более дорогим scoring.
 
+## [EQ-TARGET-2] Mixing budget guardrail for N=7/8 (pairwise-start KL)
+
+**Решение.**
+
+- Для `N=7` и `N=8` введён инженерный “датчик смешивания” fixed-N MCMC без exact baseline:
+  - скрипт `analysis/chem/eq_target_2_scan.py` (Mode A по умолчанию),
+  - стартовые состояния задаются как **структурные** спецификации, независимые от строковых имён изомеров:
+    - `path` (линейная цепь),
+    - `max_branch` (сильно разветвлённое дерево при ограничении `deg<=4`).
+- На сетке `steps ∈ {2k, 5k, 10k, 20k}` (опционально `50k`) считаются:
+  - wall-clock: `elapsed_total_sec`,
+  - throughput: `STEPS_TOTAL`, `STEPS_PER_SEC_TOTAL`,
+  - `energy_cache_hit_rate`,
+  - guardrail: `KL_max/KL_mean` как **pairwise** KL между оценками распределений,
+    полученных из разных “плохих стартам” (для 2 стартов: `max(KL(P1||P2), KL(P2||P1))`).
+
+**Вывод.**
+
+- Для `N>=7`, где exact baseline недоступен, бюджет шагов выбирается по стабилизации:
+  - `KL_max` между “плохими стартам” и/или стабильности ключевых log-ratio,
+  - при обязательном логировании `steps/sec` и `cache_hit_rate` (инженерная стоимость).
+
+**Результаты (Mode A, λ=1.0, chains=3, thin=10, burnin_frac=0.1, starts=[path,max_branch]).**
+
+- N=7:
+  - steps=2k:  `KL_max=0.006028`, elapsed=0.579s, steps/sec=20734, hit=1.000
+  - steps=5k:  `KL_max=0.000984`, elapsed=1.389s, steps/sec=21591, hit=1.000
+  - steps=10k: `KL_max=0.000333`, elapsed=2.696s, steps/sec=22252, hit=1.000
+  - steps=20k: `KL_max=0.000068`, elapsed=5.431s, steps/sec=22097, hit=1.000
+- N=8:
+  - steps=2k:  `KL_max=0.083180`, elapsed=0.627s, steps/sec=19146, hit=0.999
+  - steps=5k:  `KL_max=0.002120`, elapsed=1.601s, steps/sec=18742, hit=1.000
+  - steps=10k: `KL_max=0.001495`, elapsed=3.173s, steps/sec=18912, hit=1.000
+  - steps=20k: `KL_max=0.001115`, elapsed=6.352s, steps/sec=18892, hit=1.000
+
+**Интерпретация.**
+
+- Для `N=7` уже `steps=5000` даёт очень малый guardrail (`KL_max≈1e-3`).
+- Для `N=8` видно “плохой старт”-эффект на `steps=2000` (высокий `KL_max`), после чего `steps>=5000` стабилизирует оценку (`KL_max≈0.002` и ниже).
+
 ## [INVARIANCE-BENCH-0] Overhead canonical tree relabeling (AHU)
 
 **Решение.**
