@@ -365,6 +365,42 @@
 - N=4: при `λ*=0.5852` получено `KL(P_mcmc||P_pred)≈0.0192`.
 - N=5: при `λ*=0.9225` получено `KL(P_mcmc||P_pred)≈0.0257`.
 
+## [MH-KERNEL-2] Exact baseline (Prüfer enumeration) + CORE-3 (label-averaged prediction)
+
+**Решение.**
+
+- Добавлен перебор всех labeled деревьев через Prüfer sequences:
+  - модуль `analysis/chem/exact_trees.py` (`N=4 → 16`, `N=5 → 125`).
+- Добавлен exact-бейзлайн:
+  - скрипт `analysis/chem/mh_kernel_2_exact.py`, который считает точное распределение
+    `P_exact(state) ∝ exp(-λ E(state)/T)` и агрегирует до `P_exact(topology)`,
+    а также печатает:
+    - `P_pred` (CORE-2: `g*exp(-λE_ref/T)`),
+    - `P_mcmc` (из MH-KERNEL-1 artifacts),
+    - `KL(P_mcmc||P_exact)` и `KL(P_pred||P_exact)`,
+    - статистики `E_min/E_mean/E_std/E_max` по labeled состояниям внутри топологии (диагностика label-dependence).
+- CORE-3 определяется как label-averaged prediction:
+  - `P_pred3(topology) = sum_{state in topo} exp(-λ E(state)/T) / Z`;
+  - при использовании тех же state-энергий `P_pred3` совпадает с `P_exact` по определению.
+
+**Результаты (Mode A, λ* из CORE-2, N=4/5).**
+
+- N=4:
+  - `KL(P_mcmc||P_exact) ≈ 0.000123` (MCMC реализован корректно и хорошо смешан на N=4).
+  - `KL(P_pred||P_exact) ≈ 0.017267` (CORE-2 по одному эталону на топологию не совпадает с exact).
+  - label-dependence: `E_std` внутри топологий порядка `~0.25`.
+- N=5:
+  - `KL(P_mcmc||P_exact) ≈ 0.000129` (MCMC корректен и хорошо смешан на N=5 при 50k шагах).
+  - `KL(P_pred||P_exact) ≈ 0.028293` (существенное расхождение CORE-2 vs exact).
+  - label-dependence явно ненулевая:
+    - `E_std` внутри `isopentane/n_pentane/neopentane` порядка `~0.32–0.33`.
+
+**Вывод.**
+
+- Основной источник расхождения `P_mcmc` vs `P_pred(λ*)` — не mixing и не Hastings,
+  а **label-dependence энергии**: энергия `E(state)` варьирует внутри одной и той же unlabeled топологии,
+  поэтому `P_pred = g*exp(-λE_ref(topology)/T)` по одному представителю не является точной моделью.
+
 ## [Spectral Lab v1] Эксперимент SL-1 (resolution scan)
 
 **Решение.**
