@@ -97,7 +97,7 @@ def _parse_args(argv: Optional[Sequence[str]] = None) -> RunnerConfig:
         type=str,
         default="n_hexane",
         choices=["n_hexane", "2_methylpentane", "3_methylpentane", "2,2_dimethylbutane", "2,3_dimethylbutane"],
-        help="Initial labeled state for each chain (sanity against optimistic starts).",
+        help="Alias for a single start topology (sanity against optimistic starts).",
     )
     ap.add_argument(
         "--start_topologies",
@@ -113,6 +113,9 @@ def _parse_args(argv: Optional[Sequence[str]] = None) -> RunnerConfig:
         help="Show progress output.",
     )
     args = ap.parse_args(argv)
+    start_topologies = tuple(str(x) for x in args.start_topologies) if args.start_topologies is not None else None
+    if start_topologies is None:
+        start_topologies = (str(args.start_topology),)
     return RunnerConfig(
         N=int(args.N),
         mode=str(args.mode).upper(),
@@ -123,7 +126,7 @@ def _parse_args(argv: Optional[Sequence[str]] = None) -> RunnerConfig:
         seed=int(args.seed),
         lam=float(args.lam) if args.lam is not None else None,
         start_topology=str(args.start_topology),
-        start_topologies=tuple(str(x) for x in args.start_topologies) if args.start_topologies is not None else None,
+        start_topologies=start_topologies,
         progress=bool(args.progress),
     )
 
@@ -225,6 +228,8 @@ def run_runner(cfg: RunnerConfig) -> Tuple[Dict[str, float], Path]:
 
     elapsed_total = time.perf_counter() - t0_total
     end_ts = now_iso()
+    steps_total = int(cfg.steps) * int(cfg.chains)
+    steps_per_sec_total = (float(steps_total) / float(elapsed_total)) if elapsed_total > 0 else 0.0
 
     out_name = f"chem_eq_N{cfg.N}_mode{mode}"
     out_txt = results_path(f"{out_name}.txt")
@@ -260,11 +265,17 @@ def run_runner(cfg: RunnerConfig) -> Tuple[Dict[str, float], Path]:
     lines.append(f"START_TS={start_ts}")
     lines.append(f"END_TS={end_ts}")
     lines.append(f"ELAPSED_TOTAL_SEC={elapsed_total:.6f}")
-    lines.append(f"STEPS_PER_SEC={(cfg.steps * cfg.chains) / elapsed_total:.1f}")
+    lines.append(f"STEPS_TOTAL={steps_total}")
+    # Backward-compatible + explicit alias for downstream parsers.
+    lines.append(f"STEPS_PER_SEC={steps_per_sec_total:.1f}")
+    lines.append(f"STEPS_PER_SEC_TOTAL={steps_per_sec_total:.1f}")
 
     write_growth_txt(out_name, lines)
     print(f"[CHEM-EQ] wrote {out_txt}")
-    print(f"Wall-clock: start={start_ts} end={end_ts} elapsed_total_sec={elapsed_total:.3f}")
+    print(
+        f"Wall-clock: start={start_ts} end={end_ts} elapsed_total_sec={elapsed_total:.3f} "
+        f"steps_total={steps_total} steps_per_sec_total={steps_per_sec_total:.1f}"
+    )
     return p_mean, out_txt
 
 
