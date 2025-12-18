@@ -334,6 +334,37 @@
   - сравнение `P_pred` с наблюдаемыми `P_obs` и разности по `log(P(iso)/P(n))` (и `log(P(neo)/P(n))` для C5).
   - референсные дегенерации: C4 `g(n)=12`, `g(iso)=4`; C5 `g(n)=60`, `g(iso)=60`, `g(neo)=5`.
 
+## [CHEM-VALIDATION-CORE-2] Fit λ (energy scale) for degeneracy-aware model
+
+**Решение.**
+
+- Добавлен модуль `analysis/chem/core2_fit.py`, который подбирает масштаб энергии `λ` по сетке,
+  минимизируя `KL(P_obs || P_pred(λ))` для модели:
+  - `P_pred(topo;λ) ∝ g(topo) * exp(-λ * E_ref(topo) / temperature_T)`.
+- В `analysis/chem/chem_validation_0_butane.py` и `analysis/chem/chem_validation_1a_pentane.py`
+  добавлен блок `CORE-2: Fit lambda (degeneracy-aware)` с `λ*`, `KL_min`, `P_obs/P_pred(λ*)` и Δlog-отношениями.
+
+**Пример результатов (n_runs=1000, seeds=[0..4]).**
+
+- C4 / Mode A: `λ*≈0.5852`, `KL_min≈0` (для 2-топологий λ может подогнать частоты практически точно).
+- C5 / Mode A: `λ*≈0.9225`, `KL_min≈0.0126` (остаточное расхождение указывает на вклад kernel/динамики роста помимо энергии+degeneracy).
+
+## [MH-KERNEL-1] Fixed-N tree MCMC with Hastings correction
+
+**Решение.**
+
+- Добавлен контрольный фикс-N MCMC для labeled деревьев (N=4/5) с обратимыми move’ами leaf-rewire
+  и явной Hastings-коррекцией `q(y→x)/q(x→y)`:
+  - модуль `analysis/chem/topology_mcmc.py`,
+  - runner `analysis/chem/mh_kernel_1_bench.py` (артефакты в `results/`, git-ignored).
+- Цель: сравнивать `P_mcmc_fixedN` с `P_pred(λ*)` (и косвенно с `P_obs_growth` из chem_validation),
+  чтобы диагностировать bias ростового kernel’а.
+
+**Пример (mode A, steps=50k, burnin=5k, thin=10).**
+
+- N=4: при `λ*=0.5852` получено `KL(P_mcmc||P_pred)≈0.0192`.
+- N=5: при `λ*=0.9225` получено `KL(P_mcmc||P_pred)≈0.0257`.
+
 ## [Spectral Lab v1] Эксперимент SL-1 (resolution scan)
 
 **Решение.**

@@ -14,6 +14,7 @@ from analysis.io_utils import results_path
 from analysis.utils.progress import progress_iter
 from analysis.growth.rng import make_rng
 from analysis.growth.reporting import write_growth_txt
+from analysis.chem.core2_fit import compute_p_pred, fit_lambda, kl_divergence
 from core.complexity import compute_complexity_features_v2
 from core.grower import GrowthParams, grow_molecule_christmas_tree
 from core.thermo_config import ThermoConfig, override_thermo_config
@@ -163,8 +164,8 @@ def _make_thermo_for_mode(mode: str) -> ThermoConfig:
             ws_integrator="fdm",
             ws_fdm_depth=base.ws_fdm_depth,
             ws_fdm_base=base.ws_fdm_base,
-            topo3d_prefilter_tree=False,
-            topo3d_prefilter_min_n=0,
+            topo3d_prefilter_tree=True,
+            topo3d_prefilter_min_n=10,
             temperature_T=1.0,
             grower_use_mh=True,
             deltaG_backend="fdm_entanglement",
@@ -219,8 +220,8 @@ def _make_thermo_for_mode(mode: str) -> ThermoConfig:
             ws_integrator="fdm",
             ws_fdm_depth=base.ws_fdm_depth,
             ws_fdm_base=base.ws_fdm_base,
-            topo3d_prefilter_tree=False,
-            topo3d_prefilter_min_n=0,
+            topo3d_prefilter_tree=True,
+            topo3d_prefilter_min_n=10,
             temperature_T=1.0,
             grower_use_mh=True,
             deltaG_backend="fdm_entanglement",
@@ -662,6 +663,43 @@ def run_chem_validation_0(cfg: ChemValidation0Config) -> Tuple[Path, Path]:
         )
 
     lines.append("")
+
+    # CORE-2: fit lambda scale for degeneracy-aware Boltzmann model.
+    lines.append("CORE-2: Fit lambda (degeneracy-aware)")
+    for mode in sorted(by_mode.keys()):
+        m = mode.upper()
+        if m not in {"A", "B", "C"}:
+            continue
+        thermo = _make_thermo_for_mode(m)
+        T = float(getattr(thermo, "temperature_T", 1.0))
+
+        e_ref = {"n_butane": float(_score_for_mode(m, adj_path)), "isobutane": float(_score_for_mode(m, adj_star))}
+
+        topo_counts: Dict[str, int] = {}
+        for r in by_mode.get(m, []):
+            topo = str(r["topology"])
+            topo_counts[topo] = topo_counts.get(topo, 0) + 1
+        n_n = topo_counts.get("n_butane", 0)
+        n_iso = topo_counts.get("isobutane", 0)
+        denom = float(n_n + n_iso) or 1.0
+        p_obs = {"n_butane": n_n / denom, "isobutane": n_iso / denom}
+
+        fit = fit_lambda(p_obs, BUTANE_DEGENERACY, e_ref, T=T)
+        p_pred_star = compute_p_pred(BUTANE_DEGENERACY, e_ref, T=T, lam=fit.lam_star)
+        kl_star = kl_divergence(p_obs, p_pred_star)
+
+        lines.append(f"  [Mode {m}] temperature_T={T:.3f}")
+        lines.append(f"    E_ref={e_ref}")
+        lines.append(f"    lambda*={fit.lam_star:.4f}, KL_min={fit.kl_min:.6f}, KL@lambda*={kl_star:.6f}")
+        lines.append(f"    P_obs ={ {k: float(v) for k, v in p_obs.items()} }")
+        lines.append(f"    P_pred={ {k: float(v) for k, v in p_pred_star.items()} }")
+        if p_obs["n_butane"] > 0 and p_pred_star.get("n_butane", 0.0) > 0:
+            lr_obs = math.log(p_obs["isobutane"] / p_obs["n_butane"])
+            lr_pred = math.log(p_pred_star["isobutane"] / p_pred_star["n_butane"])
+            lines.append(
+                f"    log(P(iso)/P(n)): obs={lr_obs:.4f}, pred={lr_pred:.4f}, Δ={float(lr_obs-lr_pred):.4f}"
+            )
+        lines.append("")
 
     summary_path = write_growth_txt("chem_validation_0_butane", lines)
     return csv_path, summary_path

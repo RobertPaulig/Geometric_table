@@ -14,6 +14,7 @@ from analysis.io_utils import results_path
 from analysis.utils.progress import progress_iter
 from analysis.growth.rng import make_rng
 from analysis.growth.reporting import write_growth_txt
+from analysis.chem.core2_fit import compute_p_pred, fit_lambda, kl_divergence
 from core.complexity import compute_complexity_features_v2
 from core.grower import GrowthParams, grow_molecule_christmas_tree
 from core.thermo_config import ThermoConfig, override_thermo_config
@@ -845,6 +846,59 @@ def run_chem_validation_1a(cfg: ChemValidation1AConfig) -> Tuple[Path, Path]:
         lines.append(
             f"    log(P(neo)/P(n)): obs={lr_obs_neo:.4f}, pred={lr_pred_neo:.4f}, Δ={float(lr_obs_neo - lr_pred_neo):.4f}"
         )
+
+    lines.append("")
+
+    # CORE-2: fit lambda scale for degeneracy-aware Boltzmann model.
+    lines.append("CORE-2: Fit lambda (degeneracy-aware)")
+    for mode in cfg.modes:
+        m = mode.upper()
+        if m not in {"A", "B", "C"}:
+            continue
+        thermo = _make_thermo_for_mode(m)
+        T = float(getattr(thermo, "temperature_T", 1.0))
+
+        _, _, _, e_n = _score_parts_for_mode(m, adj_n)
+        _, _, _, e_i = _score_parts_for_mode(m, adj_iso)
+        _, _, _, e_neo = _score_parts_for_mode(m, adj_neo)
+        e_ref = {"n_pentane": float(e_n), "isopentane": float(e_i), "neopentane": float(e_neo)}
+
+        rows = by_mode.get(m, [])
+        topo_counts: Dict[str, int] = {}
+        for r in rows:
+            topo = str(r["topology"])
+            topo_counts[topo] = topo_counts.get(topo, 0) + 1
+        n_n = topo_counts.get("n_pentane", 0)
+        n_i = topo_counts.get("isopentane", 0)
+        n_neo = topo_counts.get("neopentane", 0)
+        denom = float(n_n + n_i + n_neo) or 1.0
+        p_obs = {
+            "n_pentane": n_n / denom,
+            "isopentane": n_i / denom,
+            "neopentane": n_neo / denom,
+        }
+
+        fit = fit_lambda(p_obs, PENTANE_DEGENERACY, e_ref, T=T)
+        p_pred_star = compute_p_pred(PENTANE_DEGENERACY, e_ref, T=T, lam=fit.lam_star)
+        kl_star = kl_divergence(p_obs, p_pred_star)
+
+        lines.append(f"  [Mode {m}] temperature_T={T:.3f}")
+        lines.append(f"    E_ref={e_ref}")
+        lines.append(f"    lambda*={fit.lam_star:.4f}, KL_min={fit.kl_min:.6f}, KL@lambda*={kl_star:.6f}")
+        lines.append(f"    P_obs ={ {k: float(v) for k, v in p_obs.items()} }")
+        lines.append(f"    P_pred={ {k: float(v) for k, v in p_pred_star.items()} }")
+        if p_obs["n_pentane"] > 0 and p_pred_star.get("n_pentane", 0.0) > 0:
+            lr_obs_iso = math.log(p_obs["isopentane"] / p_obs["n_pentane"])
+            lr_pred_iso = math.log(p_pred_star["isopentane"] / p_pred_star["n_pentane"])
+            lr_obs_neo = math.log(p_obs["neopentane"] / p_obs["n_pentane"])
+            lr_pred_neo = math.log(p_pred_star["neopentane"] / p_pred_star["n_pentane"])
+            lines.append(
+                f"    log(P(iso)/P(n)): obs={lr_obs_iso:.4f}, pred={lr_pred_iso:.4f}, Δ={float(lr_obs_iso-lr_pred_iso):.4f}"
+            )
+            lines.append(
+                f"    log(P(neo)/P(n)): obs={lr_obs_neo:.4f}, pred={lr_pred_neo:.4f}, Δ={float(lr_obs_neo-lr_pred_neo):.4f}"
+            )
+        lines.append("")
 
     summary_path = write_growth_txt("chem_validation_1a_pentane", lines)
     return csv_path, summary_path
