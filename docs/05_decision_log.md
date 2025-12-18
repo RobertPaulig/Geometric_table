@@ -468,6 +468,16 @@
 
 - Если `P_mcmc ≈ P_exact`, но `P_obs_growth` далеко, то рост — это generator/proposal, а не равновесный sampler по финальным деревьям, и частоты из CHEM-VALIDATION нужно оценивать через fixed-N MCMC/exact baseline.
 
+**Результаты (C6, Mode A).**
+
+- Использован `λ*=0.949` (из CORE-2 в `results/chem_validation_1b_hexane.txt`), `T=1`.
+- Проверка алкан-ограничения: Prüfer N=6 даёт 1296 labeled деревьев, фильтр `deg≤4` оставляет 1290 (исключает только star `K1,5`).
+- Получено:
+  - `KL(P_mcmc || P_exact) = 1.642e-4` (MCMC совпадает с exact → Hastings + mixing корректны),
+  - `KL(P_obs_growth || P_exact) = 9.602e-2` (ростовые частоты далеки от равновесия),
+  - `KL(P_pred || P_exact) ≈ 0` (CORE-2 на деревьях корректен при label-invariant энергии).
+- Вывод: CHEM-VALIDATION-1B частоты по финальным топологиям **нельзя** интерпретировать как equilibrium-частоты для фиксированного N (kernel bias роста доминирует); для “химической статистики” нужен fixed-N MCMC / exact baseline.
+
 ## [INVARIANCE-OPT-1] Avoid dense NxN relabeling in tree-canonical FDM path
 
 **Мотивация.**
@@ -479,6 +489,12 @@
 - Ввести AHU-канонизацию как перестановку вершин и применять её к adjacency-list (O(N+E)), без построения плотной NxN матрицы.
 - Перевести BFS/остовное дерево для FDM на adjacency-list, избегая `np.where` по строкам.
 - Добавить INVARIANCE-BENCH-1 для сравнения legacy dense baseline vs оптимизированного пути.
+
+**Результаты (INVARIANCE-BENCH-1).**
+
+- На N=160 (200 деревьев): скорость относительно legacy dense выросла примерно до `~3.0x` (пример: `dense_mean≈0.00418s` → `opt_mean≈0.00137s`).
+- Доля “канонизация vs raw” остаётся высокой: `canon_overhead_mean≈0.41` на N=160 (в среднем ~40% времени в `backend="fdm"` уходит на tree-canonical слой).
+- Статус: таргет `≤15–20%` не достигнут; для дальнейшего снижения overhead нужны кэширование/инкрементальность (для ростовых траекторий) либо FDM-энергия, построенная из permutation-invariant инвариантов без канонизации.
 
 ## [Spectral Lab v1] Эксперимент SL-1 (resolution scan)
 
