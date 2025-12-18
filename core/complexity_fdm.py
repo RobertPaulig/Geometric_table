@@ -24,6 +24,8 @@ def compute_fdm_complexity(
     adj_matrix: np.ndarray,
     lambda_weight: float | None = None,
     q: float | None = None,
+    *,
+    canonicalize_tree: bool = True,
 ) -> float:
     """
     FDM-подобная сложность графа, ориентированная на деревья.
@@ -49,14 +51,15 @@ def compute_fdm_complexity(
     if n <= 1:
         return 0.0
 
-    # Make the complexity invariant to vertex labels for connected trees.
-    # (For cycles/general graphs, we keep legacy behavior.)
-    try:
-        m = int(np.sum(adj_matrix) // 2)
-        if m == n - 1:
-            adj_matrix = canonical_relabel_tree(adj_matrix)
-    except Exception:
-        pass
+    if canonicalize_tree:
+        # Make the complexity invariant to vertex labels for connected trees.
+        # (For cycles/general graphs, we keep legacy behavior.)
+        try:
+            m = int(np.sum(adj_matrix) // 2)
+            if m == n - 1:
+                adj_matrix = canonical_relabel_tree(adj_matrix)
+        except Exception:
+            pass
 
     # 1. Строим остовное дерево (BFS) и родительский/глубинный массивы
     visited = np.zeros(n, dtype=bool)

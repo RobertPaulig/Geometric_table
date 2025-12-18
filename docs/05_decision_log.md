@@ -412,6 +412,45 @@
   - N=4, Mode A: `KL(P_mcmc||P_pred)≈1.5e-4`.
   - N=5, Mode A: `KL(P_mcmc||P_pred)≈5.4e-4`.
 
+## [CHEM-VALIDATION-1B] C6 hexane skeleton (5 tree isomers)
+
+**Конфиг.**
+
+- Скрипт: `analysis/chem/chem_validation_1b_hexane.py`.
+- Рост: tree-only C6 (C-skeleton), `stop_at_n_atoms=6`, `allowed_symbols=["C"]`, `enforce_tree_alkane=True`.
+- Режимы `R/A/B/C` как в CHEM-VALIDATION-1A, topo3d prefilter включён (`topo3d_prefilter_tree=True`, `topo3d_prefilter_min_n=10`).
+- Классификатор 5 изомеров:
+  - `n_hexane`: `deg_sorted=[1,1,2,2,2,2]`
+  - `2_methylpentane` vs `3_methylpentane`: `deg_sorted=[1,1,1,2,2,3]` и `dist(deg2,deg2)` = 1 vs 2
+  - `2,2_dimethylbutane`: `deg_sorted=[1,1,1,1,2,4]`
+  - `2,3_dimethylbutane`: `deg_sorted=[1,1,1,1,3,3]`
+  - DoD: `P(other)=0` (tree-only генерация).
+
+**CORE-1 (degeneracy).**
+
+- `g(topology)=6!/|Aut|`:
+  - `g(n_hexane)=360`, `g(2_methylpentane)=360`, `g(3_methylpentane)=360`,
+  - `g(2,2_dimethylbutane)=120`, `g(2,3_dimethylbutane)=90`,
+  - `sum_g=1290` (все labeled деревья N=6 кроме star).
+
+**CORE-2 (λ-fit).**
+
+- В отчёте печатаются `λ*`, `KL_min`, `P_obs` vs `P_pred(λ*)` и Δlog-отношения относительно `n_hexane`.
+
+## [INVARIANCE-BENCH-0] Overhead canonical tree relabeling (AHU)
+
+**Решение.**
+
+- Добавлен микробенч `analysis/bench/invariance_bench_0.py`:
+  - N ∈ {6,10,20,40,80,160}, по 200 деревьев (случайные Prüfer).
+  - метрики: `t_canonicalize`, `t_energy_fdm` (текущее, с каноном), `t_energy_fdm_raw` (без канона).
+
+**Результат (mean overhead = t_canonicalize / t_energy_fdm).**
+
+- Наблюдаемая доля overhead заметная и растёт с N (порядка ~21% на N=6 до ~55% на N=160).
+- Это приемлемо как плата за строгую инвариантность в tree-only слое, но для больших N может потребовать оптимизаций
+  (ускорение канонизации/кэширование/перенос части вычислений в numpy).
+
 ## [Spectral Lab v1] Эксперимент SL-1 (resolution scan)
 
 **Решение.**
