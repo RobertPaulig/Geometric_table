@@ -386,20 +386,31 @@
 **Результаты (Mode A, λ* из CORE-2, N=4/5).**
 
 - N=4:
-  - `KL(P_mcmc||P_exact) ≈ 0.000123` (MCMC реализован корректно и хорошо смешан на N=4).
-  - `KL(P_pred||P_exact) ≈ 0.017267` (CORE-2 по одному эталону на топологию не совпадает с exact).
-  - label-dependence: `E_std` внутри топологий порядка `~0.25`.
+  - (до фикса инвариантности) `KL(P_mcmc||P_exact) ≈ 0.000123`, `KL(P_pred||P_exact) ≈ 0.017267`, `E_std≈0.25`.
 - N=5:
-  - `KL(P_mcmc||P_exact) ≈ 0.000129` (MCMC корректен и хорошо смешан на N=5 при 50k шагах).
-  - `KL(P_pred||P_exact) ≈ 0.028293` (существенное расхождение CORE-2 vs exact).
-  - label-dependence явно ненулевая:
-    - `E_std` внутри `isopentane/n_pentane/neopentane` порядка `~0.32–0.33`.
+  - (до фикса инвариантности) `KL(P_mcmc||P_exact) ≈ 0.000129`, `KL(P_pred||P_exact) ≈ 0.028293`, `E_std≈0.32–0.33`.
 
 **Вывод.**
 
 - Основной источник расхождения `P_mcmc` vs `P_pred(λ*)` — не mixing и не Hastings,
   а **label-dependence энергии**: энергия `E(state)` варьирует внутри одной и той же unlabeled топологии,
   поэтому `P_pred = g*exp(-λE_ref(topology)/T)` по одному представителю не является точной моделью.
+
+## [LABEL-INVARIANCE-1] Canonical relabeling for tree-only FDM energy
+
+**Решение.**
+
+- Введена канонизация деревьев (AHU) и её применение в FDM-энергии:
+  - `core/tree_canonical.py`: `canonical_relabel_tree(adj)` (центр/кодирование AHU, детерминированная перестановка вершин).
+  - `core/complexity_fdm.py`: для connected tree (`m=n-1`) adjacency сначала канонизируется, затем считается FDM.
+- Добавлен тест `tests/test_energy_label_invariance.py`: 200 случайных перестановок для C5 (n/iso/neo) в Mode A дают `std(E)<=1e-6`.
+
+**Результат.**
+
+- После канонизации `E_std(topology)=0` (в пределах float) на N=4 и N=5, и `KL(P_pred||P_exact)≈0`.
+- MCMC при тех же `λ*` теперь согласуется с `P_pred` на уровне малого KL:
+  - N=4, Mode A: `KL(P_mcmc||P_pred)≈1.5e-4`.
+  - N=5, Mode A: `KL(P_mcmc||P_pred)≈5.4e-4`.
 
 ## [Spectral Lab v1] Эксперимент SL-1 (resolution scan)
 
