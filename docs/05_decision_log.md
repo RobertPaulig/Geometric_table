@@ -572,6 +572,37 @@
 - Для `N=7` уже `steps=5000` даёт очень малый guardrail (`KL_max≈1e-3`).
 - Для `N=8` видно “плохой старт”-эффект на `steps=2000` (высокий `KL_max`), после чего `steps>=5000` стабилизирует оценку (`KL_max≈0.002` и ниже).
 
+## [ALKANE-EXACT-1] Exact equilibrium for tree-only alkanes (N=7/8)
+
+**Решение.**
+
+- Для tree-only алканов (фильтр `deg<=4`) введён exact baseline по **unlabeled** топологиям без MCMC:
+  - скрипт `analysis/chem/alkane_exact_1.py`.
+- Алгоритм:
+  - перечисляем все labeled деревья через Prüfer (`N=7: 7^5=16807`, `N=8: 8^6=262144`),
+  - фильтруем `max_degree<=4`,
+  - коллапсируем до уникальных unlabeled топологий по AHU-коду (`N=7: 9`, `N=8: 18`),
+  - считаем размер автоморфизмов `|Aut|` и дегенерацию `g=n!/|Aut|` (проверка: `g == labeled_count`),
+  - считаем энергии `E(topo)` (Mode A/B/C) и exact-меру
+    `P_exact(topo) ∝ g(topo) * exp(-λ E(topo)/T)` при заданных `λ,T`.
+- Артефакты пишутся в `results/alkane_exact_1_N{7,8}.csv|txt` (git-ignored).
+
+**Результаты (λ=1.0, T=1.0).**
+
+- N=7:
+  - labeled total=16807, alkane(deg<=4)=16590, уникальных топологий=9.
+  - `KL(P_eq||P_exact)=0.002760` (sanity: MCMC близок к exact при eq_steps=5000).
+  - `KL(P_growth||P_exact)=0.199514` (истинная мера kernel/proposal bias роста).
+- N=8:
+  - labeled total=262144, alkane(deg<=4)=255920, уникальных топологий=18.
+  - `KL(P_eq||P_exact)=0.004798`.
+  - `KL(P_growth||P_exact)=0.283005`.
+
+**Вывод.**
+
+- Для `N=7/8` exact baseline дешевле и точнее, чем EQ-цепи (энергия после LABEL-INVARIANCE-1 топологична на деревьях).
+- Ростовой sampler остаётся существенно смещённым относительно равновесия, и этот bias растёт с N.
+
 ## [INVARIANCE-BENCH-0] Overhead canonical tree relabeling (AHU)
 
 **Решение.**
