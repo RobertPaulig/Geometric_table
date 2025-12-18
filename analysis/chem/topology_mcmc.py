@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import time
 from dataclasses import dataclass
 from typing import Callable, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
@@ -138,6 +139,14 @@ class MCMCSummary:
     mean_log_qratio: float
     p90_log_qratio: float
     p_topology: Dict[str, float]
+    energy_cache_hits: int = 0
+    energy_cache_misses: int = 0
+    steps_per_sec: float = 0.0
+
+    @property
+    def energy_cache_hit_rate(self) -> float:
+        total = int(self.energy_cache_hits) + int(self.energy_cache_misses)
+        return (float(self.energy_cache_hits) / float(total)) if total > 0 else 0.0
 
 
 def run_fixed_n_tree_mcmc(
@@ -165,13 +174,21 @@ def run_fixed_n_tree_mcmc(
     edges: List[Edge] = [(_canonical_edge(i, i + 1)) for i in range(n - 1)]
     assert is_tree(n, edges)
 
+    t0_total = time.perf_counter()
+
     # Cache energies for speed.
     e_cache: Dict[Tuple[Edge, ...], float] = {}
+    cache_hits = 0
+    cache_misses = 0
 
     def energy(e: Sequence[Edge]) -> float:
         key = tuple(sorted(_canonical_edge(i, j) for i, j in e))
         if key in e_cache:
+            nonlocal cache_hits
+            cache_hits += 1
             return e_cache[key]
+        nonlocal cache_misses
+        cache_misses += 1
         val = compute_energy_for_tree(key, backend=backend)
         e_cache[key] = float(val)
         return float(val)
@@ -258,5 +275,8 @@ def run_fixed_n_tree_mcmc(
         mean_log_qratio=float(np.mean(log_qratios)) if log_qratios else 0.0,
         p90_log_qratio=_pctl(log_qratios, 90),
         p_topology=p_topo,
+        energy_cache_hits=int(cache_hits),
+        energy_cache_misses=int(cache_misses),
+        steps_per_sec=(float(steps) / max(1e-9, (time.perf_counter() - t0_total))),
     )
     return samples, summary

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import csv
 import math
+import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -388,6 +389,39 @@ def _load_p_exact_hexane_mode_a() -> Optional[Dict[str, float]]:
     return out or None
 
 
+def _load_p_eq_hexane_mode_a() -> Optional[Dict[str, float]]:
+    """
+    Parse P_eq(topology) mean from CHEM-VALIDATION-EQ runner (if present).
+
+    Expected format:
+      P_eq(topology): mean ± 95% CI across chains
+        n_hexane = 0.243488 ± 0.001234
+    """
+    try:
+        txt = results_path("chem_eq_N6_modeA.txt").read_text(encoding="utf-8", errors="replace")
+    except Exception:
+        return None
+    if "P_eq(topology):" not in txt:
+        return None
+    tail = txt.split("P_eq(topology):", 1)[1]
+    block = tail.split("\n\n", 1)[0]
+    out: Dict[str, float] = {}
+    for line in block.splitlines():
+        line = line.strip()
+        if not line or "=" not in line:
+            continue
+        left, right = [x.strip() for x in line.split("=", 1)]
+        # right: "<mean> ± <ci>"
+        m = re.match(r"([0-9.]+)\s*(?:±|\+/-)\s*([0-9.]+)", right)
+        if not m:
+            continue
+        try:
+            out[left] = float(m.group(1))
+        except Exception:
+            continue
+    return out or None
+
+
 def run_chem_validation_1b(cfg: ChemValidation1BConfig) -> Tuple[Path, Path]:
     start_ts = now_iso()
     t0_total = time.perf_counter()
@@ -666,6 +700,16 @@ def run_chem_validation_1b(cfg: ChemValidation1BConfig) -> Tuple[Path, Path]:
                 p_exact_vec = {k: float(p_exact.get(k, 0.0)) for k in HEXANE_DEGENERACY.keys()}
                 lines.append(f"  KL(P_growth||P_exact) = {kl_divergence(p_growth, p_exact_vec):.6f}")
                 lines.append(f"  KL(P_equilibrated||P_exact) = {kl_divergence(p_equil, p_exact_vec):.6f}")
+
+            p_eq = _load_p_eq_hexane_mode_a()
+            if p_eq is not None:
+                p_eq_vec = {k: float(p_eq.get(k, 0.0)) for k in HEXANE_DEGENERACY.keys()}
+                lines.append("  P_eq(topology) from chem_eq_N6_modeA.txt:")
+                for k in HEXANE_DEGENERACY.keys():
+                    lines.append(f"    {k} = {p_eq_vec[k]:.6f}")
+                if p_exact is not None:
+                    p_exact_vec = {k: float(p_exact.get(k, 0.0)) for k in HEXANE_DEGENERACY.keys()}
+                    lines.append(f"  KL(P_eq||P_exact) = {kl_divergence(p_eq_vec, p_exact_vec):.6f}")
 
         if growth_times:
             arr = np.asarray(growth_times, dtype=float)
