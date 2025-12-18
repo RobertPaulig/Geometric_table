@@ -136,6 +136,7 @@ class Config:
     eq_burnin_frac: float = 0.1
     eq_thin: int = 10
     eq_start_specs: Tuple[str, ...] = ("path", "max_branch")
+    top_k: int = 20
 
 
 def _parse_args(argv: Optional[Sequence[str]] = None) -> Config:
@@ -149,6 +150,7 @@ def _parse_args(argv: Optional[Sequence[str]] = None) -> Config:
     ap.add_argument("--eq_burnin_frac", type=float, default=0.1)
     ap.add_argument("--eq_thin", type=int, default=10)
     ap.add_argument("--eq_start_specs", type=str, nargs="*", default=["path", "max_branch"])
+    ap.add_argument("--top_k", type=int, default=20)
     args = ap.parse_args(argv)
     return Config(
         n_runs=int(args.n_runs),
@@ -160,6 +162,7 @@ def _parse_args(argv: Optional[Sequence[str]] = None) -> Config:
         eq_burnin_frac=float(args.eq_burnin_frac),
         eq_thin=int(args.eq_thin),
         eq_start_specs=tuple(str(x) for x in args.eq_start_specs),
+        top_k=int(args.top_k),
     )
 
 
@@ -176,6 +179,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
 
     total_runs = int(cfg.n_runs) * len(cfg.seeds) * len(cfg.modes)
     growth_counts: Dict[Tuple[str, str], int] = {}
+    n_atoms = 8
 
     with timed("growth_total", acc):
         run_iter = progress_iter(
@@ -192,7 +196,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
                 rng = np.random.default_rng(int(seed))
                 for _ in range(int(cfg.n_runs)):
                     next(it)
-                    params = GrowthParams(stop_at_n_atoms=8, allowed_symbols=["C"], max_depth=4)
+                    params = GrowthParams(stop_at_n_atoms=n_atoms, allowed_symbols=["C"], max_depth=4)
                     params.enforce_tree_alkane = True  # type: ignore[attr-defined]
                     mol = grow_molecule_christmas_tree("C", params, rng=rng)
                     adj = _mol_to_adj(mol)
@@ -208,9 +212,14 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
 
     eq_by_mode: Dict[str, Dict[str, float]] = {}
     eq_guardrail_by_mode: Dict[str, Dict[str, float]] = {}
+    eq_metrics_by_mode: Dict[str, Dict[str, float]] = {}
 
     with timed("eq_total", acc):
         for mode in [m for m in cfg.modes if m != "R"]:
+            mode_t0 = time.perf_counter()
+            steps_total = int(cfg.eq_steps) * int(cfg.eq_chains) * max(1, len(cfg.eq_start_specs))
+            cache_hits_total = 0
+            cache_misses_total = 0
             backend = _backend_for_mode(mode)
             burnin = int(max(0, round(float(cfg.eq_burnin_frac) * float(cfg.eq_steps))))
             per_start: List[Tuple[str, Dict[str, float], float, float]] = []
@@ -242,6 +251,8 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
                     chain_probs.append(dict(summary.p_topology))
                     chain_hit_rates.append(float(summary.energy_cache_hit_rate))
                     chain_steps_sec.append(float(summary.steps_per_sec))
+                    cache_hits_total += int(summary.energy_cache_hits)
+                    cache_misses_total += int(summary.energy_cache_misses)
 
                 keys: List[str] = []
                 for p in chain_probs:
@@ -284,6 +295,16 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
                 "cache_hit_rate_mean": float(np.mean(np.asarray([x[2] for x in per_start], dtype=float))) if per_start else 0.0,
                 "steps_per_sec_mean": float(np.mean(np.asarray([x[3] for x in per_start], dtype=float))) if per_start else 0.0,
             }
+            mode_elapsed = float(time.perf_counter() - mode_t0)
+            cache_total = cache_hits_total + cache_misses_total
+            eq_metrics_by_mode[str(mode)] = {
+                "eq_elapsed_sec": float(mode_elapsed),
+                "steps_total": float(steps_total),
+                "steps_per_sec_total": float(steps_total) / float(mode_elapsed) if mode_elapsed > 0 else 0.0,
+                "energy_cache_hits": float(cache_hits_total),
+                "energy_cache_misses": float(cache_misses_total),
+                "energy_cache_hit_rate": (float(cache_hits_total) / float(cache_total)) if cache_total > 0 else 0.0,
+            }
 
     with timed("io_total", acc):
         rows: List[Dict[str, object]] = []
@@ -302,37 +323,56 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         lines.append("CHEM-VALIDATION-1D: C8 octane skeleton (proposal vs equilibrium)")
         lines.append(f"Config: n_runs={cfg.n_runs}, seeds={list(cfg.seeds)}, modes={list(cfg.modes)}")
         lines.append(f"EQ budget: eq_steps={cfg.eq_steps}, eq_chains={cfg.eq_chains}, starts={list(cfg.eq_start_specs)}")
+        lines.append(f"Reporting: top_k={cfg.top_k}")
         lines.append("")
 
-        for mode in cfg.modes:
-            mode_counts = {topo: int(cnt) for (m, topo), cnt in growth_counts.items() if m == mode}
-            total = float(sum(mode_counts.values())) if mode_counts else 0.0
-            lines.append(f"[Mode {mode}] P_growth(topology):")
-            for topo, cnt in sorted(mode_counts.items(), key=lambda kv: (-kv[1], kv[0]))[:40]:
-                p = float(cnt) / total if total > 0 else 0.0
-                lines.append(f"  {topo} = {p:.6f} (count={cnt})")
-            if len(mode_counts) > 40:
-                lines.append(f"  ... ({len(mode_counts)-40} more)")
-            lines.append("")
-
         for mode in [m for m in cfg.modes if m != "R"]:
-            lines.append(f"[Mode {mode}] P_eq(topology):")
-            p_eq = eq_by_mode.get(mode, {})
-            for topo, p in sorted(p_eq.items(), key=lambda kv: (-kv[1], kv[0]))[:40]:
-                lines.append(f"  {topo} = {float(p):.6f}")
-            if len(p_eq) > 40:
-                lines.append(f"  ... ({len(p_eq)-40} more)")
-            guard = eq_guardrail_by_mode.get(mode, {})
-            lines.append(
-                f"  Guardrail: KL_max_pairwise={guard.get('kl_max_pairwise', float('nan')):.6f}, "
-                f"KL_mean_pairwise={guard.get('kl_mean_pairwise', float('nan')):.6f}, "
-                f"cache_hit_rate_mean={guard.get('cache_hit_rate_mean', 0.0):.3f}, "
-                f"steps_per_sec_mean={guard.get('steps_per_sec_mean', 0.0):.1f}"
-            )
             mode_counts = {topo: int(cnt) for (m, topo), cnt in growth_counts.items() if m == mode}
             total = float(sum(mode_counts.values())) if mode_counts else 0.0
             p_growth = {k: (float(v) / total if total > 0 else 0.0) for k, v in mode_counts.items()}
+            n_unique_growth = int(len(p_growth))
+
+            p_eq = eq_by_mode.get(mode, {})
+            n_unique_eq = int(len(p_eq))
+
+            lines.append(f"[Mode {mode}]")
+            lines.append(f"  n_unique_growth={n_unique_growth}, n_unique_eq={n_unique_eq}")
+
+            lines.append("  P_growth(topology):")
+            growth_sorted = sorted(mode_counts.items(), key=lambda kv: (-kv[1], kv[0]))
+            top_k = max(1, int(cfg.top_k))
+            top_growth = growth_sorted[:top_k]
+            mass_topk_growth = 0.0
+            for topo, cnt in top_growth:
+                p = float(cnt) / total if total > 0 else 0.0
+                mass_topk_growth += float(p)
+                lines.append(f"    {topo} = {p:.6f} (count={cnt})")
+            lines.append(f"  mass_topK_growth={mass_topk_growth:.6f}")
+
+            lines.append("  P_eq(topology):")
+            eq_sorted = sorted(p_eq.items(), key=lambda kv: (-float(kv[1]), kv[0]))
+            top_eq = eq_sorted[:top_k]
+            mass_topk_eq = float(sum(float(p) for _, p in top_eq))
+            for topo, p in top_eq:
+                lines.append(f"    {topo} = {float(p):.6f}")
+            lines.append(f"  mass_topK_eq={mass_topk_eq:.6f}")
+
             lines.append(f"  KL(P_growth||P_eq) = {_kl(p_growth, p_eq):.6f}")
+            guard = eq_guardrail_by_mode.get(mode, {})
+            lines.append(
+                f"  Guardrail: KL_max_pairwise={guard.get('kl_max_pairwise', float('nan')):.6f}, "
+                f"KL_mean_pairwise={guard.get('kl_mean_pairwise', float('nan')):.6f}"
+            )
+            eqm = eq_metrics_by_mode.get(mode, {})
+            lines.append(
+                f"  EQ_METRICS: ELAPSED_EQ_SEC={eqm.get('eq_elapsed_sec', 0.0):.6f}, "
+                f"STEPS_TOTAL={int(eqm.get('steps_total', 0.0))}, "
+                f"STEPS_PER_SEC_TOTAL={eqm.get('steps_per_sec_total', 0.0):.1f}"
+            )
+            lines.append(
+                f"  ENERGY-CACHE: hit_rate={eqm.get('energy_cache_hit_rate', 0.0):.3f}, "
+                f"hits={int(eqm.get('energy_cache_hits', 0.0))}, misses={int(eqm.get('energy_cache_misses', 0.0))}"
+            )
             lines.append("")
 
         elapsed_total = time.perf_counter() - t0_total
@@ -356,4 +396,3 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
 
 if __name__ == "__main__":
     main()
-
