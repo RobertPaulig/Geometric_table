@@ -143,6 +143,7 @@ class EqRunConfig:
     top_k: int = 20
     max_attempts: int = 3
     guardrail_kl_max_target: Optional[float] = None
+    profile_every: int = 0
 
 
 def _start_edges_for_spec(n: int, spec: str) -> List[Edge]:
@@ -187,15 +188,26 @@ def run_equilibrium_with_guardrail(cfg: EqRunConfig) -> Tuple[Dict[str, float], 
     steps = int(cfg.steps)
     burnin = int(cfg.burnin)
 
+    # Cumulative totals across *all attempts* (important when auto-escalating steps).
+    cache_hits_cum = 0
+    cache_misses_cum = 0
+    proposals_cum = 0
+    accepted_cum = 0
+    steps_cum = 0
+
     for attempt in range(int(cfg.max_attempts)):
         per_start_chain_probs: List[Tuple[str, List[Dict[str, float]]]] = []
         per_start_chain_counts: List[Tuple[str, List[Counter[str]]]] = []
         cache_hits_total = 0
         cache_misses_total = 0
+        cache_misses_per_chain: List[int] = []
         proposals_total = 0
         accepted_total = 0
         steps_total = 0
         chain_steps_sec: List[float] = []
+        chain_t_move: List[float] = []
+        chain_t_energy: List[float] = []
+        chain_t_canon: List[float] = []
 
         for start_spec in cfg.start_specs:
             chain_probs: List[Dict[str, float]] = []
@@ -220,6 +232,7 @@ def run_equilibrium_with_guardrail(cfg: EqRunConfig) -> Tuple[Dict[str, float], 
                     topology_classifier=topology_id_tree,
                     start_edges=edges0,
                     progress=None,
+                    profile_every=int(cfg.profile_every),
                 )
                 chain_probs.append(dict(summary.p_topology))
                 c: Counter[str] = Counter()
@@ -229,10 +242,16 @@ def run_equilibrium_with_guardrail(cfg: EqRunConfig) -> Tuple[Dict[str, float], 
 
                 cache_hits_total += int(summary.energy_cache_hits)
                 cache_misses_total += int(summary.energy_cache_misses)
+                cache_misses_per_chain.append(int(summary.energy_cache_misses))
                 proposals_total += int(summary.proposals)
                 accepted_total += int(summary.accepted)
                 steps_total += int(summary.steps)
                 chain_steps_sec.append(float(summary.steps_per_sec))
+                # Optional micro-profiler (averages per chain).
+                if hasattr(summary, "t_move_avg"):
+                    chain_t_move.append(float(getattr(summary, "t_move_avg")))
+                    chain_t_energy.append(float(getattr(summary, "t_energy_avg")))
+                    chain_t_canon.append(float(getattr(summary, "t_canon_avg")))
 
             per_start_chain_probs.append((str(start_spec), chain_probs))
             per_start_chain_counts.append((str(start_spec), chain_counts))
@@ -251,8 +270,15 @@ def run_equilibrium_with_guardrail(cfg: EqRunConfig) -> Tuple[Dict[str, float], 
         if n_unique_eq >= int(cfg.expected_n_topologies):
             elapsed_total = time.perf_counter() - t0_total
             end_ts = now_iso()
-            cache_total = cache_hits_total + cache_misses_total
-            cache_hit_rate = float(cache_hits_total) / float(cache_total) if cache_total > 0 else 0.0
+            # Add attempt totals to cumulative counters (even if this attempt succeeds).
+            cache_hits_cum += int(cache_hits_total)
+            cache_misses_cum += int(cache_misses_total)
+            proposals_cum += int(proposals_total)
+            accepted_cum += int(accepted_total)
+            steps_cum += int(steps_total)
+
+            cache_total = cache_hits_cum + cache_misses_cum
+            cache_hit_rate = float(cache_hits_cum) / float(cache_total) if cache_total > 0 else 0.0
 
             kl_max, kl_mean = _kl_pairwise_max_mean([p for _, p in p_start_means])
 
@@ -267,22 +293,37 @@ def run_equilibrium_with_guardrail(cfg: EqRunConfig) -> Tuple[Dict[str, float], 
                 "end_ts": end_ts,
                 "elapsed_total_sec": float(elapsed_total),
                 "eq_elapsed_sec": float(elapsed_total),
-                "steps_total": int(steps_total),
-                "steps_per_sec_total": float(steps_total) / float(elapsed_total) if elapsed_total > 0 else 0.0,
-                "cache_hits": int(cache_hits_total),
-                "cache_misses": int(cache_misses_total),
+                "steps_total": int(steps_cum),
+                "steps_total_last_attempt": int(steps_total),
+                "steps_per_sec_total": float(steps_cum) / float(elapsed_total) if elapsed_total > 0 else 0.0,
+                "cache_hits": int(cache_hits_cum),
+                "cache_misses": int(cache_misses_cum),
                 "cache_hit_rate": float(cache_hit_rate),
-                "accept_rate": (float(accepted_total) / float(proposals_total)) if proposals_total > 0 else 0.0,
+                "cache_misses_per_chain_mean": float(np.mean(np.asarray(cache_misses_per_chain, dtype=float)))
+                if cache_misses_per_chain
+                else 0.0,
+                "accept_rate": (float(accepted_cum) / float(proposals_cum)) if proposals_cum > 0 else 0.0,
                 "kl_max_pairwise": float(kl_max),
                 "kl_mean_pairwise": float(kl_mean),
                 "n_unique_eq": int(n_unique_eq),
                 "per_start_p": {st: p for st, p in p_start_means},
                 "per_start_chain_counts": per_start_chain_counts,
                 "chain_steps_per_sec": float(np.mean(np.asarray(chain_steps_sec, dtype=float))) if chain_steps_sec else 0.0,
+                "profile_every": int(cfg.profile_every),
+                "t_move_avg": float(np.mean(np.asarray(chain_t_move, dtype=float))) if chain_t_move else 0.0,
+                "t_energy_avg": float(np.mean(np.asarray(chain_t_energy, dtype=float))) if chain_t_energy else 0.0,
+                "t_canon_avg": float(np.mean(np.asarray(chain_t_canon, dtype=float))) if chain_t_canon else 0.0,
                 "attempt": int(attempt),
                 "steps_used": int(steps),
             }
             return p_eq, meta
+
+        # Attempt failed (coverage insufficient): add attempt totals to cumulative counters.
+        cache_hits_cum += int(cache_hits_total)
+        cache_misses_cum += int(cache_misses_total)
+        proposals_cum += int(proposals_total)
+        accepted_cum += int(accepted_total)
+        steps_cum += int(steps_total)
 
         # Not enough coverage: increase steps and try again.
         steps = int(steps) * 2
@@ -303,6 +344,7 @@ def write_report_and_csv(
     energies: Dict[str, float],
     aut_sizes: Dict[str, int],
     g_vals: Dict[str, int],
+    extra_summary_lines: Sequence[str] = (),
 ) -> Tuple[str, str]:
     out_txt = results_path(f"{out_stub}.txt")
     out_csv = results_path(f"{out_stub}.csv")
@@ -368,6 +410,16 @@ def write_report_and_csv(
     lines.append(
         f"Self-consistency: KL(P_eq||P_pred)={float(kl_divergence(p_eq, p_pred)):.6f}"
     )
+    for ln in extra_summary_lines:
+        lines.append(str(ln))
+    if int(meta.get("profile_every", 0)) > 0:
+        lines.append(
+            "Profiler: "
+            f"profile_every={int(meta['profile_every'])} "
+            f"t_move_avg={float(meta.get('t_move_avg', 0.0)):.6g}s "
+            f"t_energy_avg={float(meta.get('t_energy_avg', 0.0)):.6g}s "
+            f"t_canon_avg={float(meta.get('t_canon_avg', 0.0)):.6g}s"
+        )
     lines.append("")
     lines.append("Top-K by P_eq:")
     for topo, p in sorted(p_eq.items(), key=lambda kv: (-kv[1], kv[0]))[:top_k]:
@@ -392,10 +444,11 @@ def write_report_and_csv(
     lines.append(
         f"ENERGY_CACHE: hit_rate={meta['cache_hit_rate']:.3f}, hits={meta['cache_hits']}, misses={meta['cache_misses']}"
     )
+    lines.append(f"ENERGY_CACHE_MISSES_PER_CHAIN_MEAN={float(meta.get('cache_misses_per_chain_mean', 0.0)):.3f}")
 
     write_growth_txt(out_stub, lines)
-    print(f"[CHEM-VALIDATION-2] wrote {out_csv}")
-    print(f"[CHEM-VALIDATION-2] wrote {out_txt}")
+    print(f"[CHEM-VALIDATION] wrote {out_csv}")
+    print(f"[CHEM-VALIDATION] wrote {out_txt}")
     print(
         f"Wall-clock: start={meta['start_ts']} end={meta['end_ts']} elapsed_total_sec={float(meta['elapsed_total_sec']):.3f} "
         f"steps_total={int(meta['steps_total'])} steps_per_sec_total={float(meta['steps_per_sec_total']):.1f}"

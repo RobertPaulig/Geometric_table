@@ -656,6 +656,44 @@
 - Для `N=9/10` критерии “корректности внутри модели” выполняются без внешнего эталона:
   coverage + convergence guardrail + согласие `P_eq` с `g*exp(-E)` (малый KL).
 
+## [CHEM-VALIDATION-3] C11/C12 equilibrium-first + diagnostics (TECH-DEBT-1)
+
+**Решение.**
+
+- Добавлена диагностика производительности и “чистота метрик” для fixed-N MCMC:
+  - `energy_cache_misses` трактуется как число **уникальных топологий, впервые увиденных в цепи**
+    (а не “cache miss по compute”), чтобы прогрев кэша (например, при авто-эскалации steps) не обнулял misses.
+  - Добавлен микро-профайлер (сэмплирование одного шага каждые `profile_every`):
+    `t_move_avg`, `t_energy_avg`, `t_canon_avg`.
+  - В `run_equilibrium_with_guardrail` шаги/принятия/кэш теперь агрегируются **по всем attempts**,
+    чтобы throughput (`steps/sec`) был честным при авто-эскалации (это объясняет “аномалию” C9).
+- Добавлены прогоны CHEM-VALIDATION-3 (equilibrium-first) для:
+  - `analysis/chem/chem_validation_3_undecane.py` (C11),
+  - `analysis/chem/chem_validation_3_dodecane.py` (C12).
+
+**Результаты (Mode A, λ=1.0, T=1.0; starts=path/max_branch; chains=5).**
+
+- C11 (N=11, target 159):
+  - coverage: `n_unique_eq=159/159`.
+  - guardrail: `KL_max_pairwise=0.003665` (target ≤ 0.005).
+  - self-consistency: `KL(P_eq||P_pred)=0.000855`.
+  - micro-profiler (`profile_every=100`): `t_move_avg≈7.40e-05s`, `t_canon_avg≈1.02e-04s`, `t_energy_avg≈9.44e-07s`.
+  - “shape sanity”: SpearmanCorr(Energy, Wiener) `ρ≈0.7587` (энергия растёт с Wiener → более “растянутые” деревья менее вероятны).
+  - timing: `STEPS_TOTAL=1,000,000`, `STEPS_PER_SEC_TOTAL≈5.18k`.
+- C12 (N=12, target 355):
+  - coverage: `n_unique_eq=355/355`.
+  - guardrail: `KL_max_pairwise=0.003939` (target ≤ 0.005), потребовалась авто-эскалация до `steps=200k`.
+  - self-consistency: `KL(P_eq||P_pred)=0.001075`.
+  - micro-profiler (`profile_every=100`): `t_move_avg≈9.62e-05s`, `t_canon_avg≈1.34e-04s`, `t_energy_avg≈9.10e-07s`.
+  - “shape sanity”: SpearmanCorr(Energy, Wiener) `ρ≈0.7536`.
+  - timing: `STEPS_TOTAL=2,000,000`, `STEPS_PER_SEC_TOTAL≈2.65k`.
+
+**Вывод.**
+
+- Coverage на C11/C12 достигнут (159/355) без внешней “подсказки”.
+- Guardrail сходится в пределах таргетов, а `P_eq` согласуется с `P_pred ∝ g*exp(-E)` (малый KL), т.е. MCMC даёт корректную меру внутри модели.
+- Профилирование показывает, что “горячая” часть шага — `move` + `canonicalization`, а вычисление энергии почти полностью прячется кэшем (t_energy_avg ~ 1e-6s).
+
 ## [INVARIANCE-BENCH-0] Overhead canonical tree relabeling (AHU)
 
 **Решение.**

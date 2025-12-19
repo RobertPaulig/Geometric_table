@@ -17,6 +17,19 @@ Edge = Tuple[int, int]
 _GLOBAL_ENERGY_CACHE_BY_TOPOLOGY: Dict[Tuple[str, str], float] = {}
 
 
+def reset_global_energy_cache(*, clear_values: bool = False) -> None:
+    """
+    Reset global energy cache state used by analysis MCMC.
+
+    Per-run hit/miss counters are local to `run_fixed_n_tree_mcmc`; this helper
+    exists for diagnostics/reproducibility.
+
+    If `clear_values=True`, removes all cached energies.
+    """
+    if clear_values:
+        _GLOBAL_ENERGY_CACHE_BY_TOPOLOGY.clear()
+
+
 def _canonical_edge(i: int, j: int) -> Edge:
     a, b = (int(i), int(j))
     return (a, b) if a < b else (b, a)
@@ -145,6 +158,9 @@ class MCMCSummary:
     energy_cache_hits: int = 0
     energy_cache_misses: int = 0
     steps_per_sec: float = 0.0
+    t_move_avg: float = 0.0
+    t_energy_avg: float = 0.0
+    t_canon_avg: float = 0.0
 
     @property
     def energy_cache_hit_rate(self) -> float:
@@ -167,6 +183,7 @@ def run_fixed_n_tree_mcmc(
     start_edges: Optional[Sequence[Edge]] = None,
     energy_cache: Optional[MutableMapping[Tuple[str, str], float]] = None,
     progress: Optional[callable] = None,
+    profile_every: int = 0,
 ) -> Tuple[List[Dict[str, object]], MCMCSummary]:
     """
     Fixed-N MCMC on labeled trees using reversible leaf-rewire moves with Hastings correction.
@@ -191,21 +208,44 @@ def run_fixed_n_tree_mcmc(
     topo_cache = energy_cache if energy_cache is not None else _GLOBAL_ENERGY_CACHE_BY_TOPOLOGY
     cache_hits = 0
     cache_misses = 0
+    seen_topologies: set[str] = set()
+
+    profile_this_step = False
+    t_move_total = 0.0
+    t_energy_total = 0.0
+    t_canon_total = 0.0
+    profiled_steps = 0
+    profiled_energy_calls = 0
 
     def energy(e: Sequence[Edge]) -> float:
         nonlocal cache_hits, cache_misses
+        nonlocal t_energy_total, t_canon_total, profiled_energy_calls, profile_this_step
         key_edges = tuple(sorted(_canonical_edge(i, j) for i, j in e))
         if topology_classifier is not None:
+            t_c0 = time.perf_counter() if (profile_every > 0 and profile_this_step) else 0.0
             # Topology-keyed cache gives maximal reuse for label-invariant tree energies.
             adj = edges_to_adj(n, key_edges)
             topo = str(topology_classifier(adj))
-            key_topo = (str(backend), topo)
-            if key_topo in topo_cache:
+            if profile_every > 0 and profile_this_step:
+                t_canon_total += time.perf_counter() - t_c0
+
+            # Track per-run "first time seen" regardless of cache warm-up.
+            if topo in seen_topologies:
                 cache_hits += 1
-                return float(topo_cache[key_topo])
-            cache_misses += 1
-            val = compute_energy_for_tree(key_edges, backend=backend)
-            topo_cache[key_topo] = float(val)
+            else:
+                cache_misses += 1
+                seen_topologies.add(topo)
+
+            key_topo = (str(backend), topo)
+            t_e0 = time.perf_counter() if (profile_every > 0 and profile_this_step) else 0.0
+            if key_topo in topo_cache:
+                val = float(topo_cache[key_topo])
+            else:
+                val = compute_energy_for_tree(key_edges, backend=backend)
+                topo_cache[key_topo] = float(val)
+            if profile_every > 0 and profile_this_step:
+                t_energy_total += time.perf_counter() - t_e0
+                profiled_energy_calls += 1
             return float(val)
 
         if key_edges in e_cache_edges:
@@ -227,6 +267,9 @@ def run_fixed_n_tree_mcmc(
     proposals = 0
 
     for step in range(int(steps)):
+        profile_this_step = bool(profile_every) and (int(step) % int(profile_every) == 0)
+        t_m0 = time.perf_counter() if profile_this_step else 0.0
+
         moves_x = enumerate_leaf_rewire_moves(n, edges, max_valence=max_valence)
         if not moves_x:
             continue
@@ -235,6 +278,9 @@ def run_fixed_n_tree_mcmc(
         assert is_tree(n, edges_y)
 
         moves_y = enumerate_leaf_rewire_moves(n, edges_y, max_valence=max_valence)
+        if profile_this_step:
+            t_move_total += time.perf_counter() - t_m0
+            profiled_steps += 1
         q_x = 1.0 / float(len(moves_x))
         q_y = 1.0 / float(len(moves_y)) if moves_y else 0.0
         if q_y <= 0.0:
@@ -286,6 +332,10 @@ def run_fixed_n_tree_mcmc(
     total = sum(topo_counts.values()) or 1
     p_topo = {k: (v / float(total)) for k, v in topo_counts.items()}
 
+    t_move_avg = float(t_move_total) / float(profiled_steps) if profiled_steps > 0 else 0.0
+    t_energy_avg = float(t_energy_total) / float(profiled_energy_calls) if profiled_energy_calls > 0 else 0.0
+    t_canon_avg = float(t_canon_total) / float(profiled_energy_calls) if profiled_energy_calls > 0 else 0.0
+
     summary = MCMCSummary(
         n=int(n),
         steps=int(steps),
@@ -301,5 +351,8 @@ def run_fixed_n_tree_mcmc(
         energy_cache_hits=int(cache_hits),
         energy_cache_misses=int(cache_misses),
         steps_per_sec=(float(steps) / max(1e-9, (time.perf_counter() - t0_total))),
+        t_move_avg=float(t_move_avg),
+        t_energy_avg=float(t_energy_avg),
+        t_canon_avg=float(t_canon_avg),
     )
     return samples, summary
