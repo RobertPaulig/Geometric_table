@@ -623,6 +623,39 @@
     `diameter`, `max_degree`, `n_leaves`, `Wiener index`.
 - Это даёт быстрый ориентир, *какие структурные факторы* систематически пере/недо-производит ростовой kernel.
 
+## [CHEM-VALIDATION-2] C9/C10 equilibrium-first (tree-only) + self-consistency vs P_pred
+
+**Решение.**
+
+- Для `N=9` (C9, 35 топологий) и `N=10` (C10, 75 топологий) введены equilibrium-first прогоны:
+  - `analysis/chem/chem_validation_2_nonane.py` (C9),
+  - `analysis/chem/chem_validation_2_decane.py` (C10),
+  - общая логика в `analysis/chem/chem_validation_2_common.py`.
+- Fixed-N MCMC (leaf-rewire + Hastings) запускается с двумя “плохими стартами” `path/max_branch` и несколькими цепями,
+  затем проверяется:
+  - coverage (`n_unique_eq` равно ожидаемым `35/75`),
+  - guardrail `KL_max_pairwise/KL_mean_pairwise` между стартами,
+  - self-consistency: `KL(P_eq||P_pred)` для
+    `P_pred(t) ∝ g(t) * exp(-λ E(t)/T)`, где `g=N!/|Aut|`.
+
+**Результаты (Mode A, λ=1.0, T=1.0).**
+
+- C9 (N=9):
+  - coverage: `n_unique_eq=35`.
+  - guardrail: `KL_max_pairwise=0.000763`, `KL_mean_pairwise=0.000760` (target ≤ 0.002).
+  - self-consistency: `KL(P_eq||P_pred)=0.000256` (target ≤ 0.01).
+  - бюджет: авто-повышение шагов до `steps=80000` (chains=5, starts=2) для выполнения guardrail.
+- C10 (N=10):
+  - coverage: `n_unique_eq=75`.
+  - guardrail: `KL_max_pairwise=0.003181`, `KL_mean_pairwise=0.003120` (target ≤ 0.005).
+  - self-consistency: `KL(P_eq||P_pred)=0.000737` (target ≤ 0.02).
+  - бюджет: `steps=50000` достаточен (chains=5, starts=2).
+
+**Вывод.**
+
+- Для `N=9/10` критерии “корректности внутри модели” выполняются без внешнего эталона:
+  coverage + convergence guardrail + согласие `P_eq` с `g*exp(-E)` (малый KL).
+
 ## [INVARIANCE-BENCH-0] Overhead canonical tree relabeling (AHU)
 
 **Решение.**
