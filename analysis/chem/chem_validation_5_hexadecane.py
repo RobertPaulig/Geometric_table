@@ -20,6 +20,8 @@ class Config:
     guardrail_target: float = 0.007
     profile_every: int = 100
     progress: bool = True
+    auto_escalate: bool = True
+    lambda_scale: float = 1.0
 
 
 def _parse_args(argv: Optional[Sequence[str]] = None) -> Config:
@@ -28,7 +30,7 @@ def _parse_args(argv: Optional[Sequence[str]] = None) -> Config:
     ap.add_argument("--n_runs", type=int, default=5000)
     ap.add_argument("--growth_seeds", type=int, nargs="*", default=[0, 1, 2, 3, 4])
     ap.add_argument("--chains", type=int, default=5)
-    ap.add_argument("--steps", dest="steps_init", type=int, default=80_000_000)
+    ap.add_argument("--steps_init", type=int, default=80_000_000)
     ap.add_argument("--max_steps", type=int, default=320_000_000)
     ap.add_argument("--thin", type=int, default=10)
     ap.add_argument("--seed", dest="eq_seed", type=int, default=0)
@@ -36,6 +38,8 @@ def _parse_args(argv: Optional[Sequence[str]] = None) -> Config:
     ap.add_argument("--guardrail_target", type=float, default=0.007)
     ap.add_argument("--profile_every", type=int, default=100)
     ap.add_argument("--progress", action=argparse.BooleanOptionalAction, default=True)
+    ap.add_argument("--auto_escalate", action=argparse.BooleanOptionalAction, default=True)
+    ap.add_argument("--lambda_scale", type=float, default=1.0)
     args = ap.parse_args(argv)
     return Config(
         n_runs=int(args.n_runs),
@@ -49,12 +53,14 @@ def _parse_args(argv: Optional[Sequence[str]] = None) -> Config:
         guardrail_target=float(args.guardrail_target),
         profile_every=int(args.profile_every),
         progress=bool(args.progress),
+        auto_escalate=bool(args.auto_escalate),
+        lambda_scale=float(args.lambda_scale),
     )
 
 
 def main(argv: Optional[Sequence[str]] = None) -> None:
     cfg = _parse_args(argv)
-    p_growth, growth_counts, _ = run_growth_distribution(
+    p_growth, growth_counts, t_growth = run_growth_distribution(
         n=16,
         cfg=GrowthCfg(n_runs=int(cfg.n_runs), seeds=cfg.growth_seeds, progress=bool(cfg.progress)),
     )
@@ -73,6 +79,9 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
             progress=bool(cfg.progress),
         ),
     )
+    meta["lambda_scale"] = float(cfg.lambda_scale)
+    meta["temperature_T"] = 1.0
+    meta["growth_total_sec"] = float(t_growth)
     write_report(
         out_stub="chem_validation_5_hexadecane",
         n=16,
@@ -81,8 +90,9 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         p_eq=p_eq,
         meta=meta,
     )
+    if bool(meta.get("FAIL", False)) and bool(cfg.auto_escalate):
+        raise SystemExit(2)
 
 
 if __name__ == "__main__":
     main()
-

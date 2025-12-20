@@ -211,8 +211,11 @@ def run_equilibrium_distribution_mode_a(
     t0 = time.perf_counter()
     start_ts = now_iso()
 
-    steps = int(cfg.steps_init)
-    burnin = int(max(0, round(0.1 * float(steps))))
+    # `steps` in CHEM-VALIDATION-5 is interpreted as TOTAL steps across all starts×chains.
+    steps_total_budget = int(cfg.steps_init)
+    n_chains_total = int(cfg.chains) * int(len(cfg.start_specs))
+    steps_per_chain = max(1, int(round(float(steps_total_budget) / float(n_chains_total))))
+    burnin = int(max(0, round(0.1 * float(steps_per_chain))))
     attempts = 0
     last_meta: Dict[str, object] = {}
 
@@ -238,13 +241,13 @@ def run_equilibrium_distribution_mode_a(
             for chain_idx in progress_iter(
                 range(int(cfg.chains)),
                 total=int(cfg.chains),
-                desc=f"EQ N{n} modeA steps={steps} start={start_spec}",
+                desc=f"EQ N{n} modeA steps_per_chain={steps_per_chain} start={start_spec}",
                 enabled=bool(cfg.progress),
             ):
                 edges0 = _start_edges_for_spec(n, start_spec)
                 samples, summary = run_fixed_n_tree_mcmc(
                     n=int(n),
-                    steps=int(steps),
+                    steps=int(steps_per_chain),
                     burnin=int(burnin),
                     thin=int(cfg.thin),
                     backend="fdm",
@@ -295,7 +298,7 @@ def run_equilibrium_distribution_mode_a(
         for st in cfg.start_specs:
             md = compute_mixing_diagnostics(
                 n=int(n),
-                steps=int(steps),
+                steps=int(steps_per_chain),
                 burnin=int(burnin),
                 thin=int(cfg.thin),
                 start_spec=str(st),
@@ -322,7 +325,8 @@ def run_equilibrium_distribution_mode_a(
             "end_ts": end_ts,
             "elapsed_total_sec": float(elapsed),
             "eq_elapsed_sec": float(elapsed),
-            "steps_used": int(steps),
+            "steps_total_budget": int(steps_total_budget),
+            "steps_per_chain": int(steps_per_chain),
             "steps_total": int(steps_total),
             "steps_per_sec_total": float(steps_total) / float(elapsed) if elapsed > 0 else 0.0,
             "cache_hits": int(cache_hits_total),
@@ -352,11 +356,12 @@ def run_equilibrium_distribution_mode_a(
 
         if guard_ok and split_ok and rhat_ok and ess_ok and coverage_ok:
             return p_eq, last_meta, float(elapsed), float(0.0)
-        if steps >= int(cfg.max_steps):
+        if steps_total_budget >= int(cfg.max_steps):
             last_meta["FAIL"] = True
             return p_eq, last_meta, float(elapsed), float(0.0)
-        steps = min(int(cfg.max_steps), int(steps) * 2)
-        burnin = int(max(burnin, round(0.1 * float(steps))))
+        steps_total_budget = min(int(cfg.max_steps), int(steps_total_budget) * 2)
+        steps_per_chain = max(1, int(round(float(steps_total_budget) / float(n_chains_total))))
+        burnin = int(max(burnin, round(0.1 * float(steps_per_chain))))
 
 
 def write_report(
@@ -395,6 +400,10 @@ def write_report(
 
     kl_growth_eq = float(kl_divergence(p_growth, p_eq))
     kl_eq_pred = float(kl_divergence(p_eq, p_pred))
+
+    growth_total_sec = float(meta.get("growth_total_sec", 0.0))
+    eq_total_sec = float(meta.get("eq_elapsed_sec", 0.0))
+    t0_io = time.perf_counter()
 
     # CSV (topology-level)
     with out_csv.open("w", newline="", encoding="utf-8") as f:
@@ -435,6 +444,7 @@ def write_report(
     lines.append("TOPOLOGY_KEY_INVARIANT=1 (tree:<edge-list> on canonical relabeling)")
     lines.append("")
     lines.append(f"N={n}, mode=A")
+    lines.append(f"lambda_scale={float(meta.get('lambda_scale', 1.0))}  T_eff={float(meta.get('temperature_T', 1.0))}")
     lines.append(f"coverage_unique_eq={meta.get('coverage_unique_eq')}  n_unique_eq={meta.get('n_unique_eq')} expected={meta.get('expected_unique_eq')}")
     lines.append(f"Guardrail: KL_max_pairwise={meta.get('kl_max_pairwise'):.6f} KL_mean_pairwise={meta.get('kl_mean_pairwise'):.6f}")
     lines.append(f"Split: KL_split_max={meta.get('kl_split_max'):.6f}")
@@ -447,11 +457,17 @@ def write_report(
     lines.append("TIMING")
     lines.append(f"START_TS={meta.get('start_ts')}")
     lines.append(f"END_TS={meta.get('end_ts')}")
-    lines.append(f"ELAPSED_TOTAL_SEC={meta.get('elapsed_total_sec')}")
+    elapsed_total = float(meta.get("elapsed_total_sec", 0.0))
+    io_total_sec = float(time.perf_counter() - t0_io)
+    lines.append(f"ELAPSED_TOTAL_SEC={elapsed_total}")
+    lines.append(f"ELAPSED_GROWTH_SEC={growth_total_sec}")
+    lines.append(f"ELAPSED_EQ_SEC={eq_total_sec}")
+    lines.append(f"ELAPSED_IO_SEC={io_total_sec}")
     lines.append(f"STEPS_TOTAL={meta.get('steps_total')} STEPS_PER_SEC_TOTAL={meta.get('steps_per_sec_total')}")
     lines.append(
         f"ENERGY_CACHE hit_rate={meta.get('cache_hit_rate'):.3f} hits={meta.get('cache_hits')} misses={meta.get('cache_misses')}"
     )
+    lines.append(f"ENERGY_CACHE_MISSES_PER_CHAIN_MEAN={float(meta.get('cache_misses_per_chain_mean', 0.0)):.3f}")
     lines.append(f"Profiler: t_move_avg={meta.get('t_move_avg'):.6g}s t_energy_avg={meta.get('t_energy_avg'):.6g}s t_canon_avg={meta.get('t_canon_avg'):.6g}s")
     lines.append("")
     lines.append("Top-20 by P_eq (with metrics):")
