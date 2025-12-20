@@ -3,18 +3,20 @@ from __future__ import annotations
 import math
 import time
 from dataclasses import dataclass
-from typing import Callable, Dict, Iterable, List, Mapping, MutableMapping, Optional, Sequence, Tuple
+from typing import Callable, Dict, Iterable, List, Mapping, MutableMapping, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
 from analysis.chem.core2_fit import compute_p_pred
 from core.complexity import compute_complexity_features_v2
+from core.tree_canonical import canonical_tree_permutation, relabel_adj_list
 
 
 Edge = Tuple[int, int]
+TreeTopoKey = Tuple[Edge, ...]
 
 
-_GLOBAL_ENERGY_CACHE_BY_TOPOLOGY: Dict[Tuple[str, str], float] = {}
+_GLOBAL_ENERGY_CACHE_BY_TOPOLOGY: Dict[Tuple[str, object], float] = {}
 
 
 def reset_global_energy_cache(*, clear_values: bool = False) -> None:
@@ -44,6 +46,43 @@ def edges_to_adj(n: int, edges: Sequence[Edge]) -> np.ndarray:
         adj[a, b] = 1.0
         adj[b, a] = 1.0
     return adj
+
+
+def edges_to_adj_list(n: int, edges: Sequence[Edge]) -> List[List[int]]:
+    adj_list: List[List[int]] = [[] for _ in range(int(n))]
+    for i, j in edges:
+        a, b = _canonical_edge(i, j)
+        adj_list[a].append(b)
+        adj_list[b].append(a)
+    for u in range(int(n)):
+        adj_list[u].sort()
+    return adj_list
+
+
+def tree_topology_edge_key_from_edges(n: int, edges: Sequence[Edge]) -> TreeTopoKey:
+    """
+    Permutation-invariant tree topology key as canonical edge tuple.
+
+    The tuple is hashable and is the preferred internal key for caching.
+    """
+    adj_list = edges_to_adj_list(int(n), edges)
+    perm = canonical_tree_permutation(adj_list)
+    rel = relabel_adj_list(adj_list, perm)
+    out_edges: List[Edge] = []
+    for u in range(int(n)):
+        for v in rel[u]:
+            if int(v) > int(u):
+                out_edges.append((int(u), int(v)))
+    out_edges.sort()
+    return tuple(out_edges)
+
+
+def tree_topology_id_from_edge_key(edge_key: TreeTopoKey) -> str:
+    return "tree:" + ",".join(f"{a}-{b}" for a, b in edge_key)
+
+
+def tree_topology_id_from_edges(n: int, edges: Sequence[Edge]) -> str:
+    return tree_topology_id_from_edge_key(tree_topology_edge_key_from_edges(int(n), edges))
 
 
 def degrees(n: int, edges: Sequence[Edge]) -> List[int]:
@@ -180,8 +219,9 @@ def run_fixed_n_tree_mcmc(
     seed: int,
     max_valence: int = 4,
     topology_classifier: Optional[Callable[[np.ndarray], str]] = None,
+    topology_key_fn_edges: Optional[Callable[[int, Sequence[Edge]], object]] = None,
     start_edges: Optional[Sequence[Edge]] = None,
-    energy_cache: Optional[MutableMapping[Tuple[str, str], float]] = None,
+    energy_cache: Optional[MutableMapping[Tuple[str, object], float]] = None,
     progress: Optional[callable] = None,
     profile_every: int = 0,
 ) -> Tuple[List[Dict[str, object]], MCMCSummary]:
@@ -208,7 +248,8 @@ def run_fixed_n_tree_mcmc(
     topo_cache = energy_cache if energy_cache is not None else _GLOBAL_ENERGY_CACHE_BY_TOPOLOGY
     cache_hits = 0
     cache_misses = 0
-    seen_topologies: set[str] = set()
+    seen_topologies: set[object] = set()
+    topo_id_memo: Dict[object, str] = {}
 
     profile_this_step = False
     t_move_total = 0.0
@@ -221,6 +262,31 @@ def run_fixed_n_tree_mcmc(
         nonlocal cache_hits, cache_misses
         nonlocal t_energy_total, t_canon_total, profiled_energy_calls, profile_this_step
         key_edges = tuple(sorted(_canonical_edge(i, j) for i, j in e))
+        if topology_key_fn_edges is not None:
+            t_c0 = time.perf_counter() if (profile_every > 0 and profile_this_step) else 0.0
+            topo_key = topology_key_fn_edges(int(n), key_edges)
+            if profile_every > 0 and profile_this_step:
+                t_canon_total += time.perf_counter() - t_c0
+
+            # Track per-run "first time seen" regardless of cache warm-up.
+            if topo_key in seen_topologies:
+                cache_hits += 1
+            else:
+                cache_misses += 1
+                seen_topologies.add(topo_key)
+
+            key_topo = (str(backend), topo_key)
+            t_e0 = time.perf_counter() if (profile_every > 0 and profile_this_step) else 0.0
+            if key_topo in topo_cache:
+                val = float(topo_cache[key_topo])
+            else:
+                val = compute_energy_for_tree(key_edges, backend=backend)
+                topo_cache[key_topo] = float(val)
+            if profile_every > 0 and profile_this_step:
+                t_energy_total += time.perf_counter() - t_e0
+                profiled_energy_calls += 1
+            return float(val)
+
         if topology_classifier is not None:
             t_c0 = time.perf_counter() if (profile_every > 0 and profile_this_step) else 0.0
             # Topology-keyed cache gives maximal reuse for label-invariant tree energies.
@@ -303,7 +369,17 @@ def run_fixed_n_tree_mcmc(
             progress(1)
 
         if step >= burnin and ((step - burnin) % max(1, thin) == 0):
-            if topology_classifier is None:
+            if topology_key_fn_edges is not None:
+                topo_key = topology_key_fn_edges(int(n), edges)
+                if topo_key in topo_id_memo:
+                    topo = topo_id_memo[topo_key]
+                else:
+                    if isinstance(topo_key, tuple):
+                        topo = tree_topology_id_from_edge_key(topo_key)  # type: ignore[arg-type]
+                    else:
+                        topo = str(topo_key)
+                    topo_id_memo[topo_key] = topo
+            elif topology_classifier is None:
                 deg = degrees(n, edges)
                 topo = classify_tree_topology_by_deg_sorted(sorted(deg))
             else:

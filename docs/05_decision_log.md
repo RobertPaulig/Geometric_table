@@ -694,6 +694,24 @@
 - Guardrail сходится в пределах таргетов, а `P_eq` согласуется с `P_pred ∝ g*exp(-E)` (малый KL), т.е. MCMC даёт корректную меру внутри модели.
 - Профилирование показывает, что “горячая” часть шага — `move` + `canonicalization`, а вычисление энергии почти полностью прячется кэшем (t_energy_avg ~ 1e-6s).
 
+## [CHEM-VALIDATION-4] C13/C14 equilibrium-first (tree-only) + coverage/guardrail/self-consistency gates
+
+**Решение.**
+
+- Расширить equilibrium-first пайплайн на `N=13/14` в `Mode A` с теми же внутренними критериями корректности:
+  - coverage gate: `n_unique_eq == expected_unique(N)` (табличный expected для алканов с `deg<=4`),
+  - guardrail: `KL_max_pairwise` между стартами `path/max_branch`,
+  - self-consistency: `KL(P_eq||P_pred)` для `P_pred ∝ g*exp(-λE/T)` при `λ=1.0`.
+- Встроить ожидаемые counts в одном месте: `analysis/chem/alkane_expected_counts.py` (для `N=7..14`).
+- Для удержания времени добавить OPT-2 канонизации: MCMC использует AHU-канонический ключ (tuple edge-key),
+  без плотной `NxN` канонизации внутри шага.
+
+**DoD команды.**
+
+- `python -m analysis.chem.chem_validation_4_tridecane --mode A --progress`
+- `python -m analysis.chem.chem_validation_4_tetradecane --mode A --progress`
+- `python -m analysis.bench.invariance_bench_2`
+
 ## [INVARIANCE-BENCH-0] Overhead canonical tree relabeling (AHU)
 
 **Решение.**

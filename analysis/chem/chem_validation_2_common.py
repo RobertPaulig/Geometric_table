@@ -11,7 +11,11 @@ import numpy as np
 
 from analysis.chem.alkane_exact_1 import tree_automorphism_size
 from analysis.chem.core2_fit import kl_divergence
-from analysis.chem.topology_mcmc import Edge, run_fixed_n_tree_mcmc
+from analysis.chem.topology_mcmc import (
+    Edge,
+    run_fixed_n_tree_mcmc,
+    tree_topology_edge_key_from_edges,
+)
 from analysis.io_utils import results_path
 from analysis.utils.progress import progress_iter
 from analysis.utils.timing import now_iso
@@ -52,6 +56,7 @@ def topology_id_tree(adj: np.ndarray) -> str:
         for j in range(i + 1, n):
             if can[i, j] > 0:
                 edges.append((i, j))
+    edges.sort()
     return "tree:" + ",".join(f"{a}-{b}" for a, b in edges)
 
 
@@ -229,7 +234,7 @@ def run_equilibrium_with_guardrail(cfg: EqRunConfig) -> Tuple[Dict[str, float], 
                     temperature_T=float(cfg.temperature_T),
                     seed=int(cfg.seed) + 101 * int(chain_id) + 10_000 * int(attempt),
                     max_valence=4,
-                    topology_classifier=topology_id_tree,
+                    topology_key_fn_edges=tree_topology_edge_key_from_edges,
                     start_edges=edges0,
                     progress=None,
                     profile_every=int(cfg.profile_every),
@@ -283,6 +288,39 @@ def run_equilibrium_with_guardrail(cfg: EqRunConfig) -> Tuple[Dict[str, float], 
             kl_max, kl_mean = _kl_pairwise_max_mean([p for _, p in p_start_means])
 
             if cfg.guardrail_kl_max_target is not None and float(kl_max) > float(cfg.guardrail_kl_max_target):
+                if attempt >= int(cfg.max_attempts) - 1:
+                    # Coverage ok but guardrail too loose: return last attempt with FAIL flag.
+                    meta: Dict[str, object] = {
+                        "start_ts": start_ts,
+                        "end_ts": end_ts,
+                        "elapsed_total_sec": float(elapsed_total),
+                        "eq_elapsed_sec": float(elapsed_total),
+                        "steps_total": int(steps_cum),
+                        "steps_total_last_attempt": int(steps_total),
+                        "steps_per_sec_total": float(steps_cum) / float(elapsed_total) if elapsed_total > 0 else 0.0,
+                        "cache_hits": int(cache_hits_cum),
+                        "cache_misses": int(cache_misses_cum),
+                        "cache_hit_rate": float(cache_hit_rate),
+                        "cache_misses_per_chain_mean": float(np.mean(np.asarray(cache_misses_per_chain, dtype=float)))
+                        if cache_misses_per_chain
+                        else 0.0,
+                        "accept_rate": (float(accepted_cum) / float(proposals_cum)) if proposals_cum > 0 else 0.0,
+                        "kl_max_pairwise": float(kl_max),
+                        "kl_mean_pairwise": float(kl_mean),
+                        "n_unique_eq": int(n_unique_eq),
+                        "per_start_p": {st: p for st, p in p_start_means},
+                        "per_start_chain_counts": per_start_chain_counts,
+                        "chain_steps_per_sec": float(np.mean(np.asarray(chain_steps_sec, dtype=float))) if chain_steps_sec else 0.0,
+                        "profile_every": int(cfg.profile_every),
+                        "t_move_avg": float(np.mean(np.asarray(chain_t_move, dtype=float))) if chain_t_move else 0.0,
+                        "t_energy_avg": float(np.mean(np.asarray(chain_t_energy, dtype=float))) if chain_t_energy else 0.0,
+                        "t_canon_avg": float(np.mean(np.asarray(chain_t_canon, dtype=float))) if chain_t_canon else 0.0,
+                        "attempt": int(attempt),
+                        "steps_used": int(steps),
+                        "guardrail_pass": False,
+                    }
+                    return p_eq, meta
+
                 # Coverage ok but guardrail too loose: increase steps and retry.
                 steps = int(steps) * 2
                 burnin = int(max(burnin, int(round(0.1 * float(steps)))))
@@ -315,6 +353,7 @@ def run_equilibrium_with_guardrail(cfg: EqRunConfig) -> Tuple[Dict[str, float], 
                 "t_canon_avg": float(np.mean(np.asarray(chain_t_canon, dtype=float))) if chain_t_canon else 0.0,
                 "attempt": int(attempt),
                 "steps_used": int(steps),
+                "guardrail_pass": True,
             }
             return p_eq, meta
 
@@ -407,6 +446,8 @@ def write_report_and_csv(
     lines.append(
         f"Guardrail: KL_max_pairwise={meta['kl_max_pairwise']:.6f}, KL_mean_pairwise={meta['kl_mean_pairwise']:.6f}"
     )
+    if "guardrail_pass" in meta and not bool(meta["guardrail_pass"]):
+        lines.append("Guardrail: FAIL (max_attempts reached)")
     lines.append(
         f"Self-consistency: KL(P_eq||P_pred)={float(kl_divergence(p_eq, p_pred)):.6f}"
     )

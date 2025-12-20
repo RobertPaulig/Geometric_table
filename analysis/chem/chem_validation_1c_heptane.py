@@ -8,7 +8,7 @@ from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 
-from analysis.chem.topology_mcmc import Edge, run_fixed_n_tree_mcmc
+from analysis.chem.topology_mcmc import Edge, run_fixed_n_tree_mcmc, tree_topology_edge_key_from_edges
 from analysis.io_utils import results_path
 from analysis.utils.progress import progress_iter
 from analysis.utils.timing import now_iso, timed
@@ -273,7 +273,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
                         temperature_T=1.0,
                         seed=12345 + 101 * int(chain_idx),
                         max_valence=4,
-                        topology_classifier=_topology_id_tree,
+                        topology_key_fn_edges=tree_topology_edge_key_from_edges,
                         start_edges=edges0,
                         progress=None,
                     )
