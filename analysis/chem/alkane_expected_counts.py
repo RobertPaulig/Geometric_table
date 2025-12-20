@@ -17,6 +17,8 @@ ALKANE_TREE_TOPOLOGY_COUNTS: Dict[int, int] = {
     12: 355,
     13: 802,
     14: 1858,
+    15: 4347,
+    16: 10359,
 }
 
 
@@ -25,4 +27,3 @@ def expected_unique_alkane_tree_topologies(n: int) -> int:
     if n not in ALKANE_TREE_TOPOLOGY_COUNTS:
         raise KeyError(f"Expected alkane topology count is not defined for N={n}")
     return int(ALKANE_TREE_TOPOLOGY_COUNTS[n])
-

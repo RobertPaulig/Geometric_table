@@ -712,6 +712,32 @@
 - `python -m analysis.chem.chem_validation_4_tetradecane --mode A --progress`
 - `python -m analysis.bench.invariance_bench_2`
 
+## [MIXING-DIAGNOSTICS-1] Fixed-N MCMC mixing diagnostics (beyond guardrail)
+
+**Решение.**
+
+- Добавлен модуль `analysis/chem/mixing_diagnostics_1.py`, который даёт количественные признаки:
+  - chain agreement: `KL_max_pairwise/KL_mean_pairwise` по `P(chain)`,
+  - split-chain stationarity: `KL_split_max/KL_split_mean`,
+  - `Rhat_energy` и `ESS_energy` по энерго-трассам (без scipy),
+  - coverage dynamics: `n_unique_vs_step` (биннинг).
+- Эти метрики используются как stop/auto-escalation критерии для больших N, чтобы отличать “guardrail прошёл” от
+  “цепи реально стабилизировались”.
+
+## [CHEM-VALIDATION-5] C15/C16 growth vs equilibrium (Mode A) + mixing diagnostics
+
+**Решение.**
+
+- Добавлены скрипты:
+  - `analysis/chem/chem_validation_5_pentadecane.py` (C15),
+  - `analysis/chem/chem_validation_5_hexadecane.py` (C16),
+  - общая логика: `analysis/chem/chem_validation_5_common.py`.
+- В отчётах разделяются:
+  - `P_growth` (конструктивный рост; kernel-biased),
+  - `P_eq` (fixed-N MCMC; multi-start `path/max_branch` + mixing diagnostics).
+- Expected counts расширены до `N=15/16` в `analysis/chem/alkane_expected_counts.py`:
+  - `N=15 -> 4347`, `N=16 -> 10359`.
+
 ## [INVARIANCE-BENCH-0] Overhead canonical tree relabeling (AHU)
 
 **Решение.**
