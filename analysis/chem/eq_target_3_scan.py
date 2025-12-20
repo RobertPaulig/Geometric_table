@@ -220,10 +220,17 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
             "ESS_energy_min": float(ess_min),
         }
         rows.append(row)
-        lines.append(
+        line = (
             f"steps={int(steps_total_budget)}: KL_max={kl_max:.6g} KL_split_max={kl_split_max:.6g} "
             f"Rhat_max={rhat_max:.4g} ESS_min={ess_min:.1f} "
             f"elapsed={total_elapsed:.1f}s steps/s={steps_per_sec_total:.0f} hit={cache_hit_rate:.3f}"
+        )
+        lines.append(line)
+        print(f"[EQ-TARGET-3] {line}")
+        print(
+            f"[EQ-TARGET-3] STEPS_TOTAL={int(total_steps_done)} "
+            f"STEPS_PER_SEC_TOTAL={steps_per_sec_total:.1f} "
+            f"ELAPSED_SEC={total_elapsed:.3f}"
         )
 
     end_ts = now_iso()
