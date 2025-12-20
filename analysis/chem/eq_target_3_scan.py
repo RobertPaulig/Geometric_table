@@ -4,7 +4,7 @@ import argparse
 import csv
 import time
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -40,6 +40,8 @@ class Cfg:
     start_specs: Tuple[str, ...] = ("path", "max_branch")
     seed: int = 0
     progress: bool = True
+    step_progress: bool = True
+    step_heartbeat_every: int = 200_000
 
 
 def _parse_args(argv: Optional[Sequence[str]] = None) -> Cfg:
@@ -51,6 +53,8 @@ def _parse_args(argv: Optional[Sequence[str]] = None) -> Cfg:
     ap.add_argument("--start_specs", type=str, nargs="*", default=["path", "max_branch"])
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--progress", action=argparse.BooleanOptionalAction, default=True)
+    ap.add_argument("--step_progress", action=argparse.BooleanOptionalAction, default=True)
+    ap.add_argument("--step_heartbeat_every", type=int, default=200_000)
     args = ap.parse_args(argv)
     return Cfg(
         n=int(args.N),
@@ -60,6 +64,8 @@ def _parse_args(argv: Optional[Sequence[str]] = None) -> Cfg:
         start_specs=tuple(str(x) for x in args.start_specs),
         seed=int(args.seed),
         progress=bool(args.progress),
+        step_progress=bool(args.step_progress),
+        step_heartbeat_every=int(args.step_heartbeat_every),
     )
 
 
@@ -92,27 +98,84 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
             seqs: List[List[str]] = []
             energies: List[List[float]] = []
             t_start = time.perf_counter()
-            for chain_idx in progress_iter(
+
+            # If step_progress is enabled, the outer "chains" progress is redundant (and produces 0.0 it/s).
+            chains_iter = progress_iter(
                 range(int(cfg.chains)),
                 total=int(cfg.chains),
                 desc=f"EQ-TARGET-3 N{cfg.n} steps={steps_total_budget} start={start_spec}",
-                enabled=bool(cfg.progress),
-            ):
+                enabled=bool(cfg.progress) and not bool(cfg.step_progress),
+            )
+            for chain_idx in chains_iter:
                 edges0 = _start_edges_for_spec(cfg.n, start_spec)
-                samples, summary = run_fixed_n_tree_mcmc(
-                    n=int(cfg.n),
-                    steps=int(steps_total_budget),
-                    burnin=int(burnin),
-                    thin=int(cfg.thin),
-                    backend="fdm",
-                    lam=1.0,
-                    temperature_T=1.0,
-                    seed=int(cfg.seed) + 101 * int(chain_idx) + 10_000 * int(steps_total_budget),
-                    max_valence=4,
-                    topology_key_fn_edges=tree_topology_edge_key_from_edges,
-                    start_edges=edges0,
-                    progress=None,
-                )
+
+                pbar = None
+                hb_every = max(1, int(cfg.step_heartbeat_every))
+                if bool(cfg.progress) and bool(cfg.step_progress):
+                    try:
+                        from tqdm import tqdm  # type: ignore
+
+                        pbar = tqdm(
+                            total=int(steps_total_budget),
+                            desc=f"EQ N{cfg.n} start={start_spec} chain={int(chain_idx)}",
+                            unit="step",
+                            mininterval=1.0,
+                            smoothing=0.1,
+                        )
+                    except Exception:
+                        pbar = None
+
+                last_hb_step = 0
+
+                def _heartbeat(info: Mapping[str, float]) -> None:
+                    nonlocal last_hb_step
+                    step = int(info.get("step", 0))
+                    if pbar is not None:
+                        delta = max(0, step - last_hb_step)
+                        last_hb_step = step
+                        pbar.update(delta)
+                        pbar.set_postfix(
+                            steps_per_sec=f"{info.get('heartbeat_steps_per_sec', 0.0):.0f}",
+                            acc=f"{info.get('accept_rate', 0.0):.3f}",
+                            hit=f"{info.get('energy_cache_hit_rate', 0.0):.3f}",
+                            misses=str(int(info.get("energy_cache_misses_seen", 0.0))),
+                        )
+                    else:
+                        # Fallback heartbeat print.
+                        print(
+                            f"[EQ-TARGET-3 N={cfg.n} start={start_spec} chain={int(chain_idx)}] "
+                            f"step={step}/{int(steps_total_budget)} "
+                            f"steps/sec={info.get('heartbeat_steps_per_sec', 0.0):.0f} "
+                            f"acc={info.get('accept_rate', 0.0):.3f} "
+                            f"hit={info.get('energy_cache_hit_rate', 0.0):.3f} "
+                            f"misses_seen={int(info.get('energy_cache_misses_seen', 0.0))}"
+                        )
+
+                try:
+                    samples, summary = run_fixed_n_tree_mcmc(
+                        n=int(cfg.n),
+                        steps=int(steps_total_budget),
+                        burnin=int(burnin),
+                        thin=int(cfg.thin),
+                        backend="fdm",
+                        lam=1.0,
+                        temperature_T=1.0,
+                        seed=int(cfg.seed) + 101 * int(chain_idx) + 10_000 * int(steps_total_budget),
+                        max_valence=4,
+                        topology_key_fn_edges=tree_topology_edge_key_from_edges,
+                        start_edges=edges0,
+                        progress=None,
+                        step_heartbeat_every=hb_every if bool(cfg.progress) else 0,
+                        step_heartbeat=_heartbeat if bool(cfg.progress) else None,
+                    )
+                finally:
+                    if pbar is not None:
+                        try:
+                            # Ensure the bar reaches total, then close.
+                            if last_hb_step < int(steps_total_budget):
+                                pbar.update(int(steps_total_budget) - int(last_hb_step))
+                        finally:
+                            pbar.close()
                 seqs.append([str(s["topology"]) for s in samples])
                 energies.append([float(s["energy"]) for s in samples])
                 cache_hits_total += int(summary.energy_cache_hits)
@@ -184,4 +247,3 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
 
 if __name__ == "__main__":
     main()
-
