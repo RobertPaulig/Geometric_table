@@ -224,6 +224,8 @@ def run_fixed_n_tree_mcmc(
     energy_cache: Optional[MutableMapping[Tuple[str, object], float]] = None,
     progress: Optional[callable] = None,
     profile_every: int = 0,
+    step_heartbeat_every: int = 0,
+    step_heartbeat: Optional[Callable[[Mapping[str, float]], None]] = None,
 ) -> Tuple[List[Dict[str, object]], MCMCSummary]:
     """
     Fixed-N MCMC on labeled trees using reversible leaf-rewire moves with Hastings correction.
@@ -240,6 +242,7 @@ def run_fixed_n_tree_mcmc(
     assert is_tree(n, edges)
 
     t0_total = time.perf_counter()
+    t0_heartbeat = t0_total
 
     # Cache energies for speed (two-level):
     # - global cache by (backend, topology) when topology_classifier is provided (label-invariant energy on trees)
@@ -367,6 +370,29 @@ def run_fixed_n_tree_mcmc(
 
         if progress is not None:
             progress(1)
+
+        if (
+            step_heartbeat is not None
+            and int(step_heartbeat_every) > 0
+            and int(step) > 0
+            and (int(step) % int(step_heartbeat_every) == 0)
+        ):
+            now = time.perf_counter()
+            dt = now - t0_heartbeat
+            steps_per_sec = (float(step_heartbeat_every) / dt) if dt > 0 else 0.0
+            t0_heartbeat = now
+            step_heartbeat(
+                {
+                    "step": float(step),
+                    "steps_total": float(steps),
+                    "accept_rate": (float(accepted) / float(proposals)) if proposals > 0 else 0.0,
+                    "energy_cache_hit_rate": float(cache_hits) / float(cache_hits + cache_misses)
+                    if (cache_hits + cache_misses) > 0
+                    else 0.0,
+                    "energy_cache_misses_seen": float(cache_misses),
+                    "heartbeat_steps_per_sec": float(steps_per_sec),
+                }
+            )
 
         if step >= burnin and ((step - burnin) % max(1, thin) == 0):
             if topology_key_fn_edges is not None:

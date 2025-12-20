@@ -245,6 +245,16 @@ def run_equilibrium_distribution_mode_a(
                 enabled=bool(cfg.progress),
             ):
                 edges0 = _start_edges_for_spec(n, start_spec)
+                def _heartbeat(info: Mapping[str, float]) -> None:
+                    print(
+                        f"[EQ-HB N{n} start={start_spec} chain={int(chain_idx)}] "
+                        f"step={int(info['step'])}/{int(info['steps_total'])} "
+                        f"steps_per_sec={info['heartbeat_steps_per_sec']:.0f} "
+                        f"acc={info['accept_rate']:.3f} "
+                        f"hit={info['energy_cache_hit_rate']:.3f} "
+                        f"misses_seen={int(info['energy_cache_misses_seen'])}"
+                    )
+
                 samples, summary = run_fixed_n_tree_mcmc(
                     n=int(n),
                     steps=int(steps_per_chain),
@@ -259,6 +269,8 @@ def run_equilibrium_distribution_mode_a(
                     start_edges=edges0,
                     progress=None,
                     profile_every=int(cfg.profile_every),
+                    step_heartbeat_every=1_000_000,
+                    step_heartbeat=_heartbeat if bool(cfg.progress) else None,
                 )
                 chain_probs.append(dict(summary.p_topology))
                 chain_seqs.append([str(s["topology"]) for s in samples])
