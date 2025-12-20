@@ -1,3 +1,7 @@
+## QSG Versions (project-level)
+
+- `QSG v7.1` — baseline for resumed version tracking; tag `qsg-v7.1` (see `VERSION`).
+
 ### [Geom-Mendeleev v2] старт гипотез
 
 **Решение.**
