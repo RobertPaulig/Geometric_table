@@ -91,8 +91,12 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         per_start_elapsed = {}
         total_elapsed = 0.0
         total_steps_done = 0
+        total_samples_recorded = 0
+        total_proposals = 0
+        total_accepted = 0
         cache_hits_total = 0
         cache_misses_total = 0
+        unique_eqs_seen: set[str] = set()
 
         for start_spec in cfg.start_specs:
             seqs: List[List[str]] = []
@@ -181,6 +185,8 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
                 cache_hits_total += int(summary.energy_cache_hits)
                 cache_misses_total += int(summary.energy_cache_misses)
                 total_steps_done += int(summary.steps)
+                total_proposals += int(summary.proposals)
+                total_accepted += int(summary.accepted)
 
             dt = time.perf_counter() - t_start
             total_elapsed += dt
@@ -194,6 +200,9 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
                 topology_sequences_by_chain=seqs,
                 energy_traces_by_chain=energies,
             )
+            total_samples_recorded += sum(len(seq) for seq in seqs)
+            for seq in seqs:
+                unique_eqs_seen.update(seq)
 
         kl_max = float(np.nanmax(np.asarray([d.kl_pairwise_max for d in per_start_diags.values()], dtype=float)))
         kl_split_max = float(np.nanmax(np.asarray([d.kl_split_max for d in per_start_diags.values()], dtype=float)))
@@ -202,6 +211,9 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         steps_per_sec_total = float(total_steps_done) / float(total_elapsed) if total_elapsed > 0 else 0.0
         cache_total = cache_hits_total + cache_misses_total
         cache_hit_rate = float(cache_hits_total) / float(cache_total) if cache_total > 0 else 0.0
+        accept_rate = float(total_accepted) / float(total_proposals) if total_proposals > 0 else 0.0
+        n_unique_eq = int(len(unique_eqs_seen))
+        coverage_frac = float(n_unique_eq) / float(total_samples_recorded) if total_samples_recorded > 0 else 0.0
 
         row = {
             "N": int(cfg.n),
@@ -214,6 +226,11 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
             "steps_total": int(total_steps_done),
             "steps_per_sec_total": float(steps_per_sec_total),
             "energy_cache_hit_rate": float(cache_hit_rate),
+            "energy_cache_hits": int(cache_hits_total),
+            "energy_cache_misses": int(cache_misses_total),
+            "accept_rate_total": float(accept_rate),
+            "n_unique_eq": int(n_unique_eq),
+            "coverage_frac": float(coverage_frac),
             "KL_max_pairwise": float(kl_max),
             "KL_split_max": float(kl_split_max),
             "Rhat_energy_max": float(rhat_max),
@@ -223,15 +240,14 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         line = (
             f"steps={int(steps_total_budget)}: KL_max={kl_max:.6g} KL_split_max={kl_split_max:.6g} "
             f"Rhat_max={rhat_max:.4g} ESS_min={ess_min:.1f} "
-            f"elapsed={total_elapsed:.1f}s steps/s={steps_per_sec_total:.0f} hit={cache_hit_rate:.3f}"
+            f"elapsed={total_elapsed:.1f}s steps/s={steps_per_sec_total:.0f} hit={cache_hit_rate:.3f} "
+            f"ACC_RATE={accept_rate:.3f} UNIQUE_EQ={n_unique_eq} COVERAGE_FRAC={coverage_frac:.3f} "
+            f"HITS={cache_hits_total} MISSES={cache_misses_total} "
+            f"STEPS_TOTAL={int(total_steps_done)} STEPS_PER_SEC_TOTAL={steps_per_sec_total:.1f} "
+            f"ELAPSED_SEC={total_elapsed:.3f}"
         )
         lines.append(line)
         print(f"[EQ-TARGET-3] {line}")
-        print(
-            f"[EQ-TARGET-3] STEPS_TOTAL={int(total_steps_done)} "
-            f"STEPS_PER_SEC_TOTAL={steps_per_sec_total:.1f} "
-            f"ELAPSED_SEC={total_elapsed:.3f}"
-        )
 
     end_ts = now_iso()
     elapsed_total = time.perf_counter() - t0
