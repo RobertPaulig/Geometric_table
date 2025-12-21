@@ -6,11 +6,12 @@ import math
 import multiprocessing as mp
 import pickle
 import platform
+import queue
 import subprocess
 import sys
 import time
 from collections import Counter
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -95,6 +96,52 @@ def _git_sha() -> str:
         return subprocess.check_output(["git", "rev-parse", "HEAD"], stderr=subprocess.DEVNULL).decode().strip()
     except Exception:
         return "UNKNOWN"
+
+
+def _print_progress_event(kind: str, payload: Mapping[str, object]) -> None:
+    task_id = payload.get("task_id", "?")
+    start_spec = payload.get("start_spec", "?")
+    chain_idx = payload.get("chain_idx", "?")
+    steps_total = payload.get("steps_total", "?")
+    step = payload.get("step", 0)
+    accept_rate = payload.get("accept_rate")
+    hit_rate = payload.get("hit_rate")
+    pid = payload.get("pid")
+    prefix = f"[WORKER {task_id}] start={start_spec} chain={chain_idx} steps_total={steps_total} pid={pid}"
+
+    if kind == "start":
+        msg = f"{prefix} START"
+    elif kind == "heartbeat":
+        if isinstance(accept_rate, (int, float)) and isinstance(hit_rate, (int, float)):
+            msg = (
+                f"{prefix} HEARTBEAT step={step} "
+                f"accept_rate={float(accept_rate):.3f} hit_rate={float(hit_rate):.3f}"
+            )
+        else:
+            msg = f"{prefix} HEARTBEAT step={step}"
+    elif kind == "done":
+        msg = f"{prefix} DONE step={step}"
+    else:
+        msg = f"{prefix} EVENT={kind} step={step}"
+    print(msg, flush=True)
+
+
+def _drain_progress_queue(progress_queue: Optional[queue.Queue]) -> None:
+    if progress_queue is None:
+        return
+    while True:
+        try:
+            item = progress_queue.get_nowait()
+        except queue.Empty:
+            break
+        except Exception:
+            break
+        else:
+            if not isinstance(item, tuple) or len(item) != 2:
+                continue
+            kind, payload = item
+            if isinstance(kind, str) and isinstance(payload, Mapping):
+                _print_progress_event(kind, payload)
 
 
 def _safe_nanmax(values: Sequence[float]) -> float:
@@ -268,6 +315,8 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         print("\n".join(run_header_lines))
 
     points_since_cache_save = 0
+    progress_enabled = bool(cfg.progress or cfg.step_progress)
+    mp_ctx = mp.get_context("spawn") if (cfg.workers > 1 or progress_enabled) else None
 
     def append_csv_row(row: Dict[str, object]) -> None:
         nonlocal csv_header_written, csv_fieldnames
@@ -291,10 +340,17 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
 
         tasks: List[eq_worker_pool.EqTask] = []
         start_edges_by_spec: Dict[str, Tuple[Edge, ...]] = {}
-        for start_spec in cfg.start_specs:
+        progress_every = int(cfg.step_heartbeat_every) if cfg.step_progress else 0
+        for start_spec_idx, start_spec in enumerate(cfg.start_specs):
             start_edges_by_spec[start_spec] = tuple(_start_edges_for_spec(cfg.n, start_spec))
             for chain_idx in range(int(cfg.chains)):
-                seed = int(cfg.seed) + 101 * int(chain_idx) + 10_000 * int(steps_per_chain)
+                seed = (
+                    int(cfg.seed)
+                    + 101 * int(chain_idx)
+                    + 10_000 * int(steps_per_chain)
+                    + 1_000_000 * int(start_spec_idx)
+                )
+                task_id = f"steps{int(steps_per_chain)}_{start_spec}_c{int(chain_idx)}"
                 tasks.append(
                     eq_worker_pool.EqTask(
                         n=int(cfg.n),
@@ -305,6 +361,8 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
                         chain_idx=int(chain_idx),
                         seed=seed,
                         start_edges=start_edges_by_spec[start_spec],
+                        task_id=task_id,
+                        progress_every=int(progress_every),
                         backend="fdm",
                         lam=1.0,
                         temperature=1.0,
@@ -318,22 +376,41 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
 
         results: List[eq_worker_pool.EqTaskResult] = []
         workers = max(1, int(cfg.workers))
-        if workers == 1:
-            eq_worker_pool.set_sequential_base_cache(energy_cache)
+        use_process_pool = workers > 1 or progress_enabled
+        progress_queue_obj: Optional[queue.Queue] = None
+
+        if not use_process_pool:
+            eq_worker_pool.configure_for_sequential(energy_cache, None)
             for task in tasks:
                 results.append(eq_worker_pool.run_task(task))
         else:
-            ctx = mp.get_context("spawn")
+            assert mp_ctx is not None
+            if progress_enabled:
+                progress_queue_obj = mp_ctx.Queue()
             cache_arg = str(cache_path) if cache_path is not None else None
             with ProcessPoolExecutor(
                 max_workers=workers,
-                mp_context=ctx,
+                mp_context=mp_ctx,
                 initializer=eq_worker_pool.init_worker,
-                initargs=(cache_arg,),
+                initargs=(cache_arg, progress_queue_obj),
             ) as ex:
                 futures = [ex.submit(eq_worker_pool.run_task, task) for task in tasks]
-                for fut in as_completed(futures):
-                    results.append(fut.result())
+                pending = set(futures)
+                while pending:
+                    done, pending = wait(pending, timeout=0.2, return_when=FIRST_COMPLETED)
+                    _drain_progress_queue(progress_queue_obj)
+                    for fut in done:
+                        results.append(fut.result())
+                _drain_progress_queue(progress_queue_obj)
+            if progress_queue_obj is not None:
+                try:
+                    progress_queue_obj.close()
+                except Exception:
+                    pass
+                try:
+                    progress_queue_obj.join_thread()
+                except Exception:
+                    pass
 
         total_elapsed = time.perf_counter() - point_t0
         total_steps_done = sum(int(r.steps_total) for r in results) or int(steps_per_chain) * len(tasks)

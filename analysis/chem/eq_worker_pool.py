@@ -5,7 +5,7 @@ import pickle
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Mapping, MutableMapping, Optional, Tuple
+from typing import Any, Dict, Mapping, MutableMapping, Optional, Tuple
 
 from analysis.chem.topology_mcmc import Edge, run_fixed_n_tree_mcmc, tree_topology_edge_key_from_edges
 
@@ -14,6 +14,7 @@ CacheKey = Tuple[str, object]
 
 _WORKER_BASE_CACHE: Dict[CacheKey, float] = {}
 _WORKER_ENERGY_CACHE_PATH: Optional[Path] = None
+_WORKER_PROGRESS_QUEUE: Optional[Any] = None
 
 
 class TrackingCache(MutableMapping):
@@ -59,7 +60,13 @@ def _safe_load_cache(path: Optional[Path]) -> Dict[CacheKey, float]:
     return {}
 
 
-def init_worker(energy_cache_path: Optional[str]) -> None:
+def _set_worker_state(base_cache: Dict[CacheKey, float], progress_queue: Optional[Any]) -> None:
+    global _WORKER_BASE_CACHE, _WORKER_PROGRESS_QUEUE
+    _WORKER_BASE_CACHE = base_cache
+    _WORKER_PROGRESS_QUEUE = progress_queue
+
+
+def init_worker(energy_cache_path: Optional[str], progress_queue: Optional[Any]) -> None:
     """
     Initializer for ProcessPoolExecutor workers (spawn-safe).
     Loads cache snapshot into the worker and clamps BLAS threads.
@@ -67,18 +74,19 @@ def init_worker(energy_cache_path: Optional[str]) -> None:
     global _WORKER_BASE_CACHE, _WORKER_ENERGY_CACHE_PATH
     _WORKER_ENERGY_CACHE_PATH = Path(energy_cache_path) if energy_cache_path else None
     _WORKER_BASE_CACHE = _safe_load_cache(_WORKER_ENERGY_CACHE_PATH)
+    _set_worker_state(_WORKER_BASE_CACHE, progress_queue)
     os.environ.setdefault("OMP_NUM_THREADS", "1")
     os.environ.setdefault("MKL_NUM_THREADS", "1")
     os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 
 
-def set_sequential_base_cache(cache: Dict[CacheKey, float]) -> None:
+def configure_for_sequential(cache: Dict[CacheKey, float], progress_queue: Optional[Any]) -> None:
     """
     Configure worker globals for in-process execution (workers=1).
     """
-    global _WORKER_BASE_CACHE, _WORKER_ENERGY_CACHE_PATH
+    global _WORKER_ENERGY_CACHE_PATH
     _WORKER_ENERGY_CACHE_PATH = None
-    _WORKER_BASE_CACHE = cache
+    _set_worker_state(cache, progress_queue)
 
 
 @dataclass(frozen=True)
@@ -91,6 +99,8 @@ class EqTask:
     chain_idx: int
     seed: int
     start_edges: Tuple[Edge, ...]
+    task_id: str
+    progress_every: int = 0
     backend: str = "fdm"
     lam: float = 1.0
     temperature: float = 1.0
@@ -184,6 +194,39 @@ def run_task(task: EqTask) -> EqTaskResult:
             energy_sum_lag1 += e * prev_energy
         prev_energy = e
 
+    def _send_progress(kind: str, payload: Mapping[str, object]) -> None:
+        if _WORKER_PROGRESS_QUEUE is None:
+            return
+        data: Dict[str, object] = {
+            "task_id": task.task_id,
+            "start_spec": task.start_spec,
+            "chain_idx": task.chain_idx,
+            "steps_total": task.steps_per_chain,
+            "pid": os.getpid(),
+        }
+        data.update(payload)
+        try:
+            _WORKER_PROGRESS_QUEUE.put((kind, data))
+        except Exception:
+            pass
+
+    if task.progress_every > 0 and _WORKER_PROGRESS_QUEUE is not None:
+        def _heartbeat(info: Mapping[str, float]) -> None:
+            _send_progress(
+                "heartbeat",
+                {
+                    "step": int(info.get("step", 0)),
+                    "accept_rate": float(info.get("accept_rate", 0.0)),
+                    "hit_rate": float(info.get("energy_cache_hit_rate", 0.0)),
+                },
+            )
+        heartbeat_every = int(task.progress_every)
+    else:
+        _heartbeat = None
+        heartbeat_every = 0
+
+    _send_progress("start", {"step": 0})
+
     _, summary = run_fixed_n_tree_mcmc(
         n=int(task.n),
         steps=int(task.steps_per_chain),
@@ -199,14 +242,16 @@ def run_task(task: EqTask) -> EqTaskResult:
         energy_cache=tracking_cache,
         progress=None,
         profile_every=0,
-        step_heartbeat_every=0,
-        step_heartbeat=None,
+        step_heartbeat_every=heartbeat_every,
+        step_heartbeat=_heartbeat,
         sample_callback=on_sample,
         collect_samples=False,
     )
 
     mean, var, rho1 = _finalize_energy_stats(energy_n, energy_sum, energy_sum2, energy_sum_lag1)
     ess_est = _ess_from_rho1(energy_n, rho1)
+
+    _send_progress("done", {"step": task.steps_per_chain})
 
     return EqTaskResult(
         start_spec=task.start_spec,
