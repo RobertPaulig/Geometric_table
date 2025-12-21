@@ -226,6 +226,8 @@ def run_fixed_n_tree_mcmc(
     profile_every: int = 0,
     step_heartbeat_every: int = 0,
     step_heartbeat: Optional[Callable[[Mapping[str, float]], None]] = None,
+    sample_callback: Optional[Callable[[str, float], None]] = None,
+    collect_samples: bool = True,
 ) -> Tuple[List[Dict[str, object]], MCMCSummary]:
     """
     Fixed-N MCMC on labeled trees using reversible leaf-rewire moves with Hastings correction.
@@ -411,16 +413,19 @@ def run_fixed_n_tree_mcmc(
             else:
                 adj = edges_to_adj(n, edges)
                 topo = str(topology_classifier(adj))
-            samples.append(
-                {
-                    "step": int(step),
-                    "topology": topo,
-                    "deg_sorted": str(sorted(degrees(n, edges))),
-                    "energy": float(e_x),
-                    "accepted": int(accepted),
-                    "proposals": int(proposals),
-                }
-            )
+            if sample_callback is not None:
+                sample_callback(topo, float(e_x))
+            if collect_samples:
+                samples.append(
+                    {
+                        "step": int(step),
+                        "topology": topo,
+                        "deg_sorted": str(sorted(degrees(n, edges))),
+                        "energy": float(e_x),
+                        "accepted": int(accepted),
+                        "proposals": int(proposals),
+                    }
+                )
 
     def _pctl(arr: Sequence[float], q: float) -> float:
         if not arr:

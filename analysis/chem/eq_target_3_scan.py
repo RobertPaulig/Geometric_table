@@ -2,11 +2,15 @@ from __future__ import annotations
 
 import argparse
 import csv
+import math
+import multiprocessing as mp
 import pickle
 import platform
 import subprocess
 import sys
 import time
+from collections import Counter
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -14,11 +18,10 @@ from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 
+from analysis.chem import eq_worker_pool
 from analysis.chem.alkane_expected_counts import expected_unique_alkane_tree_topologies
-from analysis.chem.mixing_diagnostics_1 import MixingDiagnosticsSummary, compute_mixing_diagnostics
-from analysis.chem.topology_mcmc import Edge, run_fixed_n_tree_mcmc, tree_topology_edge_key_from_edges
+from analysis.chem.topology_mcmc import Edge
 from analysis.io_utils import results_path
-from analysis.utils.progress import progress_iter
 from analysis.utils.timing import now_iso
 
 
@@ -55,6 +58,7 @@ class Cfg:
     energy_cache_path: Optional[str] = None
     save_cache_every_points: int = 1
     emit_run_blocks: bool = True
+    workers: int = 1
 
 
 def _load_existing_steps(path: Path) -> List[int]:
@@ -107,6 +111,50 @@ def _safe_nanmin(values: Sequence[float]) -> float:
     return float(np.nanmin(arr))
 
 
+def _counter_to_prob(counter: Counter[str]) -> Dict[str, float]:
+    total = float(sum(counter.values()))
+    if total <= 0:
+        return {}
+    return {k: float(v) / total for k, v in counter.items()}
+
+
+def _kl(p: Mapping[str, float], q: Mapping[str, float], eps: float = 1e-12) -> float:
+    if not p:
+        return 0.0
+    out = 0.0
+    for key, pv in p.items():
+        qv = q.get(key, 0.0) + eps
+        out += pv * math.log(max(pv, eps) / qv)
+    return float(out)
+
+
+def _pairwise_kl_max(probs: Sequence[Mapping[str, float]]) -> float:
+    if len(probs) < 2:
+        return float("nan")
+    best = 0.0
+    for i in range(len(probs)):
+        for j in range(i + 1, len(probs)):
+            kij = _kl(probs[i], probs[j])
+            kji = _kl(probs[j], probs[i])
+            best = max(best, kij, kji)
+    return float(best)
+
+
+def _rhat_from_chain_stats(means: Sequence[float], vars_: Sequence[float], ns: Sequence[int]) -> float:
+    counts = [n for n in ns if n > 1]
+    if len(means) < 2 or len(counts) < 2:
+        return float("nan")
+    n = min(counts)
+    m = len(means)
+    mean_all = sum(means) / m
+    B = (n / (m - 1)) * sum((mi - mean_all) ** 2 for mi in means)
+    W = sum(vars_) / m
+    if W <= 0:
+        return float("nan")
+    var_hat = ((n - 1) / n) * W + (1 / n) * B
+    return float(math.sqrt(max(var_hat / W, 0.0)))
+
+
 def _parse_args(argv: Optional[Sequence[str]] = None) -> Cfg:
     ap = argparse.ArgumentParser(description="EQ-TARGET-3: scan steps for arbitrary N using mixing diagnostics (Mode A).")
     ap.add_argument("--N", type=int, required=True)
@@ -124,6 +172,7 @@ def _parse_args(argv: Optional[Sequence[str]] = None) -> Cfg:
     ap.add_argument("--energy_cache_path", type=str, default=None)
     ap.add_argument("--save_cache_every_points", type=int, default=1)
     ap.add_argument("--emit_run_blocks", action=argparse.BooleanOptionalAction, default=True)
+    ap.add_argument("--workers", type=int, default=1)
     args = ap.parse_args(argv)
     return Cfg(
         n=int(args.N),
@@ -141,6 +190,7 @@ def _parse_args(argv: Optional[Sequence[str]] = None) -> Cfg:
         energy_cache_path=str(args.energy_cache_path) if args.energy_cache_path else None,
         save_cache_every_points=max(1, int(args.save_cache_every_points)),
         emit_run_blocks=bool(args.emit_run_blocks),
+        workers=max(1, int(args.workers)),
     )
 
 
@@ -235,130 +285,97 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
             print(f"[EQ-TARGET-3] Skipping steps={steps_per_chain} (resume)")
             continue
 
+        point_t0 = time.perf_counter()
         burnin = int(max(0, round(0.1 * float(steps_per_chain))))
-        per_start_diags: Dict[str, MixingDiagnosticsSummary] = {}
-        total_elapsed = 0.0
-        total_steps_done = 0
-        total_samples_recorded = 0
-        total_proposals = 0
-        total_accepted = 0
-        cache_hits_total = 0
-        cache_misses_total = 0
-        unique_eqs_seen: set[str] = set()
+        samples_per_chain = max(0, (steps_per_chain - burnin) // max(1, int(cfg.thin)))
 
+        tasks: List[eq_worker_pool.EqTask] = []
+        start_edges_by_spec: Dict[str, Tuple[Edge, ...]] = {}
         for start_spec in cfg.start_specs:
-            seqs: List[List[str]] = []
-            energies: List[List[float]] = []
-            t_start = time.perf_counter()
-
-            chains_iter = progress_iter(
-                range(int(cfg.chains)),
-                total=int(cfg.chains),
-                desc=f"EQ-TARGET-3 N{cfg.n} steps={steps_per_chain} start={start_spec}",
-                enabled=bool(cfg.progress) and not bool(cfg.step_progress),
-            )
-            for chain_idx in chains_iter:
-                edges0 = _start_edges_for_spec(cfg.n, start_spec)
-
-                pbar = None
-                hb_every = max(1, int(cfg.step_heartbeat_every))
-                if bool(cfg.progress) and bool(cfg.step_progress):
-                    try:
-                        from tqdm import tqdm  # type: ignore
-
-                        pbar = tqdm(
-                            total=int(steps_per_chain),
-                            desc=f"EQ N{cfg.n} start={start_spec} chain={int(chain_idx)}",
-                            unit="step",
-                            mininterval=1.0,
-                            smoothing=0.1,
-                        )
-                    except Exception:
-                        pbar = None
-
-                last_hb_step = 0
-
-                def _heartbeat(info: Mapping[str, float]) -> None:
-                    nonlocal last_hb_step
-                    step = int(info.get("step", 0))
-                    if pbar is not None:
-                        delta = max(0, step - last_hb_step)
-                        last_hb_step = step
-                        pbar.update(delta)
-                        pbar.set_postfix(
-                            steps_per_sec=f"{info.get('heartbeat_steps_per_sec', 0.0):.0f}",
-                            acc=f"{info.get('accept_rate', 0.0):.3f}",
-                            hit=f"{info.get('energy_cache_hit_rate', 0.0):.3f}",
-                            misses=str(int(info.get("energy_cache_misses_seen", 0.0))),
-                        )
-                    else:
-                        print(
-                            f"[EQ-TARGET-3 N={cfg.n} start={start_spec} chain={int(chain_idx)}] "
-                            f"step={step}/{int(steps_per_chain)} "
-                            f"steps/sec={info.get('heartbeat_steps_per_sec', 0.0):.0f} "
-                            f"acc={info.get('accept_rate', 0.0):.3f} "
-                            f"hit={info.get('energy_cache_hit_rate', 0.0):.3f} "
-                            f"misses_seen={int(info.get('energy_cache_misses_seen', 0.0))}"
-                        )
-
-                try:
-                    samples, summary = run_fixed_n_tree_mcmc(
+            start_edges_by_spec[start_spec] = tuple(_start_edges_for_spec(cfg.n, start_spec))
+            for chain_idx in range(int(cfg.chains)):
+                seed = int(cfg.seed) + 101 * int(chain_idx) + 10_000 * int(steps_per_chain)
+                tasks.append(
+                    eq_worker_pool.EqTask(
                         n=int(cfg.n),
-                        steps=int(steps_per_chain),
-                        burnin=int(burnin),
+                        steps_per_chain=int(steps_per_chain),
+                        burnin_steps=int(burnin),
                         thin=int(cfg.thin),
+                        start_spec=str(start_spec),
+                        chain_idx=int(chain_idx),
+                        seed=seed,
+                        start_edges=start_edges_by_spec[start_spec],
                         backend="fdm",
                         lam=1.0,
-                        temperature_T=1.0,
-                        seed=int(cfg.seed) + 101 * int(chain_idx) + 10_000 * int(steps_per_chain),
+                        temperature=1.0,
                         max_valence=4,
-                        topology_key_fn_edges=tree_topology_edge_key_from_edges,
-                        start_edges=edges0,
-                        progress=None,
-                        step_heartbeat_every=hb_every if bool(cfg.progress) else 0,
-                        step_heartbeat=_heartbeat if bool(cfg.progress) else None,
-                        energy_cache=energy_cache,
+                        n_samples_expected=int(samples_per_chain),
                     )
-                finally:
-                    if pbar is not None:
-                        try:
-                            if last_hb_step < int(steps_per_chain):
-                                pbar.update(int(steps_per_chain) - int(last_hb_step))
-                        finally:
-                            pbar.close()
-                seqs.append([str(s["topology"]) for s in samples])
-                energies.append([float(s["energy"]) for s in samples])
-                cache_hits_total += int(summary.energy_cache_hits)
-                cache_misses_total += int(summary.energy_cache_misses)
-                total_steps_done += int(summary.steps)
-                total_proposals += int(summary.proposals)
-                total_accepted += int(summary.accepted)
+                )
 
-            dt = time.perf_counter() - t_start
-            total_elapsed += dt
-            per_start_diags[str(start_spec)] = compute_mixing_diagnostics(
-                n=int(cfg.n),
-                steps=int(steps_per_chain),
-                burnin=int(burnin),
-                thin=int(cfg.thin),
-                start_spec=str(start_spec),
-                topology_sequences_by_chain=seqs,
-                energy_traces_by_chain=energies,
-            )
-            total_samples_recorded += sum(len(seq) for seq in seqs)
-            for seq in seqs:
-                unique_eqs_seen.update(seq)
+        if not tasks:
+            continue
 
-        diag_values = list(per_start_diags.values())
-        kl_max = _safe_nanmax([d.kl_pairwise_max for d in diag_values])
-        kl_split_max = _safe_nanmax([d.kl_split_max for d in diag_values])
-        rhat_max = _safe_nanmax([d.rhat_energy for d in diag_values])
-        ess_min = _safe_nanmin([d.ess_energy_min for d in diag_values])
+        results: List[eq_worker_pool.EqTaskResult] = []
+        workers = max(1, int(cfg.workers))
+        if workers == 1:
+            eq_worker_pool.set_sequential_base_cache(energy_cache)
+            for task in tasks:
+                results.append(eq_worker_pool.run_task(task))
+        else:
+            ctx = mp.get_context("spawn")
+            cache_arg = str(cache_path) if cache_path is not None else None
+            with ProcessPoolExecutor(
+                max_workers=workers,
+                mp_context=ctx,
+                initializer=eq_worker_pool.init_worker,
+                initargs=(cache_arg,),
+            ) as ex:
+                futures = [ex.submit(eq_worker_pool.run_task, task) for task in tasks]
+                for fut in as_completed(futures):
+                    results.append(fut.result())
+
+        total_elapsed = time.perf_counter() - point_t0
+        total_steps_done = sum(int(r.steps_total) for r in results) or int(steps_per_chain) * len(tasks)
+        total_samples_recorded = sum(int(r.n_samples_recorded) for r in results)
+
+        accepted_total = sum(int(r.accepted) for r in results)
+        proposed_total = sum(int(r.proposed) for r in results)
+        cache_hits_total = sum(int(r.cache_hits) for r in results)
+        cache_misses_total = sum(int(r.cache_misses) for r in results)
+
+        probs = []
+        split_vals = []
+        means = []
+        vars_ = []
+        ns = []
+        ess_vals = []
+        unique_eqs_seen: set[str] = set()
+
+        for res in results:
+            probs.append(_counter_to_prob(res.topo_counts))
+            split_first = _counter_to_prob(res.topo_counts_first)
+            split_second = _counter_to_prob(res.topo_counts_second)
+            split_vals.append(max(_kl(split_first, split_second), _kl(split_second, split_first)))
+            unique_eqs_seen.update(res.topo_counts.keys())
+            if res.energy_samples > 1:
+                means.append(res.energy_mean)
+                vars_.append(max(res.energy_var, 0.0))
+                ns.append(int(res.energy_samples))
+            if not math.isnan(res.ess_energy_est):
+                ess_vals.append(res.ess_energy_est)
+            if cache_path and res.cache_delta:
+                energy_cache.update(res.cache_delta)
+
+        kl_max = _pairwise_kl_max(probs)
+        kl_split_max = _safe_nanmax(split_vals)
+        rhat_max = _rhat_from_chain_stats(means, vars_, ns) if len(means) >= 2 else float("nan")
+        ess_min = _safe_nanmin(ess_vals)
         steps_per_sec_total = float(total_steps_done) / float(total_elapsed) if total_elapsed > 0 else 0.0
         cache_total = cache_hits_total + cache_misses_total
         cache_hit_rate = float(cache_hits_total) / float(cache_total) if cache_total > 0 else 0.0
-        accept_rate = float(total_accepted) / float(total_proposals) if total_proposals > 0 else 0.0
-        n_unique_eq = int(len(unique_eqs_seen))
+        accept_rate = float(accepted_total) / float(proposed_total) if proposed_total > 0 else 0.0
+        n_unique_eq = len(unique_eqs_seen)
         unique_frac_samples = float(n_unique_eq) / float(total_samples_recorded) if total_samples_recorded > 0 else 0.0
         coverage_unique = float(n_unique_eq) / float(expected_unique) if expected_unique > 0 else 0.0
 
@@ -412,7 +429,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
                 f"EXPECTED_UNIQUE_EQ={expected_unique}",
                 f"COVERAGE_UNIQUE_EQ={coverage_unique:.6f}",
                 f"UNIQUE_FRAC_SAMPLES={unique_frac_samples:.6f}",
-                f"ACCEPT_RATE={accept_rate:.3f}" if total_proposals > 0 else "ACCEPT_RATE=NA",
+                f"ACCEPT_RATE={accept_rate:.3f}" if proposed_total > 0 else "ACCEPT_RATE=NA",
                 f"HIT_RATE={cache_hit_rate:.3f}",
                 f"MISSES_SEEN={cache_misses_total}",
                 f"STEPS_TOTAL={int(total_steps_done)}",
