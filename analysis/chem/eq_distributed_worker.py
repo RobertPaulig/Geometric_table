@@ -5,6 +5,7 @@ import hashlib
 import json
 import socket
 import pickle
+import time
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
@@ -142,6 +143,7 @@ def main(argv: list[str] | None = None) -> None:
 
     start_edges = list(_start_edges_for_spec(task["N"], task["start_spec"]))
 
+    t0 = time.perf_counter()
     _, summary = run_fixed_n_tree_mcmc(
         n=int(task["N"]),
         steps=steps,
@@ -162,6 +164,7 @@ def main(argv: list[str] | None = None) -> None:
         sample_callback=on_sample,
         collect_samples=False,
     )
+    elapsed_wall_sec = time.perf_counter() - t0
 
     accepted = getattr(summary, "accepted", None)
     if accepted is None:
@@ -173,7 +176,9 @@ def main(argv: list[str] | None = None) -> None:
         proposals = getattr(summary, "proposals_total", 0)
     cache_hits = getattr(summary, "energy_cache_hits", getattr(summary, "cache_hits", 0))
     cache_misses = getattr(summary, "energy_cache_misses_seen", getattr(summary, "cache_misses", 0))
-    elapsed_sec = getattr(summary, "elapsed_sec", getattr(summary, "elapsed", 0.0))
+    elapsed_sec = float(getattr(summary, "elapsed_sec", getattr(summary, "elapsed", 0.0)) or 0.0)
+    if elapsed_sec <= 0.0:
+        elapsed_sec = float(elapsed_wall_sec)
 
     accept_rate = float(accepted) / float(proposals) if proposals else 0.0
     hit_rate = float(cache_hits) / float(cache_hits + cache_misses) if (cache_hits + cache_misses) else 0.0
