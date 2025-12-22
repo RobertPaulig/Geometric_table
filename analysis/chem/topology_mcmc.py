@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Callable, Dict, Iterable, List, Mapping, MutableMapping, Optional, Sequence, Tuple, Union
 
 import numpy as np
+from collections import OrderedDict
 
 from analysis.chem.core2_fit import compute_p_pred
 from core.complexity import compute_complexity_features_v2
@@ -200,11 +201,18 @@ class MCMCSummary:
     t_move_avg: float = 0.0
     t_energy_avg: float = 0.0
     t_canon_avg: float = 0.0
+    topo_memo_hits: int = 0
+    topo_memo_misses: int = 0
 
     @property
     def energy_cache_hit_rate(self) -> float:
         total = int(self.energy_cache_hits) + int(self.energy_cache_misses)
         return (float(self.energy_cache_hits) / float(total)) if total > 0 else 0.0
+
+    @property
+    def topo_memo_hit_rate(self) -> float:
+        total = int(self.topo_memo_hits) + int(self.topo_memo_misses)
+        return (float(self.topo_memo_hits) / float(total)) if total > 0 else 0.0
 
 
 class _ReservoirStats:
@@ -286,6 +294,12 @@ def run_fixed_n_tree_mcmc(
     else:
         edges = [(_canonical_edge(int(i), int(j))) for (i, j) in start_edges]
     assert is_tree(n, edges)
+    edges_set = {_canonical_edge(i, j) for (i, j) in edges}
+    adj_list: List[List[int]] = [[] for _ in range(n)]
+    for a, b in edges_set:
+        adj_list[a].append(b)
+        adj_list[b].append(a)
+    deg = [len(adj_list[u]) for u in range(n)]
 
     t0_total = time.perf_counter()
     t0_heartbeat = t0_total
@@ -299,7 +313,10 @@ def run_fixed_n_tree_mcmc(
     cache_misses = 0
     seen_topologies: set[object] = set()
     topo_id_memo: Dict[object, str] = {}
-    topo_key_memo: Dict[Tuple[Edge, ...], object] = {}
+    topo_key_memo: OrderedDict[Tuple[Edge, ...], object] = OrderedDict()
+    topo_key_memo_limit = 200_000
+    topo_memo_hits = 0
+    topo_memo_misses = 0
 
     profile_this_step = False
     t_move_total = 0.0
@@ -309,18 +326,25 @@ def run_fixed_n_tree_mcmc(
     profiled_energy_calls = 0
 
     def energy(e: Sequence[Edge]) -> float:
-        nonlocal cache_hits, cache_misses
+        nonlocal cache_hits, cache_misses, topo_memo_hits, topo_memo_misses
         nonlocal t_energy_total, t_canon_total, profiled_energy_calls, profile_this_step
         key_edges = tuple(sorted(_canonical_edge(i, j) for i, j in e))
         if topology_key_fn_edges is not None:
-            if key_edges in topo_key_memo:
-                topo_key = topo_key_memo[key_edges]
+            memo_hit = topo_key_memo.get(key_edges)
+            if memo_hit is not None:
+                topo_key = memo_hit
+                topo_memo_hits += 1
+                # refresh LRU
+                topo_key_memo.move_to_end(key_edges)
             else:
+                topo_memo_misses += 1
                 t_c0 = time.perf_counter() if (profile_every > 0 and profile_this_step) else 0.0
                 topo_key = topology_key_fn_edges(int(n), key_edges)
                 if profile_every > 0 and profile_this_step:
                     t_canon_total += time.perf_counter() - t_c0
                 topo_key_memo[key_edges] = topo_key
+                if len(topo_key_memo) > topo_key_memo_limit:
+                    topo_key_memo.popitem(last=False)
 
             # Track per-run "first time seen" regardless of cache warm-up.
             if topo_key in seen_topologies:
@@ -392,37 +416,122 @@ def run_fixed_n_tree_mcmc(
         profile_this_step = bool(profile_every) and (int(step) % int(profile_every) == 0)
         t_m0 = time.perf_counter() if profile_this_step else 0.0
 
-        moves_x = enumerate_leaf_rewire_moves(n, edges, max_valence=max_valence)
-        if not moves_x:
-            continue
-        move = moves_x[int(rng.integers(0, len(moves_x)))]
-        edges_y = apply_leaf_rewire_move(edges, move)
-        assert is_tree(n, edges_y)
+        # Compute leaves and eligible nodes
+        leaves = [u for u in range(n) if deg[u] == 1]
+        eligible = [v for v in range(n) if deg[v] < max_valence]
+        eligible_set = set(eligible)
+        eligible_count = len(eligible)
 
-        moves_y = enumerate_leaf_rewire_moves(n, edges_y, max_valence=max_valence)
+        move_weights: List[Tuple[int, int]] = []
+        total_moves = 0
+        for u in leaves:
+            old_parent = adj_list[u][0]
+            c_u = eligible_count - 1  # exclude u
+            if old_parent in eligible_set:
+                c_u -= 1  # exclude old_parent
+            if c_u > 0:
+                move_weights.append((u, c_u))
+                total_moves += c_u
+
+        if total_moves <= 0:
+            continue
+
+        # sample leaf with weight c_u
+        r = int(rng.integers(0, total_moves))
+        leaf = -1
+        c_weight = 0
+        for u, c_u in move_weights:
+            if r < c_u:
+                leaf = u
+                c_weight = c_u
+                break
+            r -= c_u
+        if leaf < 0:
+            continue
+        old_parent = adj_list[leaf][0]
+        # sample new_parent uniformly from eligible excluding leaf/old_parent
+        while True:
+            new_parent = eligible[int(rng.integers(0, eligible_count))]
+            if new_parent != leaf and new_parent != old_parent:
+                break
+
+        move = LeafRewireMove(leaf=leaf, old_parent=old_parent, new_parent=new_parent)
+
+        def _apply_move(mv: LeafRewireMove) -> None:
+            u = mv.leaf
+            op = mv.old_parent
+            np_ = mv.new_parent
+            edge_rm = _canonical_edge(u, op)
+            edge_add = _canonical_edge(u, np_)
+            edges_set.discard(edge_rm)
+            edges_set.add(edge_add)
+            adj_list[u].remove(op)
+            adj_list[op].remove(u)
+            adj_list[u].append(np_)
+            adj_list[np_].append(u)
+            deg[op] -= 1
+            deg[np_] += 1
+
+        def _revert_move(mv: LeafRewireMove) -> None:
+            u = mv.leaf
+            op = mv.old_parent
+            np_ = mv.new_parent
+            edge_rm = _canonical_edge(u, np_)
+            edge_add = _canonical_edge(u, op)
+            edges_set.discard(edge_rm)
+            edges_set.add(edge_add)
+            adj_list[u].remove(np_)
+            adj_list[np_].remove(u)
+            adj_list[u].append(op)
+            adj_list[op].append(u)
+            deg[np_] -= 1
+            deg[op] += 1
+
+        _apply_move(move)
+        edges = sorted(edges_set)
+
+        # moves_y count in proposed state
+        leaves_y = [u for u in range(n) if deg[u] == 1]
+        eligible_y = [v for v in range(n) if deg[v] < max_valence]
+        eligible_y_set = set(eligible_y)
+        eligible_y_count = len(eligible_y)
+        total_moves_y = 0
+        for u in leaves_y:
+            op = adj_list[u][0]
+            c_u = eligible_y_count - 1
+            if op in eligible_y_set:
+                c_u -= 1
+            if c_u > 0:
+                total_moves_y += c_u
+
         if profile_this_step:
             t_move_total += time.perf_counter() - t_m0
             profiled_steps += 1
-        q_x = 1.0 / float(len(moves_x))
-        q_y = 1.0 / float(len(moves_y)) if moves_y else 0.0
+
+        q_x = 1.0 / float(total_moves)
+        q_y = 1.0 / float(total_moves_y) if total_moves_y > 0 else 0.0
         if q_y <= 0.0:
+            _revert_move(move)
+            edges = sorted(edges_set)
             continue
         log_qratio = math.log(q_y / q_x)
 
-        e_y = energy(edges_y)
+        e_y = energy(edges)
         proposals += 1
         log_alpha = -beta * float(e_y - e_x) + log_qratio
         alpha = 1.0 if log_alpha >= 0 else math.exp(log_alpha)
         if float(rng.random()) < alpha:
-            edges = edges_y
             e_x = e_y
             accepted += 1
+        else:
+            _revert_move(move)
+            edges = sorted(edges_set)
 
         if collect_move_stats:
-            moves_sizes.append(int(len(moves_x)))
+            moves_sizes.append(int(total_moves))
             log_qratios.append(float(log_qratio))
         else:
-            move_size_stats.add(float(len(moves_x)))
+            move_size_stats.add(float(total_moves))
             log_qratio_stats.add(float(log_qratio))
 
         if progress is not None:
