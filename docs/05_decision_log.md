@@ -742,6 +742,41 @@
 - Expected counts расширены до `N=15/16` в `analysis/chem/alkane_expected_counts.py`:
   - `N=15 -> 4347`, `N=16 -> 10359`.
 
+## [EQ-DIST-1] Distributed EQ work units (GIMPS-style) for N=16 (resilient to time limits)
+
+**Проблема.**
+
+- Монолитный `eq_target_3_scan` пишет CSV/TXT только после завершения точки `steps_per_chain`; при внешних тайм-лимитах/убийстве процесса прогресс точки теряется.
+- Решение: считать независимые цепи как отдельные work units и собирать их агрегацией (как GIMPS).
+
+**Решение.**
+
+- Введён distributed-контур (work units → submissions → aggregate):
+  - генератор задач: `analysis/chem/eq_distributed_make_tasks.py`,
+  - воркер одной задачи: `analysis/chem/eq_distributed_worker.py`,
+  - агрегатор по точкам `steps_per_chain`: `analysis/chem/eq_distributed_aggregate.py`.
+- Каждая задача соответствует одной независимой цепи (фиксированный seed, старт, chain_idx, budget) и может считаться на любой машине; результат — один JSON-файл submission.
+- Для детерминизма seed фиксируется формулой:
+  - `seed = seed_base + 10_000*steps_per_chain + 1_000_000*start_spec_idx + 101*chain_idx`.
+- Агрегатор печатает `POINT`-блоки в машинном формате и пишет CSV/TXT по мере готовности точек; для неполных точек выводит `MISSING ...`, не падает.
+
+**Структура каталогов (инвариант).**
+
+- `results/dist/N16_modeA/tasks/` — `tasks.jsonl` и `task_*.json`
+- `results/dist/N16_modeA/submissions/` — `task_XXXXXX__HOST__GITSHA.json`
+- `results/dist/N16_modeA/aggregates/` — итоговые `eq_target_3_N16_modeA.csv|txt`
+
+**DoD команды (N=16).**
+
+- Мастер: генерация задач (6 точек × 2 старта × 3 цепи = 36 tasks):
+  - `python -m analysis.chem.eq_distributed_make_tasks --N 16 --mode A --steps_grid 2000000 4000000 8000000 12000000 16000000 24000000 --chains 3 --start_specs path max_branch --thin 10 --burnin_frac 0.1 --seed_base 12345 --git_sha_expected <GIT_SHA> --out_dir results/dist/N16_modeA`
+- Волонтёр/любая машина: выполнить одну задачу:
+  - `python -m analysis.chem.eq_distributed_worker --task results/dist/N16_modeA/tasks/task_000001.json --out_dir results/dist/N16_modeA/submissions --energy_cache_path results/dist/N16_modeA/cache_<HOST>.pkl --git_sha <GIT_SHA>`
+- Мастер: агрегация (можно запускать хоть каждые 10 минут; готовые точки сразу дадут `POINT`):
+  - `python -m analysis.chem.eq_distributed_aggregate --tasks_jsonl results/dist/N16_modeA/tasks/tasks.jsonl --submissions_dir results/dist/N16_modeA/submissions --expected_unique 10359 --out_csv results/dist/N16_modeA/aggregates/eq_target_3_N16_modeA.csv --out_txt results/dist/N16_modeA/aggregates/eq_target_3_N16_modeA.txt`
+- Верификация (как у GIMPS, опционально): для `steps in {8M,16M}` требовать 2 submissions с совпадающим `counter_hash`:
+  - `python -m analysis.chem.eq_distributed_aggregate ... --require_double_for_verify --verify_steps 8000000 16000000`
+
 ## [INVARIANCE-BENCH-0] Overhead canonical tree relabeling (AHU)
 
 **Решение.**
