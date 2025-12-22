@@ -21,6 +21,17 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--out_csv", required=True)
     ap.add_argument("--out_txt", required=True)
     ap.add_argument(
+        "--include_submissions_dir",
+        action="store_true",
+        help="Also `git add` the submissions_dir (JSON submissions) after aggregation.",
+    )
+    ap.add_argument(
+        "--include_cache_path",
+        type=str,
+        default="",
+        help="Optional cache file to `git add` (e.g. results/dist/.../cache_HOST.pkl).",
+    )
+    ap.add_argument(
         "--add_paths",
         nargs="*",
         default=[],
@@ -55,6 +66,10 @@ def main(argv: list[str]) -> int:
     out_csv = Path(args.out_csv)
     out_txt = Path(args.out_txt)
     add_paths = [str(out_csv), str(out_txt)] + list(args.add_paths)
+    if args.include_submissions_dir:
+        add_paths.append(str(Path(args.submissions_dir)))
+    if args.include_cache_path:
+        add_paths.append(str(Path(args.include_cache_path)))
 
     _run(["git", "add", *add_paths])
 
@@ -73,4 +88,3 @@ def main(argv: list[str]) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main(sys.argv[1:]))
-
