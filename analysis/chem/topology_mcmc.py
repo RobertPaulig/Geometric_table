@@ -293,6 +293,7 @@ def run_fixed_n_tree_mcmc(
         edges: List[Edge] = [(_canonical_edge(i, i + 1)) for i in range(n - 1)]
     else:
         edges = [(_canonical_edge(int(i), int(j))) for (i, j) in start_edges]
+    edges.sort()
     assert is_tree(n, edges)
     edges_set = {_canonical_edge(i, j) for (i, j) in edges}
     adj_list: List[List[int]] = [[] for _ in range(n)]
@@ -328,7 +329,8 @@ def run_fixed_n_tree_mcmc(
     def energy(e: Sequence[Edge]) -> float:
         nonlocal cache_hits, cache_misses, topo_memo_hits, topo_memo_misses
         nonlocal t_energy_total, t_canon_total, profiled_energy_calls, profile_this_step
-        key_edges = tuple(sorted(_canonical_edge(i, j) for i, j in e))
+        # edges are maintained canonical+sorted throughout the loop; avoid per-call sorting
+        key_edges = tuple(e)
         if topology_key_fn_edges is not None:
             memo_hit = topo_key_memo.get(key_edges)
             if memo_hit is not None:
@@ -407,8 +409,16 @@ def run_fixed_n_tree_mcmc(
     samples: List[Dict[str, object]] = []
     moves_sizes: List[int] = [] if collect_move_stats else []
     log_qratios: List[float] = [] if collect_move_stats else []
-    move_size_stats = _ReservoirStats(reservoir_size=int(move_stats_reservoir), seed=int(seed) + 1_001)
-    log_qratio_stats = _ReservoirStats(reservoir_size=int(move_stats_reservoir), seed=int(seed) + 2_003)
+    move_size_stats = (
+        _ReservoirStats(reservoir_size=int(move_stats_reservoir), seed=int(seed) + 1_001)
+        if collect_move_stats
+        else None
+    )
+    log_qratio_stats = (
+        _ReservoirStats(reservoir_size=int(move_stats_reservoir), seed=int(seed) + 2_003)
+        if collect_move_stats
+        else None
+    )
     accepted = 0
     proposals = 0
 
@@ -530,9 +540,10 @@ def run_fixed_n_tree_mcmc(
         if collect_move_stats:
             moves_sizes.append(int(total_moves))
             log_qratios.append(float(log_qratio))
-        else:
-            move_size_stats.add(float(total_moves))
-            log_qratio_stats.add(float(log_qratio))
+            if move_size_stats is not None:
+                move_size_stats.add(float(total_moves))
+            if log_qratio_stats is not None:
+                log_qratio_stats.add(float(log_qratio))
 
         if progress is not None:
             progress(1)
@@ -614,12 +625,18 @@ def run_fixed_n_tree_mcmc(
         thin=int(thin),
         accepted=int(accepted),
         proposals=int(proposals),
-        mean_moves=float(np.mean(moves_sizes)) if collect_move_stats and moves_sizes else move_size_stats.mean,
-        p90_moves=_pctl(moves_sizes, 90) if collect_move_stats else move_size_stats.pctl(90),
+        mean_moves=float(np.mean(moves_sizes))
+        if collect_move_stats and moves_sizes
+        else (move_size_stats.mean if (collect_move_stats and move_size_stats is not None) else 0.0),
+        p90_moves=_pctl(moves_sizes, 90)
+        if collect_move_stats
+        else (move_size_stats.pctl(90) if move_size_stats is not None else 0.0),
         mean_log_qratio=float(np.mean(log_qratios))
         if collect_move_stats and log_qratios
-        else log_qratio_stats.mean,
-        p90_log_qratio=_pctl(log_qratios, 90) if collect_move_stats else log_qratio_stats.pctl(90),
+        else (log_qratio_stats.mean if (collect_move_stats and log_qratio_stats is not None) else 0.0),
+        p90_log_qratio=_pctl(log_qratios, 90)
+        if collect_move_stats
+        else (log_qratio_stats.pctl(90) if log_qratio_stats is not None else 0.0),
         p_topology=p_topo,
         energy_cache_hits=int(cache_hits),
         energy_cache_misses=int(cache_misses),
@@ -627,5 +644,7 @@ def run_fixed_n_tree_mcmc(
         t_move_avg=float(t_move_avg),
         t_energy_avg=float(t_energy_avg),
         t_canon_avg=float(t_canon_avg),
+        topo_memo_hits=int(topo_memo_hits),
+        topo_memo_misses=int(topo_memo_misses),
     )
     return samples, summary
