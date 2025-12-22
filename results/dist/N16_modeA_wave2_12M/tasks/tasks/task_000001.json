@@ -1,0 +1,16 @@
+{
+  "task_id": "task_000001",
+  "N": 16,
+  "mode": "A",
+  "steps_per_chain": 12000000,
+  "thin": 10,
+  "burnin_frac": 0.3,
+  "start_spec": "path",
+  "start_spec_idx": 0,
+  "chain_idx": 0,
+  "seed_base": 12345,
+  "seed": 120000012345,
+  "created_utc": "2025-12-22T05:44:28Z",
+  "git_sha_expected": "eqdist_n16_v1",
+  "notes": "EQ-DIST-P0"
+}

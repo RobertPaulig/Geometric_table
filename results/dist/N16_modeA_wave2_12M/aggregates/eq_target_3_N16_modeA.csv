@@ -1,0 +1,2 @@
+N,mode,steps,KL_max_pairwise,KL_split_max,Rhat_energy_max,ESS_energy_min,n_unique_eq,expected_unique_eq,coverage_unique_eq,steps_total,steps_per_sec_total,elapsed_sec
+16,A,12000000,0.0134925486639201,0.02978593770176132,1.000002619499631,252356.31458692765,10359,10359,1.0,72000000,8510.06747141633,8460.567468099878
