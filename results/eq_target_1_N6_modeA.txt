@@ -1,0 +1,11 @@
+EQ-TARGET-1: steps -> KL(P_eq || P_exact) curve (N=6, mode A)
+steps_list=[2000], chains=2, thin=10, burnin_frac=0.1, lambda=1.0638, start_topologies=['n_hexane', '2,2_dimethylbutane']
+
+steps=  2000 burnin=  200 elapsed=  2.625s steps/sec=3047.7 KL_max=0.002263 KL_mean=0.001858
+  start=n_hexane: KL=0.002263, elapsed=1.386s
+  start=2,2_dimethylbutane: KL=0.001453, elapsed=1.239s
+
+TIMING
+START_TS=2025-12-18T21:06:55+00:00
+END_TS=2025-12-18T21:06:57+00:00
+ELAPSED_TOTAL_SEC=2.636307

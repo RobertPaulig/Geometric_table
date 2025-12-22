@@ -1,0 +1,37 @@
+CHEM-VALIDATION-EQ-2: equilibrium runner (fixed-N MCMC on trees)
+N=6, mode=A, backend=fdm_entanglement, lambda=2.3718, T=1.000
+steps=2000, burnin=200, thin=10, chains=2, seed=0
+start_topologies=['n_hexane', '2,2_dimethylbutane']
+
+[Start n_hexane]
+  Per-chain summary:
+    chain=0: accept_rate=0.8575, moves_mean=12.167, energy_cache_hit_rate=0.998, steps_per_sec=4063.0
+    chain=1: accept_rate=0.8545, moves_mean=12.275, energy_cache_hit_rate=1.000, steps_per_sec=4298.2
+  P_eq(topology): mean ± 95% CI across chains
+    n_hexane = 0.150000 ± 0.043556
+    2_methylpentane = 0.236111 ± 0.027222
+    3_methylpentane = 0.327778 ± 0.000000
+    2,2_dimethylbutane = 0.191667 ± 0.027222
+    2,3_dimethylbutane = 0.094444 ± 0.043556
+  KL(P_eq||P_exact) = 0.031952
+
+[Start 2,2_dimethylbutane]
+  Per-chain summary:
+    chain=0: accept_rate=0.8640, moves_mean=12.113, energy_cache_hit_rate=1.000, steps_per_sec=4215.3
+    chain=1: accept_rate=0.8590, moves_mean=12.181, energy_cache_hit_rate=1.000, steps_per_sec=4151.9
+  P_eq(topology): mean ± 95% CI across chains
+    n_hexane = 0.163889 ± 0.038111
+    2_methylpentane = 0.241667 ± 0.016333
+    3_methylpentane = 0.313889 ± 0.005444
+    2,2_dimethylbutane = 0.188889 ± 0.000000
+    2,3_dimethylbutane = 0.091667 ± 0.059889
+  KL(P_eq||P_exact) = 0.024784
+
+KL_max(P_eq||P_exact) = 0.031952
+KL_mean(P_eq||P_exact) = 0.028368
+
+TIMING
+START_TS=2025-12-18T21:30:03+00:00
+END_TS=2025-12-18T21:30:05+00:00
+ELAPSED_TOTAL_SEC=1.920256
+STEPS_PER_SEC=2083.1

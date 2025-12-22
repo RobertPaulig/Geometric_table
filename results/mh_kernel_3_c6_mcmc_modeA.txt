@@ -1,0 +1,21 @@
+MH-KERNEL-3: C6 fixed-N MCMC (deg<=4)
+mode=A, backend=fdm_entanglement, lambda=1.0638, T=1.000
+steps=200000, burnin=20000, thin=10, seed=0
+elapsed_sec=14.018
+
+TIMING
+START_TS=2025-12-18T19:07:50+00:00
+END_TS=2025-12-18T19:08:04+00:00
+ELAPSED_TOTAL_SEC=14.030634
+
+MCMC acceptance:
+  proposals=200000, accepted=182696, rate=0.913480
+  moves_size_mean=11.770, moves_size_p90=15.000
+  log_qratio_mean=-0.018457, log_qratio_p90=0.405465
+
+P_mcmc(topology):
+  2,2_dimethylbutane = 0.127556
+  2,3_dimethylbutane = 0.073778
+  2_methylpentane = 0.253722
+  3_methylpentane = 0.318167
+  n_hexane = 0.226778

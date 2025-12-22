@@ -1,0 +1,53 @@
+GROWTH-KERNEL-BIAS-1 (N=8, mode=A)
+Uses P_exact from results/alkane_exact_1_N8.csv and P_growth from results/chem_validation_1d_octane.txt
+
+Bias vector per topology: bias = log(P_growth/P_exact)
+  tree:0-1,0-2,1-3,2-4,3-5,4-6,6-7: bias=-2.059042 P_growth=0.007200 P_exact=0.056437
+  tree:0-1,0-2,0-3,0-4,4-5,4-6,4-7: bias=+1.964070 P_growth=0.019800 P_exact=0.002778
+  tree:0-1,0-2,1-3,2-4,3-5,4-6,4-7: bias=-1.266945 P_growth=0.016600 P_exact=0.058930
+  tree:0-1,0-2,0-3,0-4,3-5,4-6,4-7: bias=+1.108329 P_growth=0.164400 P_exact=0.054270
+  tree:0-1,0-2,1-3,1-4,2-5,4-6,5-7: bias=-1.098274 P_growth=0.043400 P_exact=0.130156
+  tree:0-1,0-2,0-3,2-4,3-5,3-6,3-7: bias=+0.901264 P_growth=0.072800 P_exact=0.029561
+  tree:0-1,0-2,0-3,2-4,3-5,4-6,5-7: bias=-0.875092 P_growth=0.033200 P_exact=0.079650
+  tree:0-1,0-2,0-3,0-4,2-5,3-6,4-7: bias=+0.865971 P_growth=0.090000 P_exact=0.037858
+  tree:0-1,0-2,1-3,1-4,2-5,5-6,5-7: bias=-0.542890 P_growth=0.009200 P_exact=0.015833
+  tree:0-1,0-2,0-3,2-4,2-5,3-6,3-7: bias=+0.533249 P_growth=0.039200 P_exact=0.022998
+  tree:0-1,0-2,0-3,1-4,2-5,3-6,6-7: bias=-0.476830 P_growth=0.055600 P_exact=0.089569
+  tree:0-1,0-2,0-3,0-4,3-5,4-6,6-7: bias=+0.369895 P_growth=0.146200 P_exact=0.100996
+  tree:0-1,0-2,1-3,1-4,2-5,2-6,2-7: bias=+0.362465 P_growth=0.018000 P_exact=0.012527
+  tree:0-1,0-2,0-3,2-4,3-5,5-6,5-7: bias=-0.274249 P_growth=0.056800 P_exact=0.074723
+  tree:0-1,0-2,0-3,1-4,2-5,3-6,3-7: bias=+0.210388 P_growth=0.059400 P_exact=0.048130
+  tree:0-1,0-2,1-3,2-4,4-5,4-6,4-7: bias=-0.179215 P_growth=0.014600 P_exact=0.017466
+  tree:0-1,0-2,0-3,2-4,2-5,3-6,6-7: bias=-0.173016 P_growth=0.072000 P_exact=0.085600
+  tree:0-1,0-2,0-3,2-4,3-5,3-6,6-7: bias=-0.011195 P_growth=0.081600 P_exact=0.082519
+
+Top-|bias| (K=18)
+  tree:0-1,0-2,1-3,2-4,3-5,4-6,6-7: bias=-2.059042 diameter=7 max_deg=2 leaves=2 wiener=84
+  tree:0-1,0-2,0-3,0-4,4-5,4-6,4-7: bias=+1.964070 diameter=3 max_deg=4 leaves=6 wiener=58
+  tree:0-1,0-2,1-3,2-4,3-5,4-6,4-7: bias=-1.266945 diameter=6 max_deg=3 leaves=3 wiener=79
+  tree:0-1,0-2,0-3,0-4,3-5,4-6,4-7: bias=+1.108329 diameter=4 max_deg=4 leaves=5 wiener=62
+  tree:0-1,0-2,1-3,1-4,2-5,4-6,5-7: bias=-1.098274 diameter=6 max_deg=3 leaves=3 wiener=76
+  tree:0-1,0-2,0-3,2-4,3-5,3-6,3-7: bias=+0.901264 diameter=4 max_deg=4 leaves=5 wiener=63
+  tree:0-1,0-2,0-3,2-4,3-5,4-6,5-7: bias=-0.875092 diameter=6 max_deg=3 leaves=3 wiener=75
+  tree:0-1,0-2,0-3,0-4,2-5,3-6,4-7: bias=+0.865971 diameter=4 max_deg=4 leaves=4 wiener=64
+  tree:0-1,0-2,1-3,1-4,2-5,5-6,5-7: bias=-0.542890 diameter=5 max_deg=3 leaves=4 wiener=74
+  tree:0-1,0-2,0-3,2-4,2-5,3-6,3-7: bias=+0.533249 diameter=4 max_deg=3 leaves=5 wiener=65
+  tree:0-1,0-2,0-3,1-4,2-5,3-6,6-7: bias=-0.476830 diameter=5 max_deg=3 leaves=3 wiener=72
+  tree:0-1,0-2,0-3,0-4,3-5,4-6,6-7: bias=+0.369895 diameter=5 max_deg=4 leaves=4 wiener=67
+  tree:0-1,0-2,1-3,1-4,2-5,2-6,2-7: bias=+0.362465 diameter=4 max_deg=4 leaves=5 wiener=66
+  tree:0-1,0-2,0-3,2-4,3-5,5-6,5-7: bias=-0.274249 diameter=5 max_deg=3 leaves=4 wiener=71
+  tree:0-1,0-2,0-3,1-4,2-5,3-6,3-7: bias=+0.210388 diameter=4 max_deg=3 leaves=4 wiener=67
+  tree:0-1,0-2,1-3,2-4,4-5,4-6,4-7: bias=-0.179215 diameter=5 max_deg=4 leaves=4 wiener=71
+  tree:0-1,0-2,0-3,2-4,2-5,3-6,6-7: bias=-0.173016 diameter=5 max_deg=3 leaves=4 wiener=70
+  tree:0-1,0-2,0-3,2-4,3-5,3-6,6-7: bias=-0.011195 diameter=5 max_deg=3 leaves=4 wiener=68
+
+Spearman correlations with bias (signed):
+  rho(bias, diameter) = -0.9215
+  rho(bias, max_degree) = +0.7588
+  rho(bias, n_leaves) = +0.8924
+  rho(bias, wiener) = -0.9959
+
+TIMING
+START_TS=2025-12-18T23:45:10+00:00
+END_TS=2025-12-18T23:45:10+00:00
+ELAPSED_TOTAL_SEC=0.012942

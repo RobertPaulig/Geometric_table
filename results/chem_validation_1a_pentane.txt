@@ -1,0 +1,140 @@
+CHEM-VALIDATION-1A: C5 pentane skeleton (n/iso/neo)
+
+Config: n_runs=1000, seeds=[0, 1, 2, 3, 4], modes=['R', 'A', 'B', 'C']
+ALKANE-VALIDITY-0: constructive tree-only proposal (no per-run grower resample), valence(C)<=4
+elapsed_sec=33.585, runs_done=20000
+
+[Mode R]
+  P(isopentane) = 0.5762 (count=2881)
+  P(n_pentane) = 0.3372 (count=1686)
+  P(neopentane) = 0.0866 (count=433)
+  score_total[n_pentane]: median=3.7299, p90=4.2985
+  score_total[isopentane]: median=3.6110, p90=4.0633
+  score_total[neopentane]: median=3.9445, p90=3.9445
+  log(P(iso)/P(n)) = 0.5358
+  log(P(neo)/P(n)) = -1.3594
+  resample_attempts_used: mean=1.000, p90=1.0, p99=1.0
+  t_growth_sec: mean=0.0001, p90=0.0001
+  t_scoring_sec: mean=0.0003, p90=0.0005
+
+[Mode A]
+  P(isopentane) = 0.5790 (count=2895)
+  P(n_pentane) = 0.3394 (count=1697)
+  P(neopentane) = 0.0816 (count=408)
+  score_total[isopentane]: median=3.6110, p90=4.0633
+  score_total[n_pentane]: median=3.7299, p90=4.2985
+  score_total[neopentane]: median=3.9445, p90=3.9445
+  MH_acceptance[isopentane]: proposals=35256, accepted=11580, rate=0.3285
+  MH_acceptance[n_pentane]: proposals=21228, accepted=6788, rate=0.3198
+  MH_acceptance[neopentane]: proposals=4624, accepted=1632, rate=0.3529
+  log(P(iso)/P(n)) = 0.5341
+  log(P(neo)/P(n)) = -1.4254
+  resample_attempts_used: mean=1.000, p90=1.0, p99=1.0
+  t_growth_sec: mean=0.0019, p90=0.0033
+  t_scoring_sec: mean=0.0003, p90=0.0004
+
+[Mode B]
+  P(isopentane) = 0.5720 (count=2860)
+  P(n_pentane) = 0.3364 (count=1682)
+  P(neopentane) = 0.0916 (count=458)
+  score_total[isopentane]: median=3.6110, p90=4.0633
+  score_total[n_pentane]: median=3.7299, p90=4.2985
+  score_total[neopentane]: median=3.9445, p90=3.9445
+  MH_acceptance[isopentane]: proposals=34141, accepted=11440, rate=0.3351
+  MH_acceptance[n_pentane]: proposals=20766, accepted=6728, rate=0.3240
+  MH_acceptance[neopentane]: proposals=5291, accepted=1832, rate=0.3462
+  log(P(iso)/P(n)) = 0.5308
+  log(P(neo)/P(n)) = -1.3009
+  resample_attempts_used: mean=1.000, p90=1.0, p99=1.0
+  t_growth_sec: mean=0.0018, p90=0.0029
+  t_scoring_sec: mean=0.0003, p90=0.0003
+
+[Mode C]
+  P(isopentane) = 0.5810 (count=2905)
+  P(n_pentane) = 0.3336 (count=1668)
+  P(neopentane) = 0.0854 (count=427)
+  score_total[isopentane]: median=3.6110, p90=4.0633
+  score_total[n_pentane]: median=3.7299, p90=4.2985
+  score_total[neopentane]: median=3.1399, p90=3.9445
+  MH_acceptance[isopentane]: proposals=34858, accepted=11620, rate=0.3334
+  MH_acceptance[n_pentane]: proposals=20873, accepted=6672, rate=0.3196
+  MH_acceptance[neopentane]: proposals=5356, accepted=1708, rate=0.3189
+  log(P(iso)/P(n)) = 0.5548
+  log(P(neo)/P(n)) = -1.3626
+  resample_attempts_used: mean=1.000, p90=1.0, p99=1.0
+  t_growth_sec: mean=0.0017, p90=0.0027
+  t_scoring_sec: mean=0.0003, p90=0.0003
+
+Deterministic reference scores (C5: path / iso / star)
+  Mode A: score_total(n)=4.2985, score_total(iso)=4.0633, score_total(neo)=3.1399
+    n:   fdm=4.2985, topo3d=0.0000, shape=0.0000, total=4.2985
+    iso: fdm=4.0633, topo3d=0.0000, shape=0.0000, total=4.0633
+    neo: fdm=3.1399, topo3d=0.0000, shape=0.0000, total=3.1399
+    Δ(n-iso)=0.2351, Δ(n-neo)=1.1586, Δ(iso-neo)=0.9235
+    Predicted order (min-score best): neo > iso > n
+    Predicted order (max-score best): n > iso > neo
+  Mode B: score_total(n)=4.2985, score_total(iso)=4.0633, score_total(neo)=3.1399
+    n:   fdm=4.2985, topo3d=0.0000, shape=0.0000, total=4.2985
+    iso: fdm=4.0633, topo3d=0.0000, shape=0.0000, total=4.0633
+    neo: fdm=3.1399, topo3d=0.0000, shape=0.0000, total=3.1399
+    Δ(n-iso)=0.2351, Δ(n-neo)=1.1586, Δ(iso-neo)=0.9235
+    Predicted order (min-score best): neo > iso > n
+    Predicted order (max-score best): n > iso > neo
+  Mode C: score_total(n)=4.2985, score_total(iso)=4.0633, score_total(neo)=3.1399
+    n:   fdm=4.2985, topo3d=0.0000, shape=0.0000, total=4.2985
+    iso: fdm=4.0633, topo3d=0.0000, shape=0.0000, total=4.0633
+    neo: fdm=3.1399, topo3d=0.0000, shape=0.0000, total=3.1399
+    Δ(n-iso)=0.2351, Δ(n-neo)=1.1586, Δ(iso-neo)=0.9235
+    Predicted order (min-score best): neo > iso > n
+    Predicted order (max-score best): n > iso > neo
+
+Sign & consistency check (tree-only frequencies vs MH convention)
+  Mode R: P_tree(n)=0.3372, P_tree(iso)=0.5762, P_tree(neo)=0.0866; observed order: iso > n > neo
+  Mode A: P_tree(n)=0.3394, P_tree(iso)=0.5790, P_tree(neo)=0.0816; observed order: iso > n > neo
+  Mode B: P_tree(n)=0.3364, P_tree(iso)=0.5720, P_tree(neo)=0.0916; observed order: iso > n > neo
+  Mode C: P_tree(n)=0.3336, P_tree(iso)=0.5810, P_tree(neo)=0.0854; observed order: iso > n > neo
+
+CORE-1: Degeneracy-aware predicted vs observed (tree-only)
+  Model: P_pred(topo) ∝ g(topo) * exp(-coupling_delta_G * E_ref(topo) / temperature_T)
+  g(topology)={'n_pentane': 60, 'isopentane': 60, 'neopentane': 5}
+  [Mode A] coupling=1.000, temperature_T=1.000, beta=1.000
+    P_obs : n=0.3394, iso=0.5790, neo=0.0816
+    P_pred: n=0.3952, iso=0.4999, neo=0.1049
+    log(P(iso)/P(n)): obs=0.5341, pred=0.2351, Δ=0.2990
+    log(P(neo)/P(n)): obs=-1.4254, pred=-1.3263, Δ=-0.0991
+  [Mode B] coupling=1.000, temperature_T=1.000, beta=1.000
+    P_obs : n=0.3364, iso=0.5720, neo=0.0916
+    P_pred: n=0.3952, iso=0.4999, neo=0.1049
+    log(P(iso)/P(n)): obs=0.5308, pred=0.2351, Δ=0.2957
+    log(P(neo)/P(n)): obs=-1.3009, pred=-1.3263, Δ=0.0254
+  [Mode C] coupling=1.000, temperature_T=1.000, beta=1.000
+    P_obs : n=0.3336, iso=0.5810, neo=0.0854
+    P_pred: n=0.3952, iso=0.4999, neo=0.1049
+    log(P(iso)/P(n)): obs=0.5548, pred=0.2351, Δ=0.3197
+    log(P(neo)/P(n)): obs=-1.3626, pred=-1.3263, Δ=-0.0363
+
+CORE-2: Fit lambda (degeneracy-aware)
+  [Mode A] temperature_T=1.000
+    E_ref={'n_pentane': 4.298466588588096, 'isopentane': 4.063348191089589, 'neopentane': 3.139857080327591}
+    lambda*=0.9225, KL_min=0.012566, KL@lambda*=0.012566
+    P_obs ={'n_pentane': 0.3394, 'isopentane': 0.579, 'neopentane': 0.0816}
+    P_pred={'n_pentane': 0.40243441897387455, 'isopentane': 0.49991039434372164, 'neopentane': 0.09765518668240386}
+    log(P(iso)/P(n)): obs=0.5341, pred=0.2169, Δ=0.3172
+    log(P(neo)/P(n)): obs=-1.4254, pred=-1.4161, Δ=-0.0093
+
+  [Mode B] temperature_T=1.000
+    E_ref={'n_pentane': 4.298466588588096, 'isopentane': 4.063348191089589, 'neopentane': 3.139857080327591}
+    lambda*=1.0138, KL_min=0.010440, KL@lambda*=0.010440
+    P_obs ={'n_pentane': 0.3364, 'isopentane': 0.572, 'neopentane': 0.0916}
+    P_pred={'n_pentane': 0.3938750557927202, 'isopentane': 0.49988847182547236, 'neopentane': 0.10623647238180739}
+    log(P(iso)/P(n)): obs=0.5308, pred=0.2384, Δ=0.2925
+    log(P(neo)/P(n)): obs=-1.3009, pred=-1.3104, Δ=0.0095
+
+  [Mode C] temperature_T=1.000
+    E_ref={'n_pentane': 4.298466588588096, 'isopentane': 4.063348191089589, 'neopentane': 3.139857080327591}
+    lambda*=0.9680, KL_min=0.013194, KL@lambda*=0.013194
+    P_obs ={'n_pentane': 0.3336, 'isopentane': 0.581, 'neopentane': 0.0854}
+    P_pred={'n_pentane': 0.398188587266193, 'isopentane': 0.49995612230915276, 'neopentane': 0.10185529042465423}
+    log(P(iso)/P(n)): obs=0.5548, pred=0.2276, Δ=0.3272
+    log(P(neo)/P(n)): obs=-1.3626, pred=-1.3634, Δ=0.0008
+

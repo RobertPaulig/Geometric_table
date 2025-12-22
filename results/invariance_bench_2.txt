@@ -1,0 +1,11 @@
+INVARIANCE-BENCH-2: OPT-2 vs OPT-1 canonicalization timing
+config: ns=[40, 80, 160, 320], n_trees=200, seed=0
+
+N=40: opt1_mean=0.000339064s opt2_mean=0.000146723s speedup=2.311 overhead_opt2=0.433
+N=80: opt1_mean=0.000955492s opt2_mean=0.000285221s speedup=3.350 overhead_opt2=0.299
+N=160: opt1_mean=0.00344755s opt2_mean=0.000644156s speedup=5.352 overhead_opt2=0.187
+N=320: opt1_mean=0.0125112s opt2_mean=0.00148328s speedup=8.435 overhead_opt2=0.119
+
+START_TS=2025-12-20T03:27:57+00:00
+END_TS=2025-12-20T03:28:01+00:00
+ELAPSED_TOTAL_SEC=4.430153

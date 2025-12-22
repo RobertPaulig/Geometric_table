@@ -1,0 +1,49 @@
+INVARIANCE-BENCH-1: legacy dense vs optimized tree-canon path
+n_values=[6, 10, 20, 40, 80, 160], n_trees_per_n=200, seed=0
+
+[N=6]
+  dense_mean_sec=0.000145
+  opt_mean_sec=0.000112
+  raw_mean_sec=0.000066
+  canon_overhead_mean=40.76%
+  speedup_mean=1.29x
+
+[N=10]
+  dense_mean_sec=0.000248
+  opt_mean_sec=0.000180
+  raw_mean_sec=0.000115
+  canon_overhead_mean=36.07%
+  speedup_mean=1.38x
+
+[N=20]
+  dense_mean_sec=0.000474
+  opt_mean_sec=0.000326
+  raw_mean_sec=0.000213
+  canon_overhead_mean=34.68%
+  speedup_mean=1.45x
+
+[N=40]
+  dense_mean_sec=0.001011
+  opt_mean_sec=0.000612
+  raw_mean_sec=0.000401
+  canon_overhead_mean=34.35%
+  speedup_mean=1.65x
+
+[N=80]
+  dense_mean_sec=0.002372
+  opt_mean_sec=0.001176
+  raw_mean_sec=0.000778
+  canon_overhead_mean=33.81%
+  speedup_mean=2.02x
+
+[N=160]
+  dense_mean_sec=0.006522
+  opt_mean_sec=0.002275
+  raw_mean_sec=0.001540
+  canon_overhead_mean=32.32%
+  speedup_mean=2.87x
+
+TIMING
+START_TS=2025-12-18T19:07:44+00:00
+END_TS=2025-12-18T19:07:48+00:00
+ELAPSED_TOTAL_SEC=3.914384

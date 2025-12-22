@@ -1,0 +1,35 @@
+GROWTH-KERNEL-BIAS-1 (N=7, mode=A)
+Uses P_exact from results/alkane_exact_1_N7.csv and P_growth from results/chem_validation_1c_heptane.txt
+
+Bias vector per topology: bias = log(P_growth/P_exact)
+  tree:0-1,0-2,1-3,2-4,3-5,4-6: bias=-1.282249 P_growth=0.033400 P_exact=0.120398
+  tree:0-1,0-2,0-3,0-4,4-5,4-6: bias=+1.119404 P_growth=0.101000 P_exact=0.032974
+  tree:0-1,0-2,0-3,0-4,3-5,4-6: bias=+0.796539 P_growth=0.231200 P_exact=0.104245
+  tree:0-1,0-2,1-3,2-4,4-5,4-6: bias=-0.727985 P_growth=0.054000 P_exact=0.111829
+  tree:0-1,0-2,0-3,2-4,3-5,5-6: bias=-0.432563 P_growth=0.205600 P_exact=0.316871
+  tree:0-1,0-2,1-3,2-4,2-5,2-6: bias=+0.357985 P_growth=0.065000 P_exact=0.045440
+  tree:0-1,0-2,0-3,2-4,3-5,3-6: bias=+0.271889 P_growth=0.226000 P_exact=0.172198
+  tree:0-1,0-2,0-3,1-4,2-5,3-6: bias=-0.170623 P_growth=0.051000 P_exact=0.060488
+  tree:0-1,0-2,1-3,1-4,2-5,2-6: bias=-0.080678 P_growth=0.032800 P_exact=0.035556
+
+Top-|bias| (K=9)
+  tree:0-1,0-2,1-3,2-4,3-5,4-6: bias=-1.282249 diameter=6 max_deg=2 leaves=2 wiener=56
+  tree:0-1,0-2,0-3,0-4,4-5,4-6: bias=+1.119404 diameter=3 max_deg=4 leaves=5 wiener=42
+  tree:0-1,0-2,0-3,0-4,3-5,4-6: bias=+0.796539 diameter=4 max_deg=4 leaves=4 wiener=44
+  tree:0-1,0-2,1-3,2-4,4-5,4-6: bias=-0.727985 diameter=5 max_deg=3 leaves=3 wiener=52
+  tree:0-1,0-2,0-3,2-4,3-5,5-6: bias=-0.432563 diameter=5 max_deg=3 leaves=3 wiener=50
+  tree:0-1,0-2,1-3,2-4,2-5,2-6: bias=+0.357985 diameter=4 max_deg=4 leaves=4 wiener=46
+  tree:0-1,0-2,0-3,2-4,3-5,3-6: bias=+0.271889 diameter=4 max_deg=3 leaves=4 wiener=46
+  tree:0-1,0-2,0-3,1-4,2-5,3-6: bias=-0.170623 diameter=4 max_deg=3 leaves=3 wiener=48
+  tree:0-1,0-2,1-3,1-4,2-5,2-6: bias=-0.080678 diameter=4 max_deg=3 leaves=4 wiener=48
+
+Spearman correlations with bias (signed):
+  rho(bias, diameter) = -0.9083
+  rho(bias, max_degree) = +0.8944
+  rho(bias, n_leaves) = +0.9399
+  rho(bias, wiener) = -0.9916
+
+TIMING
+START_TS=2025-12-18T23:45:09+00:00
+END_TS=2025-12-18T23:45:09+00:00
+ELAPSED_TOTAL_SEC=0.013950

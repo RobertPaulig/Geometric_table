@@ -1,0 +1,7 @@
+EQ-TARGET-3: N=16, mode=A, chains=3, thin=10, starts=['path', 'max_branch']
+steps_grid=[2000000]
+out_stub=bench_N16_w1
+
+RUN_START_TS=2025-12-21T23:06:57+00:00
+CMD=python -m analysis.chem.eq_target_3_scan --N 16 --steps_grid 2000000 --chains 3 --thin 10 --start_specs path max_branch --emit_run_blocks --out_stub bench_N16_w1 --energy_cache_path results/bench_N16_w1_cache.pkl --save_cache_every_points 1 --workers 1 --step_progress --progress
+

@@ -1,0 +1,50 @@
+MH-KERNEL-3: C6 exact baseline (Pruefer enumeration) + comparisons
+mode=A, lambda=1.0638, T=1.000
+N=6 labeled trees total=1296, alkane(deg<=4)=1290 (expected 1290)
+elapsed_sec=0.976
+
+TIMING
+START_TS=2025-12-18T19:08:06+00:00
+END_TS=2025-12-18T19:08:07+00:00
+ELAPSED_TOTAL_SEC=1.007393
+
+Counts per topology (alkane labeled states):
+  n_hexane: count=360
+  2_methylpentane: count=360
+  3_methylpentane: count=360
+  2,2_dimethylbutane: count=120
+  2,3_dimethylbutane: count=90
+
+P_exact(topology):
+  n_hexane = 0.226680
+  2_methylpentane = 0.251649
+  3_methylpentane = 0.319879
+  2,2_dimethylbutane = 0.126911
+  2,3_dimethylbutane = 0.074881
+
+P_pred(topology) = g*exp(-lambda*E_ref/T) normalized:
+  n_hexane = 0.226680
+  2_methylpentane = 0.251649
+  3_methylpentane = 0.319879
+  2,2_dimethylbutane = 0.126911
+  2,3_dimethylbutane = 0.074881
+
+P_obs_growth(topology) from chem_validation_1b_hexane.csv:
+  n_hexane = 0.223600
+  2_methylpentane = 0.252800
+  3_methylpentane = 0.316800
+  2,2_dimethylbutane = 0.125000
+  2,3_dimethylbutane = 0.081800
+
+P_mcmc_fixedN(topology) from mh_kernel_3_c6_mcmc_mode*.txt:
+  n_hexane = 0.226778
+  2_methylpentane = 0.253722
+  3_methylpentane = 0.318167
+  2,2_dimethylbutane = 0.127556
+  2,3_dimethylbutane = 0.073778
+
+KL matrix:
+  KL(P_mcmc || P_exact) = 2.39232e-05
+  KL(P_obs  || P_exact) = 0.000363252
+  KL(P_obs  || P_pred)  = 0.000363252
+  KL(P_pred || P_exact) = 5.66866e-17

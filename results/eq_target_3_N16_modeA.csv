@@ -1,0 +1,2 @@
+N,steps,burnin,thin,chains,starts,elapsed_sec,steps_total,steps_per_sec_total,energy_cache_hit_rate,energy_cache_hits,energy_cache_misses,accept_rate_total,n_unique_eq,expected_unique_eq,coverage_unique_eq,unique_frac_samples,KL_max_pairwise,KL_split_max,Rhat_energy_max,ESS_energy_min
+16,2000000,200000,10,3,path|max_branch,676.3153245999711,12000000,17743.202857480414,0.994822419255457,11937875,62131,0.9250035833333333,10343,10359,0.9984554493676996,0.009576851851851852,0.09514619301147861,0.2812408873303658,1.0000133838671073,66854.16109207578

@@ -1,0 +1,74 @@
+CHEM-VALIDATION-1B: C6 hexane skeleton (tree-only)
+
+Config: n_runs=50, seeds=[0], modes=['A']
+Equilibrate (DEV, not standard): steps=0, burnin=0, thin=1
+elapsed_sec=0.330, runs_done=50
+
+CORE-1: degeneracy table g(topology)=6!/|Aut|
+  g(2,2_dimethylbutane)=120
+  g(2,3_dimethylbutane)=90
+  g(2_methylpentane)=360
+  g(3_methylpentane)=360
+  g(n_hexane)=360
+  sum_g=1290 (sanity: 1290 for all labeled non-star C6 trees)
+
+[Mode A]
+  P(2,2_dimethylbutane) = 0.2000 (count=10)
+  P(2,3_dimethylbutane) = 0.0600 (count=3)
+  P(2_methylpentane) = 0.3600 (count=18)
+  P(3_methylpentane) = 0.3000 (count=15)
+  P(n_hexane) = 0.0800 (count=4)
+  score_total[3_methylpentane]: median=3.7078, p90=3.7078
+  score_total[2,2_dimethylbutane]: median=3.5441, p90=3.5441
+  score_total[n_hexane]: median=4.0316, p90=4.0316
+  score_total[2,3_dimethylbutane]: median=3.7696, p90=3.7696
+  score_total[2_methylpentane]: median=3.9333, p90=3.9333
+  MH_acceptance[2,2_dimethylbutane]: proposals=103, accepted=50, rate=0.4854
+  MH_acceptance[2,3_dimethylbutane]: proposals=42, accepted=15, rate=0.3571
+  MH_acceptance[2_methylpentane]: proposals=200, accepted=90, rate=0.4500
+  MH_acceptance[3_methylpentane]: proposals=160, accepted=75, rate=0.4688
+  MH_acceptance[n_hexane]: proposals=37, accepted=20, rate=0.5405
+  log(P(2_methylpentane)/P(n_hexane)) = 1.5041
+  log(P(3_methylpentane)/P(n_hexane)) = 1.3218
+  log(P(2,2_dimethylbutane)/P(n_hexane)) = 0.9163
+  log(P(2,3_dimethylbutane)/P(n_hexane)) = -0.2877
+  KL(P_growth||P_exact) = 0.104009
+  KL(P_equilibrated||P_exact) = 0.104009
+  P_eq(topology) from chem_eq_N6_modeA.txt:
+    n_hexane = 0.216667
+    2_methylpentane = 0.250000
+    3_methylpentane = 0.316667
+    2,2_dimethylbutane = 0.144444
+    2,3_dimethylbutane = 0.072222
+  KL(P_growth||P_eq) = 0.089305
+  KL(P_eq||P_exact) = 0.001453
+  runtime_growth_sec: mean=0.0051, p90=0.0068
+  runtime_scoring_sec: mean=0.0009, p90=0.0010
+
+Deterministic reference scores (C6: 5 hexane isomers)
+  [Mode A]
+    n_hexane: fdm=4.0316, topo3d=0.0000, shape=0.0000, total=4.0316
+    2_methylpentane: fdm=3.9333, topo3d=0.0000, shape=0.0000, total=3.9333
+    3_methylpentane: fdm=3.7078, topo3d=0.0000, shape=0.0000, total=3.7078
+    2,2_dimethylbutane: fdm=3.5441, topo3d=0.0000, shape=0.0000, total=3.5441
+    2,3_dimethylbutane: fdm=3.7696, topo3d=0.0000, shape=0.0000, total=3.7696
+    Predicted order (min-score best): 2,2_dimethylbutane > 3_methylpentane > 2,3_dimethylbutane > 2_methylpentane > n_hexane
+
+CORE-2: Fit lambda (degeneracy-aware)
+  [Mode A] temperature_T=1.000
+    lambda*=2.3718, KL_min=0.080482, KL@lambda*=0.080482
+    P_obs ={'2,2_dimethylbutane': 0.2, '2,3_dimethylbutane': 0.06, '2_methylpentane': 0.36, '3_methylpentane': 0.3, 'n_hexane': 0.08}
+    P_pred={'2,2_dimethylbutane': 0.17825780242508082, '2,3_dimethylbutane': 0.07830961086069342, '2_methylpentane': 0.2124446356127831, '3_methylpentane': 0.36269412015754376, 'n_hexane': 0.16829383094389896}
+    log(P(2_methylpentane)/P(n_hexane)): obs=1.5041, pred=0.2330, Δ=1.2711
+    log(P(3_methylpentane)/P(n_hexane)): obs=1.3218, pred=0.7678, Δ=0.5539
+    log(P(2,2_dimethylbutane)/P(n_hexane)): obs=0.9163, pred=0.0575, Δ=0.8588
+    log(P(2,3_dimethylbutane)/P(n_hexane)): obs=-0.2877, pred=-0.7650, Δ=0.4774
+
+
+TIMING
+START_TS=2025-12-18T21:07:16+00:00
+END_TS=2025-12-18T21:07:17+00:00
+ELAPSED_TOTAL_SEC=0.330423
+ELAPSED_GROWTH_SEC=0.254274
+ELAPSED_SCORING_SEC=0.045055
+ELAPSED_IO_SEC=0.001849

@@ -1,0 +1,133 @@
+CHEM-VALIDATION-1C: C7 heptane skeleton (proposal vs equilibrium)
+Config: n_runs=1000, seeds=[0, 1, 2, 3, 4], modes=['A', 'B', 'C']
+EQ budget: eq_steps=5000, eq_chains=3, starts=['path', 'max_branch']
+Reporting: top_k=9
+
+[Mode A]
+  n_unique_growth=9, n_unique_eq=9, n_unique_exact=9
+  P_growth(topology):
+    tree:0-1,0-2,0-3,0-4,3-5,4-6 = 0.231200 (count=1156)
+    tree:0-1,0-2,0-3,2-4,3-5,3-6 = 0.226000 (count=1130)
+    tree:0-1,0-2,0-3,2-4,3-5,5-6 = 0.205600 (count=1028)
+    tree:0-1,0-2,0-3,0-4,4-5,4-6 = 0.101000 (count=505)
+    tree:0-1,0-2,1-3,2-4,2-5,2-6 = 0.065000 (count=325)
+    tree:0-1,0-2,1-3,2-4,4-5,4-6 = 0.054000 (count=270)
+    tree:0-1,0-2,0-3,1-4,2-5,3-6 = 0.051000 (count=255)
+    tree:0-1,0-2,1-3,2-4,3-5,4-6 = 0.033400 (count=167)
+    tree:0-1,0-2,1-3,1-4,2-5,2-6 = 0.032800 (count=164)
+  mass_topK_growth=1.000000
+  P_eq(topology):
+    tree:0-1,0-2,0-3,2-4,3-5,5-6 = 0.317778
+    tree:0-1,0-2,0-3,2-4,3-5,3-6 = 0.172222
+    tree:0-1,0-2,1-3,2-4,4-5,4-6 = 0.122222
+    tree:0-1,0-2,1-3,2-4,3-5,4-6 = 0.110000
+    tree:0-1,0-2,0-3,0-4,3-5,4-6 = 0.094444
+    tree:0-1,0-2,0-3,1-4,2-5,3-6 = 0.072963
+    tree:0-1,0-2,1-3,2-4,2-5,2-6 = 0.041852
+    tree:0-1,0-2,1-3,1-4,2-5,2-6 = 0.035556
+    tree:0-1,0-2,0-3,0-4,4-5,4-6 = 0.032963
+  mass_topK_eq=1.000000
+  KL(P_growth||P_eq) = 0.215759
+  KL(P_eq||P_exact) = 0.002760
+  KL(P_growth||P_exact) = 0.199514
+  Guardrail: KL_max_pairwise=0.000862, KL_mean_pairwise=0.000853
+  EQ_METRICS: ELAPSED_EQ_SEC=3.205871, STEPS_TOTAL=30000, STEPS_PER_SEC_TOTAL=9357.8
+  ENERGY-CACHE: hit_rate=1.000, hits=29997, misses=9
+  Bias log(P_growth/P_exact):
+    tree:0-1,0-2,1-3,2-4,3-5,4-6: bias=-1.282249 P_growth=0.033400 P_exact=0.120398
+    tree:0-1,0-2,0-3,0-4,4-5,4-6: bias=+1.119404 P_growth=0.101000 P_exact=0.032974
+    tree:0-1,0-2,0-3,0-4,3-5,4-6: bias=+0.796539 P_growth=0.231200 P_exact=0.104245
+    tree:0-1,0-2,1-3,2-4,4-5,4-6: bias=-0.727985 P_growth=0.054000 P_exact=0.111829
+    tree:0-1,0-2,0-3,2-4,3-5,5-6: bias=-0.432563 P_growth=0.205600 P_exact=0.316871
+    tree:0-1,0-2,1-3,2-4,2-5,2-6: bias=+0.357985 P_growth=0.065000 P_exact=0.045440
+    tree:0-1,0-2,0-3,2-4,3-5,3-6: bias=+0.271889 P_growth=0.226000 P_exact=0.172198
+    tree:0-1,0-2,0-3,1-4,2-5,3-6: bias=-0.170623 P_growth=0.051000 P_exact=0.060488
+    tree:0-1,0-2,1-3,1-4,2-5,2-6: bias=-0.080678 P_growth=0.032800 P_exact=0.035556
+
+[Mode B]
+  n_unique_growth=9, n_unique_eq=9, n_unique_exact=9
+  P_growth(topology):
+    tree:0-1,0-2,0-3,0-4,3-5,4-6 = 0.231200 (count=1156)
+    tree:0-1,0-2,0-3,2-4,3-5,3-6 = 0.226000 (count=1130)
+    tree:0-1,0-2,0-3,2-4,3-5,5-6 = 0.205600 (count=1028)
+    tree:0-1,0-2,0-3,0-4,4-5,4-6 = 0.101000 (count=505)
+    tree:0-1,0-2,1-3,2-4,2-5,2-6 = 0.065000 (count=325)
+    tree:0-1,0-2,1-3,2-4,4-5,4-6 = 0.054000 (count=270)
+    tree:0-1,0-2,0-3,1-4,2-5,3-6 = 0.051000 (count=255)
+    tree:0-1,0-2,1-3,2-4,3-5,4-6 = 0.033400 (count=167)
+    tree:0-1,0-2,1-3,1-4,2-5,2-6 = 0.032800 (count=164)
+  mass_topK_growth=1.000000
+  P_eq(topology):
+    tree:0-1,0-2,0-3,2-4,3-5,5-6 = 0.317778
+    tree:0-1,0-2,0-3,2-4,3-5,3-6 = 0.172222
+    tree:0-1,0-2,1-3,2-4,4-5,4-6 = 0.122222
+    tree:0-1,0-2,1-3,2-4,3-5,4-6 = 0.110000
+    tree:0-1,0-2,0-3,0-4,3-5,4-6 = 0.094444
+    tree:0-1,0-2,0-3,1-4,2-5,3-6 = 0.072963
+    tree:0-1,0-2,1-3,2-4,2-5,2-6 = 0.041852
+    tree:0-1,0-2,1-3,1-4,2-5,2-6 = 0.035556
+    tree:0-1,0-2,0-3,0-4,4-5,4-6 = 0.032963
+  mass_topK_eq=1.000000
+  KL(P_growth||P_eq) = 0.215759
+  KL(P_eq||P_exact) = 0.002760
+  KL(P_growth||P_exact) = 0.199514
+  Guardrail: KL_max_pairwise=0.000862, KL_mean_pairwise=0.000853
+  EQ_METRICS: ELAPSED_EQ_SEC=3.163070, STEPS_TOTAL=30000, STEPS_PER_SEC_TOTAL=9484.5
+  ENERGY-CACHE: hit_rate=1.000, hits=29997, misses=9
+  Bias log(P_growth/P_exact):
+    tree:0-1,0-2,1-3,2-4,3-5,4-6: bias=-1.282249 P_growth=0.033400 P_exact=0.120398
+    tree:0-1,0-2,0-3,0-4,4-5,4-6: bias=+1.119404 P_growth=0.101000 P_exact=0.032974
+    tree:0-1,0-2,0-3,0-4,3-5,4-6: bias=+0.796539 P_growth=0.231200 P_exact=0.104245
+    tree:0-1,0-2,1-3,2-4,4-5,4-6: bias=-0.727985 P_growth=0.054000 P_exact=0.111829
+    tree:0-1,0-2,0-3,2-4,3-5,5-6: bias=-0.432563 P_growth=0.205600 P_exact=0.316871
+    tree:0-1,0-2,1-3,2-4,2-5,2-6: bias=+0.357985 P_growth=0.065000 P_exact=0.045440
+    tree:0-1,0-2,0-3,2-4,3-5,3-6: bias=+0.271889 P_growth=0.226000 P_exact=0.172198
+    tree:0-1,0-2,0-3,1-4,2-5,3-6: bias=-0.170623 P_growth=0.051000 P_exact=0.060488
+    tree:0-1,0-2,1-3,1-4,2-5,2-6: bias=-0.080678 P_growth=0.032800 P_exact=0.035556
+
+[Mode C]
+  n_unique_growth=9, n_unique_eq=9, n_unique_exact=9
+  P_growth(topology):
+    tree:0-1,0-2,0-3,0-4,3-5,4-6 = 0.231200 (count=1156)
+    tree:0-1,0-2,0-3,2-4,3-5,3-6 = 0.226000 (count=1130)
+    tree:0-1,0-2,0-3,2-4,3-5,5-6 = 0.205600 (count=1028)
+    tree:0-1,0-2,0-3,0-4,4-5,4-6 = 0.101000 (count=505)
+    tree:0-1,0-2,1-3,2-4,2-5,2-6 = 0.065000 (count=325)
+    tree:0-1,0-2,1-3,2-4,4-5,4-6 = 0.054000 (count=270)
+    tree:0-1,0-2,0-3,1-4,2-5,3-6 = 0.051000 (count=255)
+    tree:0-1,0-2,1-3,2-4,3-5,4-6 = 0.033400 (count=167)
+    tree:0-1,0-2,1-3,1-4,2-5,2-6 = 0.032800 (count=164)
+  mass_topK_growth=1.000000
+  P_eq(topology):
+    tree:0-1,0-2,0-3,2-4,3-5,5-6 = 0.317778
+    tree:0-1,0-2,0-3,2-4,3-5,3-6 = 0.172222
+    tree:0-1,0-2,1-3,2-4,4-5,4-6 = 0.122222
+    tree:0-1,0-2,1-3,2-4,3-5,4-6 = 0.110000
+    tree:0-1,0-2,0-3,0-4,3-5,4-6 = 0.094444
+    tree:0-1,0-2,0-3,1-4,2-5,3-6 = 0.072963
+    tree:0-1,0-2,1-3,2-4,2-5,2-6 = 0.041852
+    tree:0-1,0-2,1-3,1-4,2-5,2-6 = 0.035556
+    tree:0-1,0-2,0-3,0-4,4-5,4-6 = 0.032963
+  mass_topK_eq=1.000000
+  KL(P_growth||P_eq) = 0.215759
+  KL(P_eq||P_exact) = 0.002760
+  KL(P_growth||P_exact) = 0.199514
+  Guardrail: KL_max_pairwise=0.000862, KL_mean_pairwise=0.000853
+  EQ_METRICS: ELAPSED_EQ_SEC=3.169568, STEPS_TOTAL=30000, STEPS_PER_SEC_TOTAL=9465.0
+  ENERGY-CACHE: hit_rate=1.000, hits=30006, misses=0
+  Bias log(P_growth/P_exact):
+    tree:0-1,0-2,1-3,2-4,3-5,4-6: bias=-1.282249 P_growth=0.033400 P_exact=0.120398
+    tree:0-1,0-2,0-3,0-4,4-5,4-6: bias=+1.119404 P_growth=0.101000 P_exact=0.032974
+    tree:0-1,0-2,0-3,0-4,3-5,4-6: bias=+0.796539 P_growth=0.231200 P_exact=0.104245
+    tree:0-1,0-2,1-3,2-4,4-5,4-6: bias=-0.727985 P_growth=0.054000 P_exact=0.111829
+    tree:0-1,0-2,0-3,2-4,3-5,5-6: bias=-0.432563 P_growth=0.205600 P_exact=0.316871
+    tree:0-1,0-2,1-3,2-4,2-5,2-6: bias=+0.357985 P_growth=0.065000 P_exact=0.045440
+    tree:0-1,0-2,0-3,2-4,3-5,3-6: bias=+0.271889 P_growth=0.226000 P_exact=0.172198
+    tree:0-1,0-2,0-3,1-4,2-5,3-6: bias=-0.170623 P_growth=0.051000 P_exact=0.060488
+    tree:0-1,0-2,1-3,1-4,2-5,2-6: bias=-0.080678 P_growth=0.032800 P_exact=0.035556
+
+TIMING
+START_TS=2025-12-18T23:42:28+00:00
+END_TS=2025-12-18T23:43:47+00:00
+ELAPSED_TOTAL_SEC=79.141369
+BREAKDOWN_SEC=eq_total=9.538522,growth_total=69.589664,scoring_total=0.000001

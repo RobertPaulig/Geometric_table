@@ -1,0 +1,16 @@
+SMART-GROWTH-2 end-to-end MH growth benchmark with profiling
+Z_list=[6, 8, 14, 26]
+
+Profile=SMALL (max_depth=4, max_atoms=25, n_trees_per_Z=50)
+Profile=SMALL, Z=6: speedup_total=1.10x, speedup_shape=1.00x, shape_frac_trapz=0.00, shape_frac_fdm=0.00, complexity_frac_trapz=1.35, complexity_frac_fdm=1.37, mh_accept_rate_trapz=0.41, mh_accept_rate_fdm=0.41, shape_hits_trapz=50, shape_hits_fdm=50, shape_misses_trapz=40, shape_misses_fdm=40
+Profile=SMALL, Z=8: speedup_total=0.99x, speedup_shape=1.00x, shape_frac_trapz=0.00, shape_frac_fdm=0.00, complexity_frac_trapz=1.27, complexity_frac_fdm=1.28, mh_accept_rate_trapz=0.22, mh_accept_rate_fdm=0.22, shape_hits_trapz=140, shape_hits_fdm=140, shape_misses_trapz=40, shape_misses_fdm=40
+Profile=SMALL, Z=14: speedup_total=0.86x, speedup_shape=1.00x, shape_frac_trapz=0.00, shape_frac_fdm=0.00, complexity_frac_trapz=1.30, complexity_frac_fdm=1.30, mh_accept_rate_trapz=0.22, mh_accept_rate_fdm=0.23, shape_hits_trapz=230, shape_hits_fdm=230, shape_misses_trapz=40, shape_misses_fdm=40
+Profile=SMALL, Z=26: speedup_total=0.97x, speedup_shape=1.00x, shape_frac_trapz=0.00, shape_frac_fdm=0.00, complexity_frac_trapz=1.38, complexity_frac_fdm=1.38, mh_accept_rate_trapz=0.46, mh_accept_rate_fdm=0.46, shape_hits_trapz=320, shape_hits_fdm=320, shape_misses_trapz=40, shape_misses_fdm=40
+
+Profile=HEAVY (max_depth=8, max_atoms=80, n_trees_per_Z=100)
+HEAVY baseline vs optimized (per Z):
+Z=6: speedup_total=152.72x, speedup_complexity=113.63x, layout_eliminated (n_layout_calls_baseline=507, optimized=0); mh_accept_rate_baseline=0.30, mh_accept_rate_optimized=0.32
+Z=8: speedup_total=179.74x, speedup_complexity=135.04x, layout_eliminated (n_layout_calls_baseline=262, optimized=0); mh_accept_rate_baseline=0.37, mh_accept_rate_optimized=0.37
+Z=14: speedup_total=96.00x, speedup_complexity=73.61x, layout_eliminated (n_layout_calls_baseline=303, optimized=0); mh_accept_rate_baseline=0.27, mh_accept_rate_optimized=0.27
+Z=26: speedup_total=425.06x, speedup_complexity=303.69x, layout_eliminated (n_layout_calls_baseline=843, optimized=0); mh_accept_rate_baseline=0.44, mh_accept_rate_optimized=0.44
+

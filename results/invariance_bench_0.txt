@@ -1,0 +1,43 @@
+INVARIANCE-BENCH-0: canonical tree relabel overhead
+n_values=[6, 10, 20, 40, 80, 160], n_trees_per_n=200, seed=0
+
+[N=6]
+  t_canonicalize_sec: mean=0.000079, p50=0.000076, p90=0.000085, p99=0.000169
+  t_energy_fdm_sec:   mean=0.000364, p50=0.000335, p90=0.000423, p99=0.000808
+  t_energy_fdm_raw:   mean=0.000082, p50=0.000078, p90=0.000087, p99=0.000135
+  overhead_mean = t_canonicalize / t_energy_fdm = 21.84%
+
+[N=10]
+  t_canonicalize_sec: mean=0.000122, p50=0.000120, p90=0.000130, p99=0.000238
+  t_energy_fdm_sec:   mean=0.000500, p50=0.000478, p90=0.000566, p99=0.000835
+  t_energy_fdm_raw:   mean=0.000122, p50=0.000116, p90=0.000127, p99=0.000257
+  overhead_mean = t_canonicalize / t_energy_fdm = 24.43%
+
+[N=20]
+  t_canonicalize_sec: mean=0.000252, p50=0.000248, p90=0.000265, p99=0.000418
+  t_energy_fdm_sec:   mean=0.000827, p50=0.000807, p90=0.000900, p99=0.001150
+  t_energy_fdm_raw:   mean=0.000218, p50=0.000208, p90=0.000220, p99=0.000502
+  overhead_mean = t_canonicalize / t_energy_fdm = 30.47%
+
+[N=40]
+  t_canonicalize_sec: mean=0.000610, p50=0.000591, p90=0.000682, p99=0.001071
+  t_energy_fdm_sec:   mean=0.001506, p50=0.001457, p90=0.001670, p99=0.002212
+  t_energy_fdm_raw:   mean=0.000409, p50=0.000391, p90=0.000413, p99=0.000748
+  overhead_mean = t_canonicalize / t_energy_fdm = 40.48%
+
+[N=80]
+  t_canonicalize_sec: mean=0.001664, p50=0.001629, p90=0.001823, p99=0.002362
+  t_energy_fdm_sec:   mean=0.002845, p50=0.002762, p90=0.003132, p99=0.003702
+  t_energy_fdm_raw:   mean=0.000787, p50=0.000763, p90=0.000835, p99=0.001081
+  overhead_mean = t_canonicalize / t_energy_fdm = 58.49%
+
+[N=160]
+  t_canonicalize_sec: mean=0.005044, p50=0.005136, p90=0.005513, p99=0.006098
+  t_energy_fdm_sec:   mean=0.005330, p50=0.005478, p90=0.006117, p99=0.006949
+  t_energy_fdm_raw:   mean=0.001493, p50=0.001510, p90=0.001697, p99=0.002108
+  overhead_mean = t_canonicalize / t_energy_fdm = 94.63%
+
+TIMING
+START_TS=2025-12-18T19:08:08+00:00
+END_TS=2025-12-18T19:08:13+00:00
+ELAPSED_TOTAL_SEC=4.681820

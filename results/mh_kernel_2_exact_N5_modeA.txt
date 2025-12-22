@@ -1,0 +1,17 @@
+MH-KERNEL-2: exact baseline via Prüfer enumeration
+N=5, mode=A, backend=fdm_entanglement
+states_total=125, elapsed_sec=0.069
+temperature_T=1.000, lambda=0.9225
+
+P_pred (CORE-2, g*exp(-λE_ref/T))={'n_pentane': 0.4869907501878726, 'isopentane': 0.4545144745533731, 'neopentane': 0.05849477525875439}
+P_exact (enumeration)={'neopentane': 0.05849477525875443, 'isopentane': 0.454514474553373, 'n_pentane': 0.4869907501878726}
+P_pred3 (CORE-3, label-averaged)={'neopentane': 0.05849477525875443, 'isopentane': 0.454514474553373, 'n_pentane': 0.4869907501878726}
+P_mcmc (MH-KERNEL-1)={'n_pentane': 0.4644444444444445, 'isopentane': 0.4946666666666667, 'neopentane': 0.0408888888888889}
+
+KL(P_mcmc||P_exact)=0.005218
+KL(P_pred||P_exact)=0.000000
+
+Label-dependence diagnostics: E stats within topology
+  isopentane: count=60, E_min=3.610984, E_mean=3.610984, E_std=0.000000, E_max=3.610984
+  n_pentane: count=60, E_min=3.536170, E_mean=3.536170, E_std=0.000000, E_max=3.536170
+  neopentane: count=5, E_min=3.139857, E_mean=3.139857, E_std=0.000000, E_max=3.139857

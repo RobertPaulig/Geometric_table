@@ -1,0 +1,10 @@
+FAST-COMPLEXITY-2 paired micro-benchmark for fdm_entanglement
+n_graphs_per_class=50
+N_MIN_PREFILTER=10
+
+small_tree: baseline_p50=6.306935e-02s, optimized_p50=2.184500e-04s, speedup_p50=288.71x; baseline_p90=1.123910e-01s, optimized_p90=2.724700e-04s, speedup_p90=412.49x; baseline_p99=1.198993e-01s, optimized_p99=7.029050e-04s, speedup_p99=170.58x; paired_speedup_ratio_p50=294.03x, p90=429.96x, p99=521.92x
+small_cyclic: baseline_p50=7.704730e-02s, optimized_p50=2.300000e-04s, speedup_p50=334.99x; baseline_p90=1.156422e-01s, optimized_p90=1.164325e-01s, speedup_p90=0.99x; baseline_p99=1.299404e-01s, optimized_p99=1.209139e-01s, speedup_p99=1.07x; paired_speedup_ratio_p50=241.71x, p90=351.76x, p99=435.21x
+medium_tree: baseline_p50=8.162087e-01s, optimized_p50=5.830500e-04s, speedup_p50=1399.89x; baseline_p90=1.378349e+00s, optimized_p90=7.139300e-04s, speedup_p90=1930.65x; baseline_p99=1.571743e+00s, optimized_p99=1.224768e-03s, speedup_p99=1283.30x; paired_speedup_ratio_p50=1415.35x, p90=2021.21x, p99=2343.04x
+medium_cyclic: baseline_p50=8.393114e-01s, optimized_p50=8.210385e-01s, speedup_p50=1.02x; baseline_p90=1.439657e+00s, optimized_p90=1.417320e+00s, speedup_p90=1.02x; baseline_p99=1.577537e+00s, optimized_p99=1.529171e+00s, speedup_p99=1.03x; paired_speedup_ratio_p50=1.01x, p90=1.04x, p99=1.05x
+large_tree: baseline_p50=7.165266e+00s, optimized_p50=1.435650e-03s, speedup_p50=4990.96x; baseline_p90=9.041583e+00s, optimized_p90=1.805710e-03s, speedup_p90=5007.22x; baseline_p99=9.583832e+00s, optimized_p99=2.981927e-03s, speedup_p99=3213.97x; paired_speedup_ratio_p50=4575.25x, p90=5850.88x, p99=6179.45x
+large_cyclic: baseline_p50=5.756580e+00s, optimized_p50=5.698560e+00s, speedup_p50=1.01x; baseline_p90=9.135639e+00s, optimized_p90=9.083296e+00s, speedup_p90=1.01x; baseline_p99=9.515755e+00s, optimized_p99=9.526265e+00s, speedup_p99=1.00x; paired_speedup_ratio_p50=0.99x, p90=1.02x, p99=1.04x

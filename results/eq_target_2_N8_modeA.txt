@@ -1,0 +1,20 @@
+EQ-TARGET-2: steps -> KL guardrail via bad starts (N=8, mode A)
+steps_list=[2000, 5000, 10000, 20000], chains=3, thin=10, burnin_frac=0.1, lambda=1.0, starts=['path', 'max_branch']
+
+steps=  2000 burnin=  200 elapsed=  0.627s steps_total=  12000 steps/sec= 19146.4 hit_rate= 0.999 acc= 0.903 KL_max=0.083180 KL_mean=0.046105
+  start=path: elapsed=0.313s cache_hit_rate=0.999 steps/sec=19234.5
+  start=max_branch: elapsed=0.314s cache_hit_rate=1.000 steps/sec=19201.3
+steps=  5000 burnin=  500 elapsed=  1.601s steps_total=  30000 steps/sec= 18741.8 hit_rate= 1.000 acc= 0.904 KL_max=0.002120 KL_mean=0.002095
+  start=path: elapsed=0.793s cache_hit_rate=1.000 steps/sec=18941.1
+  start=max_branch: elapsed=0.807s cache_hit_rate=1.000 steps/sec=18621.6
+steps= 10000 burnin= 1000 elapsed=  3.173s steps_total=  60000 steps/sec= 18912.0 hit_rate= 1.000 acc= 0.905 KL_max=0.001495 KL_mean=0.001474
+  start=path: elapsed=1.586s cache_hit_rate=1.000 steps/sec=18938.6
+  start=max_branch: elapsed=1.587s cache_hit_rate=1.000 steps/sec=18928.4
+steps= 20000 burnin= 2000 elapsed=  6.352s steps_total= 120000 steps/sec= 18891.5 hit_rate= 1.000 acc= 0.903 KL_max=0.001115 KL_mean=0.001111
+  start=path: elapsed=3.214s cache_hit_rate=1.000 steps/sec=18680.6
+  start=max_branch: elapsed=3.138s cache_hit_rate=1.000 steps/sec=19132.4
+
+TIMING
+START_TS=2025-12-18T22:16:41+00:00
+END_TS=2025-12-18T22:16:53+00:00
+ELAPSED_TOTAL_SEC=11.753863

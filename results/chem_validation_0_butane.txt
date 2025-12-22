@@ -1,0 +1,87 @@
+CHEM-VALIDATION-0 (C4 butane skeleton)
+n_runs_per_seed=1000
+seeds=[0, 1, 2, 3, 4]
+modes=['R', 'A', 'B', 'C']
+elapsed_sec=1223.167, runs_done=20000
+
+[Mode R]
+  P(isobutane) = 0.3340 (count=1670)
+  P(n_butane) = 0.6660 (count=3330)
+  score_total[n_butane]: median=3.0931, p90=3.5850
+  score_total[isobutane]: median=3.4358, p90=3.4358
+  log(P(iso)/P(n)) = -0.6901
+
+[Mode A]
+  P(isobutane) = 0.3396 (count=1698)
+  P(n_butane) = 0.6604 (count=3302)
+  score_total[isobutane]: median=2.8444, p90=3.4358
+  score_total[n_butane]: median=3.0931, p90=3.5850
+  MH_acceptance[isobutane]: proposals=17998, accepted=5094, rate=0.2830
+  MH_acceptance[n_butane]: proposals=34214, accepted=9906, rate=0.2895
+  log(P(iso)/P(n)) = -0.6651
+
+[Mode B]
+  P(isobutane) = 0.3602 (count=1801)
+  P(n_butane) = 0.6398 (count=3199)
+  score_total[isobutane]: median=2.8444, p90=3.4358
+  score_total[n_butane]: median=3.0931, p90=3.5850
+  MH_acceptance[isobutane]: proposals=18414, accepted=5403, rate=0.2934
+  MH_acceptance[n_butane]: proposals=33574, accepted=9597, rate=0.2858
+  log(P(iso)/P(n)) = -0.5745
+
+[Mode C]
+  P(isobutane) = 0.3534 (count=1767)
+  P(n_butane) = 0.6466 (count=3233)
+  score_total[n_butane]: median=3.0931, p90=3.5850
+  score_total[isobutane]: median=2.8444, p90=3.4358
+  MH_acceptance[isobutane]: proposals=18673, accepted=5301, rate=0.2839
+  MH_acceptance[n_butane]: proposals=34085, accepted=9699, rate=0.2846
+  log(P(iso)/P(n)) = -0.6041
+
+Deterministic reference scores (path vs star)
+  Mode A: score(path)=3.5850, score(star)=2.8444, Δscore(n-iso)=0.7407
+
+  Mode B: score(path)=3.5850, score(star)=2.8444, Δscore(n-iso)=0.7407
+
+  Mode C: score(path)=3.5850, score(star)=2.8444, Δscore(n-iso)=0.7407
+
+  Mode R: score(path)=3.5850, score(star)=2.8444, Δscore(n-iso)=0.7407
+
+CORE-1: Degeneracy-aware predicted vs observed (tree-only)
+  Model: P_pred(topo) ∝ g(topo) * exp(-coupling_delta_G * E_ref(topo) / temperature_T)
+  g(topology)={'n_butane': 12, 'isobutane': 4}
+  [Mode A] coupling=1.000, temperature_T=1.000, beta=1.000
+    P_obs : n=0.6604, iso=0.3396
+    P_pred: n=0.5885, iso=0.4115
+    log(P(iso)/P(n)): obs=-0.6651, pred=-0.3579, Δ=-0.3071
+  [Mode B] coupling=1.000, temperature_T=1.000, beta=1.000
+    P_obs : n=0.6398, iso=0.3602
+    P_pred: n=0.5885, iso=0.4115
+    log(P(iso)/P(n)): obs=-0.5745, pred=-0.3579, Δ=-0.2166
+  [Mode C] coupling=1.000, temperature_T=1.000, beta=1.000
+    P_obs : n=0.6466, iso=0.3534
+    P_pred: n=0.5885, iso=0.4115
+    log(P(iso)/P(n)): obs=-0.6041, pred=-0.3579, Δ=-0.2462
+
+CORE-2: Fit lambda (degeneracy-aware)
+  [Mode A] temperature_T=1.000
+    E_ref={'n_butane': 3.585035273857323, 'isobutane': 2.8443619162370184}
+    lambda*=0.5852, KL_min=0.000000, KL@lambda*=0.000000
+    P_obs ={'n_butane': 0.6604, 'isobutane': 0.3396}
+    P_pred={'n_butane': 0.660412547563135, 'isobutane': 0.339587452436865}
+    log(P(iso)/P(n)): obs=-0.6651, pred=-0.6651, Δ=0.0001
+
+  [Mode B] temperature_T=1.000
+    E_ref={'n_butane': 3.585035273857323, 'isobutane': 2.8443619162370184}
+    lambda*=0.7075, KL_min=0.000000, KL@lambda*=0.000000
+    P_obs ={'n_butane': 0.6398, 'isobutane': 0.3602}
+    P_pred={'n_butane': 0.6398206701143756, 'isobutane': 0.36017932988562446}
+    log(P(iso)/P(n)): obs=-0.5745, pred=-0.5746, Δ=0.0001
+
+  [Mode C] temperature_T=1.000
+    E_ref={'n_butane': 3.585035273857323, 'isobutane': 2.8443619162370184}
+    lambda*=0.6675, KL_min=0.000000, KL@lambda*=0.000000
+    P_obs ={'n_butane': 0.6466, 'isobutane': 0.3534}
+    P_pred={'n_butane': 0.646619541122881, 'isobutane': 0.35338045887711894}
+    log(P(iso)/P(n)): obs=-0.6041, pred=-0.6042, Δ=0.0001
+

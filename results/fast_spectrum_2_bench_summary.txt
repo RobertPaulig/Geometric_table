@@ -1,0 +1,13 @@
+FAST-SPECTRUM-2 get_shape_observables benchmark
+Z_values=[1, 6, 8, 14, 26]
+ws_fdm_depth=5, ws_fdm_base=2
+
+Z=1: kurt_trapz=-0.2271, kurt_fdm=-0.2222, abs_err_kurt=0.0049, t_trapz=0.000651s, t_fdm=0.000104s, speedup=6.27x
+Z=6: kurt_trapz=-0.2271, kurt_fdm=-0.2222, abs_err_kurt=0.0049, t_trapz=0.000292s, t_fdm=0.000136s, speedup=2.15x
+Z=8: kurt_trapz=-0.2271, kurt_fdm=-0.2222, abs_err_kurt=0.0049, t_trapz=0.000292s, t_fdm=0.000106s, speedup=2.76x
+Z=14: kurt_trapz=-0.2271, kurt_fdm=-0.2222, abs_err_kurt=0.0049, t_trapz=0.000913s, t_fdm=0.000329s, speedup=2.78x
+Z=26: kurt_trapz=-0.2271, kurt_fdm=-0.2222, abs_err_kurt=0.0049, t_trapz=0.000633s, t_fdm=0.000098s, speedup=6.49x
+
+max_abs_err_kurt=0.0049
+median_abs_err_kurt=0.0049
+median_speedup=2.78x

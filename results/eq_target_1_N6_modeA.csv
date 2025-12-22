@@ -1,0 +1,2 @@
+steps,burnin,thin,chains,elapsed_sec,steps_per_sec,kl_mcmc_exact_max,kl_mcmc_exact_mean
+2000,200,10,2,2.624927000142634,3047.7038026449095,0.00226296050098675,0.0018578892119811236

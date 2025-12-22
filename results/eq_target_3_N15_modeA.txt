@@ -1,0 +1,12 @@
+EQ-TARGET-3: N=15, mode=A, chains=3, thin=10, starts=['path', 'max_branch']
+steps_grid=[12000000]
+
+steps=12000000: KL_max=0.00418658 KL_split_max=0.00872913 Rhat_max=1 ESS_min=372730.3 elapsed=19213.5s steps/s=3747 hit=1.000 ACC_RATE=0.923 UNIQUE_EQ=4347 COVERAGE_FRAC=0.001 HITS=71973924 MISSES=26082 STEPS_TOTAL=72000000 STEPS_PER_SEC_TOTAL=3747.4 ELAPSED_SEC=19213.518
+
+START_TS=2025-12-21T10:33:56+00:00
+END_TS=2025-12-21T15:54:12+00:00
+ELAPSED_TOTAL_SEC=19216.786230
+[EQ-TARGET-3] steps=8000000: KL_max=0.00624896 KL_split_max=0.013524 Rhat_max=1 ESS_min=247884.1 elapsed=13273.9s steps/s=3616 hit=0.999 ACC_RATE=0.923 UNIQUE_EQ=4347 EXPECTED_UNIQUE_EQ=4347 COVERAGE_UNIQUE_EQ=1.000000 UNIQUE_FRAC_SAMPLES=0.001006 HITS=47973924 MISSES=26082 STEPS_TOTAL=48000000 STEPS_PER_SEC_TOTAL=3616.1 ELAPSED_SEC=13273.917
+RUN_START_TS=2025-12-21T18:21:21+00:00
+CMD=python -m analysis.chem.eq_target_3_scan --N 15 --steps_grid 8000000 12000000 16000000 --chains 3 --thin 10 --start_specs path max_branch --progress --step_progress --step_heartbeat_every 200000 --out_stub eq_target_3_N15_modeA --resume --append --energy_cache_path results/eq_target_3_N15_modeA_energy_cache.pkl --save_cache_every_points 1 --emit_run_blocks
+

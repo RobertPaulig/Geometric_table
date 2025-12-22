@@ -1,0 +1,13 @@
+MH-KERNEL-1: fixed-N tree MCMC benchmark
+N=4, mode=A, backend=fdm_entanglement
+steps=50000, burnin=5000, thin=10, seed=0
+temperature_T=1.000, lambda=0.5852
+elapsed_sec=1.630
+accepted=45985, proposals=50000, accept_rate=0.9197
+mean_moves=4.56, p90_moves=6.00
+mean_log(q_rev/q_fwd)=-0.0326, p90_log(q_rev/q_fwd)=0.4055
+
+P_mcmc={'isobutane': 0.27066666666666667, 'n_butane': 0.7293333333333333}
+P_pred={'n_butane': 0.7217265577988851, 'isobutane': 0.27827344220111494}
+KL(P_mcmc||P_pred)=0.000145
+

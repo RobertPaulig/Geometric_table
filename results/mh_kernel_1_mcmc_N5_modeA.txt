@@ -1,0 +1,13 @@
+MH-KERNEL-1: fixed-N tree MCMC benchmark
+N=5, mode=A, backend=fdm_entanglement
+steps=50000, burnin=5000, thin=10, seed=0
+temperature_T=1.000, lambda=0.9225
+elapsed_sec=2.155
+accepted=43530, proposals=50000, accept_rate=0.8706
+mean_moves=7.74, p90_moves=9.00
+mean_log(q_rev/q_fwd)=-0.0467, p90_log(q_rev/q_fwd)=0.4055
+
+P_mcmc={'n_pentane': 0.488, 'isopentane': 0.446, 'neopentane': 0.066}
+P_pred={'n_pentane': 0.4869907501878726, 'isopentane': 0.4545144745533731, 'neopentane': 0.05849477525875439}
+KL(P_mcmc||P_pred)=0.000543
+

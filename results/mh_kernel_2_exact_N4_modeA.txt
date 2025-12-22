@@ -1,0 +1,16 @@
+MH-KERNEL-2: exact baseline via Prüfer enumeration
+N=4, mode=A, backend=fdm_entanglement
+states_total=16, elapsed_sec=0.009
+temperature_T=1.000, lambda=0.5852
+
+P_pred (CORE-2, g*exp(-λE_ref/T))={'n_butane': 0.7217265577988851, 'isobutane': 0.27827344220111494}
+P_exact (enumeration)={'isobutane': 0.278273442201115, 'n_butane': 0.721726557798885}
+P_pred3 (CORE-3, label-averaged)={'isobutane': 0.278273442201115, 'n_butane': 0.721726557798885}
+P_mcmc (MH-KERNEL-1)={'isobutane': 0.24911111111111112, 'n_butane': 0.7508888888888889}
+
+KL(P_mcmc||P_exact)=0.002166
+KL(P_pred||P_exact)=0.000000
+
+Label-dependence diagnostics: E stats within topology
+  isobutane: count=4, E_min=2.844362, E_mean=2.844362, E_std=0.000000, E_max=2.844362
+  n_butane: count=12, E_min=3.093115, E_mean=3.093115, E_std=0.000000, E_max=3.093115
