@@ -22,6 +22,7 @@ name3.toc
 # R&D results: ignore by default
 /results/*.csv
 /results/*.txt
+/results/dist/
 
 # Keep golden baselines already tracked
 !results/ws_fdm_sweep.csv
