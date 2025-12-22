@@ -69,6 +69,11 @@ def main(argv: List[str] | None = None) -> None:
     ap.add_argument("--out_csv", type=str, required=True)
     ap.add_argument("--out_txt", type=str, required=True)
     ap.add_argument(
+        "--status",
+        action="store_true",
+        help="Print readiness per steps_per_chain and list missing task_id; does not require out paths to exist.",
+    )
+    ap.add_argument(
         "--verify_steps",
         type=int,
         nargs="*",
@@ -92,6 +97,36 @@ def main(argv: List[str] | None = None) -> None:
     tasks_by_steps = defaultdict(list)
     for task in tasks:
         tasks_by_steps[int(task["steps_per_chain"])].append(task)
+
+    if args.status:
+        for steps, tlist in sorted(tasks_by_steps.items()):
+            present = 0
+            missing: List[str] = []
+            bad_verify: List[str] = []
+            for task in tlist:
+                tid = task["task_id"]
+                cand = subs_by_task.get(tid, [])
+                if cand:
+                    present += 1
+                else:
+                    missing.append(tid)
+            verify_set = set(args.verify_steps or [])
+            if args.require_double_for_verify and steps in verify_set:
+                for task in tlist:
+                    tid = task["task_id"]
+                    cand = subs_by_task.get(tid, [])
+                    if len(cand) < 2:
+                        bad_verify.append(tid)
+                        continue
+                    cand.sort(key=lambda x: x.get("date_utc", ""))
+                    if cand[-1].get("counter_hash") != cand[-2].get("counter_hash"):
+                        bad_verify.append(tid)
+            print(f"STEPS={steps} READY={present}/{len(tlist)}")
+            if missing:
+                print("MISSING=" + ",".join(missing))
+            if bad_verify:
+                print("VERIFY_FAIL=" + ",".join(bad_verify))
+        return
 
     lines: List[str] = []
     csv_rows: List[Dict[str, float]] = []
