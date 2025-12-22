@@ -207,6 +207,48 @@ class MCMCSummary:
         return (float(self.energy_cache_hits) / float(total)) if total > 0 else 0.0
 
 
+class _ReservoirStats:
+    """
+    Bounded-memory streaming stats for long runs.
+
+    Tracks mean and an approximate p90 using reservoir sampling.
+    """
+
+    def __init__(self, *, reservoir_size: int, seed: int) -> None:
+        self._n = 0
+        self._mean = 0.0
+        self._reservoir_size = int(reservoir_size)
+        self._rng = np.random.default_rng(int(seed))
+        self._reservoir: List[float] = []
+
+    def add(self, x: float) -> None:
+        self._n += 1
+        # running mean
+        self._mean += (float(x) - self._mean) / float(self._n)
+        if self._reservoir_size <= 0:
+            return
+        if len(self._reservoir) < self._reservoir_size:
+            self._reservoir.append(float(x))
+            return
+        # reservoir sampling
+        j = int(self._rng.integers(0, self._n))
+        if j < self._reservoir_size:
+            self._reservoir[j] = float(x)
+
+    @property
+    def count(self) -> int:
+        return int(self._n)
+
+    @property
+    def mean(self) -> float:
+        return float(self._mean) if self._n > 0 else 0.0
+
+    def pctl(self, q: float) -> float:
+        if not self._reservoir:
+            return 0.0
+        return float(np.percentile(np.asarray(self._reservoir, dtype=float), q))
+
+
 def run_fixed_n_tree_mcmc(
     *,
     n: int,
@@ -228,6 +270,8 @@ def run_fixed_n_tree_mcmc(
     step_heartbeat: Optional[Callable[[Mapping[str, float]], None]] = None,
     sample_callback: Optional[Callable[[str, float], None]] = None,
     collect_samples: bool = True,
+    collect_move_stats: bool = False,
+    move_stats_reservoir: int = 10_000,
 ) -> Tuple[List[Dict[str, object]], MCMCSummary]:
     """
     Fixed-N MCMC on labeled trees using reversible leaf-rewire moves with Hastings correction.
@@ -255,6 +299,7 @@ def run_fixed_n_tree_mcmc(
     cache_misses = 0
     seen_topologies: set[object] = set()
     topo_id_memo: Dict[object, str] = {}
+    topo_key_memo: Dict[Tuple[Edge, ...], object] = {}
 
     profile_this_step = False
     t_move_total = 0.0
@@ -268,10 +313,14 @@ def run_fixed_n_tree_mcmc(
         nonlocal t_energy_total, t_canon_total, profiled_energy_calls, profile_this_step
         key_edges = tuple(sorted(_canonical_edge(i, j) for i, j in e))
         if topology_key_fn_edges is not None:
-            t_c0 = time.perf_counter() if (profile_every > 0 and profile_this_step) else 0.0
-            topo_key = topology_key_fn_edges(int(n), key_edges)
-            if profile_every > 0 and profile_this_step:
-                t_canon_total += time.perf_counter() - t_c0
+            if key_edges in topo_key_memo:
+                topo_key = topo_key_memo[key_edges]
+            else:
+                t_c0 = time.perf_counter() if (profile_every > 0 and profile_this_step) else 0.0
+                topo_key = topology_key_fn_edges(int(n), key_edges)
+                if profile_every > 0 and profile_this_step:
+                    t_canon_total += time.perf_counter() - t_c0
+                topo_key_memo[key_edges] = topo_key
 
             # Track per-run "first time seen" regardless of cache warm-up.
             if topo_key in seen_topologies:
@@ -332,8 +381,10 @@ def run_fixed_n_tree_mcmc(
 
     e_x = energy(edges)
     samples: List[Dict[str, object]] = []
-    moves_sizes: List[int] = []
-    log_qratios: List[float] = []
+    moves_sizes: List[int] = [] if collect_move_stats else []
+    log_qratios: List[float] = [] if collect_move_stats else []
+    move_size_stats = _ReservoirStats(reservoir_size=int(move_stats_reservoir), seed=int(seed) + 1_001)
+    log_qratio_stats = _ReservoirStats(reservoir_size=int(move_stats_reservoir), seed=int(seed) + 2_003)
     accepted = 0
     proposals = 0
 
@@ -367,8 +418,12 @@ def run_fixed_n_tree_mcmc(
             e_x = e_y
             accepted += 1
 
-        moves_sizes.append(len(moves_x))
-        log_qratios.append(log_qratio)
+        if collect_move_stats:
+            moves_sizes.append(int(len(moves_x)))
+            log_qratios.append(float(log_qratio))
+        else:
+            move_size_stats.add(float(len(moves_x)))
+            log_qratio_stats.add(float(log_qratio))
 
         if progress is not None:
             progress(1)
@@ -450,10 +505,12 @@ def run_fixed_n_tree_mcmc(
         thin=int(thin),
         accepted=int(accepted),
         proposals=int(proposals),
-        mean_moves=float(np.mean(moves_sizes)) if moves_sizes else 0.0,
-        p90_moves=_pctl(moves_sizes, 90),
-        mean_log_qratio=float(np.mean(log_qratios)) if log_qratios else 0.0,
-        p90_log_qratio=_pctl(log_qratios, 90),
+        mean_moves=float(np.mean(moves_sizes)) if collect_move_stats and moves_sizes else move_size_stats.mean,
+        p90_moves=_pctl(moves_sizes, 90) if collect_move_stats else move_size_stats.pctl(90),
+        mean_log_qratio=float(np.mean(log_qratios))
+        if collect_move_stats and log_qratios
+        else log_qratio_stats.mean,
+        p90_log_qratio=_pctl(log_qratios, 90) if collect_move_stats else log_qratio_stats.pctl(90),
         p_topology=p_topo,
         energy_cache_hits=int(cache_hits),
         energy_cache_misses=int(cache_misses),
