@@ -777,6 +777,26 @@
 - Верификация (как у GIMPS, опционально): для `steps in {8M,16M}` требовать 2 submissions с совпадающим `counter_hash`:
   - `python -m analysis.chem.eq_distributed_aggregate ... --require_double_for_verify --verify_steps 8000000 16000000`
 
+## [KL-SPLIT-FLOOR-1] Statistical floor for KL_SPLIT_MAX at large K
+
+**Контекст.**
+
+- В EQ-TARGET-3 mixing-диагностике `KL_SPLIT_MAX` считается как симметричный KL между двумя половинами retained-window для каждой цепи (после burn-in и thinning), затем берётся максимум по цепям/стартам.
+
+**Наблюдение.**
+
+- При большом числе категорий `K` (у нас для C16: `K≈EXPECTED_UNIQUE_EQ=10359`) даже полностью стационарная цепь даёт ненулевой “статистический пол” для split-KL из-за конечной выборки.
+
+**Оценка пола (инженерная).**
+
+- При `n_half` независимых сэмплов в каждой половине порядок величины:
+  - `E[KL_sym] ~ (K-1)/n_half`.
+- Поэтому нельзя механически повышать `burnin_frac` (уменьшая `n_half`) и ожидать улучшения `KL_SPLIT_MAX`: можно упереться в floor даже при идеальном mixing.
+
+**Практическое правило (N=16).**
+
+- Перед выбором `burnin_frac` проверять, что `(K-1)/n_half << 0.010` (целевой DoD-порог), иначе порог становится недостижимым без увеличения `steps_per_chain`/уменьшения `thin`/смягчения порога.
+
 ## [INVARIANCE-BENCH-0] Overhead canonical tree relabeling (AHU)
 
 **Решение.**
