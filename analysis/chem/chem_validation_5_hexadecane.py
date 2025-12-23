@@ -21,6 +21,7 @@ class Config:
     profile_every: int = 100
     progress: bool = True
     auto_escalate: bool = True
+    burnin_frac: float = 0.30
     lambda_scale: float = 1.0
 
 
@@ -39,6 +40,7 @@ def _parse_args(argv: Optional[Sequence[str]] = None) -> Config:
     ap.add_argument("--profile_every", type=int, default=100)
     ap.add_argument("--progress", action=argparse.BooleanOptionalAction, default=True)
     ap.add_argument("--auto_escalate", action=argparse.BooleanOptionalAction, default=True)
+    ap.add_argument("--burnin_frac", type=float, default=0.30)
     ap.add_argument("--lambda_scale", type=float, default=1.0)
     args = ap.parse_args(argv)
     return Config(
@@ -54,6 +56,7 @@ def _parse_args(argv: Optional[Sequence[str]] = None) -> Config:
         profile_every=int(args.profile_every),
         progress=bool(args.progress),
         auto_escalate=bool(args.auto_escalate),
+        burnin_frac=float(args.burnin_frac),
         lambda_scale=float(args.lambda_scale),
     )
 
@@ -77,6 +80,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
             guardrail_target=float(cfg.guardrail_target),
             profile_every=int(cfg.profile_every),
             progress=bool(cfg.progress),
+            burnin_frac=float(cfg.burnin_frac),
         ),
     )
     meta["lambda_scale"] = float(cfg.lambda_scale)

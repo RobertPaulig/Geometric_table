@@ -1986,3 +1986,14 @@
 Интерпретация:
 - Paired-микробенч FAST-COMPLEXITY-2 подтверждает, что size/tree-prefilter для backend`a `fdm_entanglement` даёт колоссальные выигрыши на деревьях (до 10³–10⁴×) и умеренные/нейтральные эффекты на циклических графах, при этом результаты устойчивы при переходе к paired-сравнению baseline/optimized на одном и том же наборе графов.
 - В HEAVY-профиле SMART-GROWTH-2 при активации entanglement-слоя с layout-ом prefilter фактически полностью выключает 3D layout/entanglement в optimized-режиме для Z ∈ {6,8,14,26}, что приводит к очень большим speedup’ам по complexity/layout и заметному ускорению полного MH-роста. Это фиксирует FAST-COMPLEXITY-2 как «heavy» baseline/optimized стенд для entanglement-слоя с явным учётом layout-профилирования.
+
+## [CHEMVAL-BURNIN-1] CHEM-VALIDATION-5: burnin_frac вынесен в конфиг/CLI (C15/C16)
+
+Дата: 2025-12-23
+
+Решение:
+- В CHEM-VALIDATION-5 (Mode A) параметр burn-in больше не зашит как `0.1 * steps_per_chain`, а задаётся как `burnin_frac * steps_per_chain`.
+- Для `analysis.chem.chem_validation_5_hexadecane` и `analysis.chem.chem_validation_5_pentadecane` добавлен CLI-параметр `--burnin_frac` и прокидывается в `EqCfg`.
+
+Мотивация:
+- Калибровка/пороговая устойчивость eqdist-Wave5 для N=16 достигалась при `burnin_frac=0.30`; фикс 0.10 повышает риск стоппера по `KL_SPLIT_MAX` на финальном прогоне при том же бюджете.

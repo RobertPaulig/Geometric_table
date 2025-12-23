@@ -151,6 +151,7 @@ class EqCfg:
     guardrail_target: float
     profile_every: int
     progress: bool
+    burnin_frac: float = 0.30
 
 
 @dataclass(frozen=True)
@@ -215,7 +216,7 @@ def run_equilibrium_distribution_mode_a(
     steps_total_budget = int(cfg.steps_init)
     n_chains_total = int(cfg.chains) * int(len(cfg.start_specs))
     steps_per_chain = max(1, int(round(float(steps_total_budget) / float(n_chains_total))))
-    burnin = int(max(0, round(0.1 * float(steps_per_chain))))
+    burnin = int(max(0, round(float(cfg.burnin_frac) * float(steps_per_chain))))
     attempts = 0
     last_meta: Dict[str, object] = {}
 
@@ -373,7 +374,7 @@ def run_equilibrium_distribution_mode_a(
             return p_eq, last_meta, float(elapsed), float(0.0)
         steps_total_budget = min(int(cfg.max_steps), int(steps_total_budget) * 2)
         steps_per_chain = max(1, int(round(float(steps_total_budget) / float(n_chains_total))))
-        burnin = int(max(burnin, round(0.1 * float(steps_per_chain))))
+        burnin = int(max(burnin, round(float(cfg.burnin_frac) * float(steps_per_chain))))
 
 
 def write_report(
