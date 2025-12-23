@@ -795,7 +795,22 @@
 
 **Практическое правило (N=16).**
 
-- Перед выбором `burnin_frac` проверять, что `(K-1)/n_half << 0.010` (целевой DoD-порог), иначе порог становится недостижимым без увеличения `steps_per_chain`/уменьшения `thin`/смягчения порога.
+- Для инженерного решения “pass/fail” для `KL_SPLIT_MAX` использовать gate:
+  - `KL_split_max ≤ max(0.010, 1.1 * (K-1) / n_half)`,
+  где:
+  - `K` — число возможных категорий (для алканов: `EXPECTED_UNIQUE_EQ(N)`),
+  - `n_half` — число retained-сэмплов в каждой половине окна.
+- При типичных настройках EQ-DIST (`thin`, `burnin_frac`) можно оценивать:
+  - `n_samples ≈ floor((steps_per_chain * (1 - burnin_frac)) / thin)`,
+  - `n_half ≈ floor(n_samples / 2)`.
+- Следствие: механическое увеличение `burnin_frac` уменьшает `n_half` и может сделать порог `0.010` статистически недостижимым даже при стационарной цепи.
+
+**Пример (C16, Wave5).**
+
+- `K=10359`, `steps_per_chain=32M`, `burnin_frac=0.30`, `thin=10`:
+  - `n_samples ≈ 32M * 0.70 / 10 = 2.24M`, `n_half ≈ 1.12M`,
+  - floor ≈ `(K-1)/n_half ≈ 10358/1.12M ≈ 0.00925`,
+  - gate ≈ `max(0.010, 1.1*0.00925) ≈ 0.01017`.
 
 ## [INVARIANCE-BENCH-0] Overhead canonical tree relabeling (AHU)
 
