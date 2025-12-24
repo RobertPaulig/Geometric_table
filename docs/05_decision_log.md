@@ -1997,3 +1997,10 @@
 
 Мотивация:
 - Калибровка/пороговая устойчивость eqdist-Wave5 для N=16 достигалась при `burnin_frac=0.30`; фикс 0.10 повышает риск стоппера по `KL_SPLIT_MAX` на финальном прогоне при том же бюджете.
+
+Результат:
+- CHEM-VALIDATION-5 C16 (hexadecane) закрыт как финальный DoD-прогон в режиме equilibrium-first, Mode A, fixed budget:
+  - `STEPS_TOTAL=320,000,000` (starts×chains = 2×5 ⇒ 32,000,000 per-chain),
+  - `burnin_frac=0.30`,
+  - строгая coverage: `n_unique_eq=10359/10359`,
+  - пороги по KL/Rhat/ESS выполнены, `FAIL` отсутствует.
