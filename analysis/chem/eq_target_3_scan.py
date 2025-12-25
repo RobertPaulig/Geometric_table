@@ -21,7 +21,7 @@ import numpy as np
 
 from analysis.chem import eq_worker_pool
 from analysis.chem.alkane_expected_counts import expected_unique_alkane_tree_topologies
-from analysis.chem.topology_mcmc import Edge
+from analysis.chem.topology_mcmc import Edge, run_fixed_n_tree_mcmc  # re-export legacy helper for tests
 from analysis.io_utils import results_path
 from analysis.utils.timing import now_iso
 
@@ -315,7 +315,8 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         print("\n".join(run_header_lines))
 
     points_since_cache_save = 0
-    progress_enabled = bool(cfg.progress or cfg.step_progress)
+    progress_enabled = bool(cfg.step_progress)
+    eq_worker_pool.set_run_fixed_mcmc_fn(run_fixed_n_tree_mcmc)
     mp_ctx = mp.get_context("spawn") if (cfg.workers > 1 or progress_enabled) else None
 
     def append_csv_row(row: Dict[str, object]) -> None:
@@ -340,7 +341,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
 
         tasks: List[eq_worker_pool.EqTask] = []
         start_edges_by_spec: Dict[str, Tuple[Edge, ...]] = {}
-        progress_every = int(cfg.step_heartbeat_every) if cfg.step_progress else 0
+        progress_every = int(cfg.step_heartbeat_every) if (cfg.progress or cfg.step_progress) else 0
         for start_spec_idx, start_spec in enumerate(cfg.start_specs):
             start_edges_by_spec[start_spec] = tuple(_start_edges_for_spec(cfg.n, start_spec))
             for chain_idx in range(int(cfg.chains)):
