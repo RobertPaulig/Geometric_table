@@ -16,7 +16,24 @@ name3.aux
 name3.log
 name3.out
 name3.toc
-results/**
+
+# ============================================================
+# RESULTS POLICY (track reports; ignore heavy/cache artifacts)
+# ============================================================
+!results/
+!results/**/
+
+!results/**/*.txt
+!results/**/*.csv
+!results/**/*.json
+!results/**/*.jsonl
+!results/**/*.md
+!results/**/*.png
+
 results_dist_*
-*.pkl
+results/**/*.pkl
+results/**/cache_*.pkl
+results/**/cache_*.npz
+results/**/submissions/**
+results/**/__pycache__/
 

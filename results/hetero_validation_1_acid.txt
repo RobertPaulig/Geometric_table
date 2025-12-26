@@ -1,0 +1,12 @@
+hetero_validation_1_acid: HETERO-1A acid test (C3H8O)
+steps_total=2000 steps_per_chain=500 burnin=150
+chains=4 samples=280
+accept_rate=0.8355 elapsed_sec=0.08
+coverage_unique_eq=1.0000 support_exact=3 support_emp=3
+KL(exact||emp)=0.008061
+KL(emp||exact)=0.007516
+
+Top states by P_emp:
+  het:edges=0-1,0-2,2-3;types=0,0,2,0 P_emp=0.478571 P_exact=0.440161
+  het:edges=0-1,0-2,2-3;types=0,0,0,2 P_emp=0.392857 P_exact=0.388440
+  het:edges=0-1,0-2,0-3;types=0,0,0,2 P_emp=0.128571 P_exact=0.171399
