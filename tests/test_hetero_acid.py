@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 import random
+import pytest
 
 import numpy as np
 
@@ -122,3 +123,86 @@ def test_mcmc_matches_exact_small_C3H8O() -> None:
         q = emp.get(k, 1e-9)
         kl += p * math.log(p / q)
     assert kl < 0.02
+
+
+def test_energy_invariance_under_permutation() -> None:
+    rng = np.random.default_rng(0)
+    base = _make_state()
+    e0 = hetero_energy_from_state(
+        base.n,
+        base.edges,
+        base.types,
+        rho_by_type=RHO,
+        alpha_H=0.5,
+        valence_by_type=VALENCE,
+    )
+    for _ in range(50):
+        perm = list(range(base.n))
+        rng.shuffle(perm)
+        mapping = {old: perm_idx for perm_idx, old in enumerate(perm)}
+        edges = []
+        for u, v in base.edges:
+            a = mapping[u]
+            b = mapping[v]
+            if a > b:
+                a, b = b, a
+            edges.append((a, b))
+        edges.sort()
+        types = tuple(base.types[perm[new]] for new in range(base.n))
+        e = hetero_energy_from_state(
+            base.n,
+            tuple(edges),
+            types,
+            rho_by_type=RHO,
+            alpha_H=0.5,
+            valence_by_type=VALENCE,
+        )
+        assert pytest.approx(e0, rel=0, abs=1e-9) == e
+
+
+def test_state_graph_connected_for_c3h8o() -> None:
+    exact = exact_distribution_for_formula_C3H8O(beta=1.0, valence_by_type=VALENCE, rho_by_type=RHO)
+    states = []
+    for state_id in exact.keys():
+        parts = state_id.split(";")
+        edges_part = parts[0].split("=")[1]
+        types_part = parts[1].split("=")[1]
+        edges = []
+        if edges_part:
+            for item in edges_part.split(","):
+                if not item:
+                    continue
+                a, b = item.split("-")
+                edges.append((int(a), int(b)))
+        types = tuple(int(t) for t in types_part.split(",")) if types_part else ()
+        states.append((state_id, HeteroState(n=len(types), edges=tuple(edges), types=types)))
+
+    from analysis.chem.hetero_mcmc import _leaf_rewire_candidates, _swap_candidates, _apply_rewire, _apply_swap
+
+    def neighbors(state: HeteroState) -> set[str]:
+        neigh_ids = set()
+        adj = [[] for _ in range(state.n)]
+        for u, v in state.edges:
+            adj[u].append(v)
+            adj[v].append(u)
+        for leaf, old_parent, new_parent in _leaf_rewire_candidates(adj, state.types, VALENCE):
+            edges_new, _ = _apply_rewire(state.n, state.edges, leaf, old_parent, new_parent)
+            _, _, sid = canonicalize_hetero_state(state.n, edges_new, state.types)
+            neigh_ids.add(sid)
+        for i, j in _swap_candidates(adj, state.types, VALENCE):
+            types_new = _apply_swap(state.types, i, j)
+            _, _, sid = canonicalize_hetero_state(state.n, state.edges, types_new)
+            neigh_ids.add(sid)
+        return neigh_ids
+
+    graph = {sid: neighbors(st) for sid, st in states}
+    start = states[0][0]
+    seen = set([start])
+    stack = [start]
+    while stack:
+        node = stack.pop()
+        for nb in graph[node]:
+            if nb not in seen:
+                seen.add(nb)
+                stack.append(nb)
+    assert seen == set(exact.keys())
