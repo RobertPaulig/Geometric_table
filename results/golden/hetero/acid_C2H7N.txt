@@ -1,0 +1,11 @@
+acid_C2H7N: HETERO-1A acid test (C2H7N)
+steps_total=2000 steps_per_chain=500 burnin=150
+chains=4 samples=352
+accept_rate=0.9725 elapsed_sec=0.18
+coverage_unique_eq=1.0000 support_exact=2 support_emp=2
+KL(exact||emp)=0.000783
+KL(emp||exact)=0.000789
+
+Top states by P_emp:
+  het:edges=0-1,0-2;types=0,0,1 P_emp=0.625000 P_exact=0.644087
+  het:edges=0-1,0-2;types=1,0,0 P_emp=0.375000 P_exact=0.355913

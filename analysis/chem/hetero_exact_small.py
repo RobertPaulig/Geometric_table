@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import itertools
 import math
-from typing import Dict, List, Sequence, Tuple
+from typing import Dict, Iterable, List, Mapping, Sequence, Tuple
 
 import numpy as np
 
@@ -34,28 +35,43 @@ def _degrees(n: int, edges: Sequence[Edge]) -> List[int]:
     return deg
 
 
-def exact_distribution_for_formula_C3H8O(
+def _unique_type_assignments(type_counts: Mapping[int, int]) -> Iterable[Tuple[int, ...]]:
+    base: List[int] = []
+    for t, cnt in type_counts.items():
+        base.extend([int(t)] * int(cnt))
+    if not base:
+        return []
+    seen: set[Tuple[int, ...]] = set()
+    for perm in itertools.permutations(base):
+        if perm in seen:
+            continue
+        seen.add(perm)
+        yield tuple(int(x) for x in perm)
+
+
+def exact_distribution_for_type_counts(
+    type_counts: Mapping[int, int],
     *,
     beta: float,
-    rho_by_type: Dict[int, float] | None = None,
+    rho_by_type: Mapping[int, float] | None = None,
     alpha_H: float = DEFAULT_ALPHA_H,
-    valence_by_type: Dict[int, int] | None = None,
+    valence_by_type: Mapping[int, int] | None = None,
 ) -> Dict[str, float]:
-    n = 4
+    n = int(sum(int(v) for v in type_counts.values()))
+    if n <= 0:
+        raise ValueError("type_counts must define at least one vertex")
     rho = dict(DEFAULT_RHO if rho_by_type is None else rho_by_type)
     valence = dict(DEFAULT_VALENCE if valence_by_type is None else valence_by_type)
     weights: Dict[str, float] = {}
+    assignments = list(_unique_type_assignments(type_counts))
     trees = enumerate_labeled_trees(n)
     for adj in trees:
         if isinstance(adj, np.ndarray):
             edges = _adj_to_edges(adj)
         else:
-            # fallback if future version returns edges directly
             edges = list(adj)  # type: ignore[assignment]
         deg = _degrees(n, edges)
-        for oxygen_idx in range(n):
-            types = [0] * n
-            types[oxygen_idx] = 2
+        for types in assignments:
             if any(deg[i] > valence.get(int(types[i]), 0) for i in range(n)):
                 continue
             edges_can, types_can, state_id = canonicalize_hetero_state(n, edges, types)
@@ -71,5 +87,53 @@ def exact_distribution_for_formula_C3H8O(
             weights[state_id] = weights.get(state_id, 0.0) + float(w)
     total = sum(weights.values())
     if total <= 0:
-        raise RuntimeError("No valid states generated for C3H8O")
+        raise RuntimeError("No valid states generated for type counts")
     return {k: float(v) / float(total) for k, v in weights.items()}
+
+
+def exact_distribution_for_formula_C3H8O(
+    *,
+    beta: float,
+    rho_by_type: Dict[int, float] | None = None,
+    alpha_H: float = DEFAULT_ALPHA_H,
+    valence_by_type: Dict[int, int] | None = None,
+) -> Dict[str, float]:
+    return exact_distribution_for_type_counts(
+        {0: 3, 2: 1},
+        beta=beta,
+        rho_by_type=rho_by_type,
+        alpha_H=alpha_H,
+        valence_by_type=valence_by_type,
+    )
+
+
+def exact_distribution_for_formula_C2H6O(
+    *,
+    beta: float,
+    rho_by_type: Dict[int, float] | None = None,
+    alpha_H: float = DEFAULT_ALPHA_H,
+    valence_by_type: Dict[int, int] | None = None,
+) -> Dict[str, float]:
+    return exact_distribution_for_type_counts(
+        {0: 2, 2: 1},
+        beta=beta,
+        rho_by_type=rho_by_type,
+        alpha_H=alpha_H,
+        valence_by_type=valence_by_type,
+    )
+
+
+def exact_distribution_for_formula_C2H7N(
+    *,
+    beta: float,
+    rho_by_type: Dict[int, float] | None = None,
+    alpha_H: float = DEFAULT_ALPHA_H,
+    valence_by_type: Dict[int, int] | None = None,
+) -> Dict[str, float]:
+    return exact_distribution_for_type_counts(
+        {0: 2, 1: 1},
+        beta=beta,
+        rho_by_type=rho_by_type,
+        alpha_H=alpha_H,
+        valence_by_type=valence_by_type,
+    )

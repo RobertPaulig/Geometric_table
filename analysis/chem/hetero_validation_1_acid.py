@@ -5,32 +5,60 @@ import csv
 import math
 import time
 from collections import Counter
-from typing import Dict, List, Tuple
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Dict, List, Mapping, Optional, Tuple
 
 from analysis.chem.core2_fit import kl_divergence
 from analysis.chem.hetero_exact_small import (
     DEFAULT_RHO,
     DEFAULT_VALENCE,
-    exact_distribution_for_formula_C3H8O,
+    exact_distribution_for_type_counts,
 )
 from analysis.chem.hetero_mcmc import HeteroState, run_hetero_mcmc
 from analysis.chem.hetero_operator import hetero_energy_from_state
-from analysis.io_utils import results_path
+from analysis.io_utils import ensure_results_dir
 
 
-def _default_state() -> HeteroState:
-    n = 4
-    edges = ((0, 1), (1, 2), (2, 3))
-    # Oxygen at node 3.
-    types = (0, 0, 0, 2)
-    return HeteroState(n=n, edges=tuple(sorted(edges)), types=types)
+@dataclass(frozen=True)
+class FormulaSpec:
+    name: str
+    type_counts: Dict[int, int]
+    steps_init: int
+    max_steps: int
+    chains: int
+    thin: int
+    burnin_frac: float
+    p_rewire: float
+
+    @property
+    def n_vertices(self) -> int:
+        return int(sum(int(v) for v in self.type_counts.values()))
+
+
+FORMULA_SPECS: Dict[str, FormulaSpec] = {
+    "C2H6O": FormulaSpec("C2H6O", {0: 2, 2: 1}, steps_init=2000, max_steps=8000, chains=4, thin=4, burnin_frac=0.3, p_rewire=0.7),
+    "C2H7N": FormulaSpec("C2H7N", {0: 2, 1: 1}, steps_init=2000, max_steps=8000, chains=4, thin=4, burnin_frac=0.3, p_rewire=0.7),
+    "C3H8O": FormulaSpec("C3H8O", {0: 3, 2: 1}, steps_init=4000, max_steps=16000, chains=6, thin=4, burnin_frac=0.3, p_rewire=0.7),
+}
+
+DEFAULT_FORMULA = "C3H8O"
+
+
+def _default_state_for_spec(spec: FormulaSpec) -> HeteroState:
+    n = spec.n_vertices
+    edges = tuple((i, i + 1) for i in range(n - 1))
+    types: List[int] = []
+    for t in sorted(spec.type_counts.keys()):
+        types.extend([int(t)] * int(spec.type_counts[t]))
+    return HeteroState(n=n, edges=edges, types=tuple(types))
 
 
 def _energy_fn_builder(
     *,
-    rho_by_type: Dict[int, float],
+    rho_by_type: Mapping[int, float],
     alpha_H: float,
-    valence_by_type: Dict[int, int],
+    valence_by_type: Mapping[int, int],
 ) -> callable:
     def _energy(state: HeteroState) -> float:
         return hetero_energy_from_state(
@@ -53,39 +81,59 @@ def _empirical_distribution(samples: List[Dict[str, object]]) -> Dict[str, float
     return {k: v / float(total) for k, v in counts.items()}
 
 
-def run_validation(args: argparse.Namespace) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, float]]:
-    exact = exact_distribution_for_formula_C3H8O(
-        beta=float(args.beta),
+def run_formula_validation(
+    spec: FormulaSpec,
+    *,
+    steps_init: Optional[int] = None,
+    max_steps: Optional[int] = None,
+    chains: Optional[int] = None,
+    thin: Optional[int] = None,
+    burnin_frac: Optional[float] = None,
+    beta: float,
+    alpha_H: float,
+    seed: int,
+    coverage_target: float,
+    p_rewire: Optional[float] = None,
+) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, float]]:
+    steps_total = int(steps_init or spec.steps_init)
+    max_steps_total = int(max_steps or spec.max_steps)
+    n_chains = int(chains or spec.chains)
+    thin_val = int(thin or spec.thin)
+    burnin_f = float(burnin_frac if burnin_frac is not None else spec.burnin_frac)
+    p_rewire_val = float(p_rewire if p_rewire is not None else spec.p_rewire)
+
+    exact = exact_distribution_for_type_counts(
+        spec.type_counts,
+        beta=float(beta),
         rho_by_type=dict(DEFAULT_RHO),
-        alpha_H=float(args.alpha_H),
+        alpha_H=float(alpha_H),
         valence_by_type=dict(DEFAULT_VALENCE),
     )
 
-    steps_total = int(args.steps_init)
-    rng_seed = int(args.seed)
+    rng_seed = int(seed)
     valence = dict(DEFAULT_VALENCE)
     rho = dict(DEFAULT_RHO)
-    energy_fn = _energy_fn_builder(rho_by_type=rho, alpha_H=float(args.alpha_H), valence_by_type=valence)
-    summary_meta: Dict[str, float] = {}
+    energy_fn = _energy_fn_builder(rho_by_type=rho, alpha_H=float(alpha_H), valence_by_type=valence)
+    summary_meta: Dict[str, float] = {"formula": spec.name}
 
     while True:
-        steps_per_chain = max(1, int(round(float(steps_total) / float(args.chains))))
-        burnin = int(max(0, round(float(args.burnin_frac) * float(steps_per_chain))))
+        steps_per_chain = max(1, int(round(float(steps_total) / float(n_chains))))
+        burnin = int(max(0, round(float(burnin_f) * float(steps_per_chain))))
         samples: List[Dict[str, object]] = []
         accepted = 0
         proposals = 0
         t0 = time.perf_counter()
-        for chain_idx in range(int(args.chains)):
+        for chain_idx in range(n_chains):
             chain_seed = rng_seed + 101 * chain_idx
             chain_samples, chain_summary = run_hetero_mcmc(
-                init=_default_state(),
+                init=_default_state_for_spec(spec),
                 steps=steps_per_chain,
                 burnin=burnin,
-                thin=int(args.thin),
-                beta=float(args.beta),
+                thin=thin_val,
+                beta=float(beta),
                 rng_seed=chain_seed,
                 energy_fn=energy_fn,
-                p_rewire=float(args.p_rewire),
+                p_rewire=p_rewire_val,
                 valence_by_type=valence,
             )
             samples.extend(chain_samples)
@@ -97,10 +145,11 @@ def run_validation(args: argparse.Namespace) -> Tuple[Dict[str, float], Dict[str
         kl_exact_emp = kl_divergence(exact, p_emp)
         kl_emp_exact = kl_divergence(p_emp, exact)
         summary_meta = {
+            "formula": spec.name,
             "steps_total": steps_total,
             "steps_per_chain": steps_per_chain,
             "burnin": burnin,
-            "chains": int(args.chains),
+            "chains": int(n_chains),
             "samples_collected": len(samples),
             "accept_rate": (accepted / proposals) if proposals > 0 else 0.0,
             "elapsed_sec": elapsed,
@@ -108,19 +157,38 @@ def run_validation(args: argparse.Namespace) -> Tuple[Dict[str, float], Dict[str
             "kl_exact_emp": kl_exact_emp,
             "kl_emp_exact": kl_emp_exact,
         }
-        if coverage >= float(args.coverage_target):
+        if coverage >= float(coverage_target):
             break
-        if steps_total >= int(args.max_steps):
+        if steps_total >= max_steps_total:
             break
-        steps_total = min(int(args.max_steps), int(steps_total) * 2)
+        steps_total = min(int(max_steps_total), int(steps_total) * 2)
 
     return exact, p_emp, summary_meta
 
 
-def write_report(exact: Dict[str, float], emp: Dict[str, float], meta: Dict[str, float]) -> None:
-    out_txt = results_path("hetero_validation_1_acid.txt")
+def _resolve_out_dir(out_dir: Optional[str]) -> Path:
+    if out_dir is None:
+        base = ensure_results_dir()
+        return base / "hetero_validation"
+    return Path(out_dir)
+
+
+def write_report(
+    formula_name: str,
+    exact: Dict[str, float],
+    emp: Dict[str, float],
+    meta: Dict[str, float],
+    *,
+    out_dir: Optional[str],
+    out_stub: Optional[str] = None,
+) -> Tuple[Path, Path]:
+    dir_path = _resolve_out_dir(out_dir)
+    dir_path.mkdir(parents=True, exist_ok=True)
+    stub = out_stub or f"acid_{formula_name}"
+    out_txt = dir_path / f"{stub}.txt"
+    out_csv = dir_path / f"{stub}.csv"
     lines = []
-    lines.append("hetero_validation_1_acid: HETERO-1A acid test (C3H8O)")
+    lines.append(f"{stub}: HETERO-1A acid test ({formula_name})")
     lines.append(f"steps_total={int(meta['steps_total'])} steps_per_chain={int(meta['steps_per_chain'])} burnin={int(meta['burnin'])}")
     lines.append(f"chains={int(meta['chains'])} samples={int(meta['samples_collected'])}")
     lines.append(f"accept_rate={meta['accept_rate']:.4f} elapsed_sec={meta['elapsed_sec']:.2f}")
@@ -133,7 +201,6 @@ def write_report(exact: Dict[str, float], emp: Dict[str, float], meta: Dict[str,
         lines.append(f"  {state_id} P_emp={p:.6f} P_exact={exact.get(state_id, 0.0):.6f}")
     out_txt.write_text("\n".join(lines), encoding="utf-8")
 
-    out_csv = results_path("hetero_validation_1_acid.csv")
     with out_csv.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=["state_id", "P_exact", "P_emp"])
         writer.writeheader()
@@ -147,24 +214,51 @@ def write_report(exact: Dict[str, float], emp: Dict[str, float], meta: Dict[str,
             )
     print(f"[HETERO-ACID] wrote {out_txt}")
     print(f"[HETERO-ACID] wrote {out_csv}")
+    return out_txt, out_csv
 
 
-def main(argv: List[str] | None = None) -> None:
-    ap = argparse.ArgumentParser(description="HETERO-1A acid validation (C3H8O).")
-    ap.add_argument("--steps_init", type=int, default=2000)
-    ap.add_argument("--max_steps", type=int, default=10000)
-    ap.add_argument("--chains", type=int, default=4)
-    ap.add_argument("--thin", type=int, default=5)
-    ap.add_argument("--burnin_frac", type=float, default=0.30)
+def _parse_args(argv: Optional[List[str]]) -> argparse.Namespace:
+    ap = argparse.ArgumentParser(description="HETERO-1A acid validation (single formula).")
+    ap.add_argument("--formula", type=str, choices=sorted(FORMULA_SPECS.keys()), default=DEFAULT_FORMULA)
+    ap.add_argument("--steps_init", type=int, default=None)
+    ap.add_argument("--max_steps", type=int, default=None)
+    ap.add_argument("--chains", type=int, default=None)
+    ap.add_argument("--thin", type=int, default=None)
+    ap.add_argument("--burnin_frac", type=float, default=None)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--beta", type=float, default=1.0)
     ap.add_argument("--alpha_H", type=float, default=0.5)
-    ap.add_argument("--p_rewire", type=float, default=0.7)
+    ap.add_argument("--p_rewire", type=float, default=None)
     ap.add_argument("--coverage_target", type=float, default=1.0)
-    args = ap.parse_args(argv)
+    ap.add_argument("--out_dir", type=str, default=None)
+    ap.add_argument("--out_stub", type=str, default=None)
+    return ap.parse_args(argv)
 
-    exact, emp, meta = run_validation(args)
-    write_report(exact, emp, meta)
+
+def main(argv: Optional[List[str]] = None) -> None:
+    args = _parse_args(argv)
+    spec = FORMULA_SPECS[args.formula]
+    exact, emp, meta = run_formula_validation(
+        spec,
+        steps_init=args.steps_init,
+        max_steps=args.max_steps,
+        chains=args.chains,
+        thin=args.thin,
+        burnin_frac=args.burnin_frac,
+        beta=float(args.beta),
+        alpha_H=float(args.alpha_H),
+        seed=int(args.seed),
+        coverage_target=float(args.coverage_target),
+        p_rewire=args.p_rewire,
+    )
+    write_report(
+        spec.name,
+        exact,
+        emp,
+        meta,
+        out_dir=args.out_dir,
+        out_stub=args.out_stub,
+    )
 
 
 if __name__ == "__main__":
