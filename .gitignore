@@ -16,3 +16,7 @@ name3.aux
 name3.log
 name3.out
 name3.toc
+results/**
+results_dist_*
+*.pkl
+
