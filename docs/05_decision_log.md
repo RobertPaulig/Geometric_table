@@ -2016,3 +2016,18 @@
 Мотивация:
 - Архитекторы и продуктовая команда читают отчёты прямо из репозитория; когда `results/` был в ignore, отчёты терялись и нельзя было воспроизвести состояние эксперимента.
 - Exact-baseline и unit/property тесты важны, но человекочитаемый отчёт по прогону (пороговые метрики, coverage, telemetry) нужен в истории — иначе через неделю непонятно, что именно было запуском “PASS”.
+
+## [HETERO-1A P0.3.1] Functional Separation Gate & score tables
+
+Дата: 2025-12-26
+
+Решение:
+- Для C2H6O/C3H8O/C2H7N введён жёсткий классификатор функциональных классов (alcohol vs ether, primary vs secondary amine) на основе `deg(O)`/`deg(N)` и валентностей.
+- `analysis.chem.hetero_score_utils` и `hetero_validation_suite` формируют две таблицы:
+  - per-state `states_<formula>.csv` (energy, fingerprint, класс, P_exact/P_emp),
+  - score `hetero_validation_suite.csv` с корректными метриками (взвешенные mean/std, delta_abs, effect_size только при `n>=2`, ROC AUC + флаг `*_auc_is_trivial`, collision_rates).
+- Golden отчёты и state-таблицы размещаются в `results/golden/hetero/*`.
+
+DoD:
+- coverage=1.0, `KL < 0.02` на малых формулах,
+- energy/fingerprint различают классы (`delta_abs > eps`, effect_size ≥ 1 при `n>=2`, collision_rate=0).
