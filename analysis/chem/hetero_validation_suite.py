@@ -5,6 +5,7 @@ import csv
 from pathlib import Path
 from typing import List
 
+from analysis.chem.hetero_score_utils import compute_formula_score, compute_state_table
 from analysis.chem.hetero_validation_1_acid import (
     FORMULA_SPECS,
     run_formula_validation,
@@ -34,7 +35,10 @@ def main(argv: List[str] | None = None) -> None:
     args = _parse_args(argv)
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    summary_rows = []
+    summary_rows: List[dict] = []
+    score_cols: set[str] = set()
+    states_dir = out_dir / "states"
+    states_dir.mkdir(parents=True, exist_ok=True)
     for formula_name in args.formulas:
         spec = FORMULA_SPECS[formula_name]
         exact, emp, meta = run_formula_validation(
@@ -52,34 +56,48 @@ def main(argv: List[str] | None = None) -> None:
         )
         stub = f"{args.stub_prefix}_{formula_name}"
         write_report(formula_name, exact, emp, meta, out_dir=str(out_dir), out_stub=stub)
-        row = {
-            "formula": formula_name,
-            "steps_total": int(meta["steps_total"]),
-            "steps_per_chain": int(meta["steps_per_chain"]),
-            "coverage_unique_eq": float(meta["coverage_unique_eq"]),
-            "kl_exact_emp": float(meta["kl_exact_emp"]),
-            "kl_emp_exact": float(meta["kl_emp_exact"]),
-            "accept_rate": float(meta["accept_rate"]),
-            "samples": int(meta["samples_collected"]),
-        }
-        summary_rows.append(row)
+        state_ids = sorted(set(exact.keys()) | set(emp.keys()))
+        df_states = compute_state_table(
+            formula=formula_name,
+            state_ids=state_ids,
+            p_exact=exact,
+            p_emp=emp,
+        )
+        df_states.to_csv(states_dir / f"states_{formula_name}.csv", index=False)
+        score_row = compute_formula_score(df_states, formula=formula_name, weights_col="P_exact")
+        summary_rows.append(
+            {
+                "formula": formula_name,
+                "steps_total": int(meta["steps_total"]),
+                "steps_per_chain": int(meta["steps_per_chain"]),
+                "coverage_unique_eq": float(meta["coverage_unique_eq"]),
+                "kl_exact_emp": float(meta["kl_exact_emp"]),
+                "kl_emp_exact": float(meta["kl_emp_exact"]),
+                "accept_rate": float(meta["accept_rate"]),
+                "samples": int(meta["samples_collected"]),
+                **score_row,
+            }
+        )
+        score_cols.update(score_row.keys())
+
+    fieldnames = [
+        "formula",
+        "steps_total",
+        "steps_per_chain",
+        "coverage_unique_eq",
+        "kl_exact_emp",
+        "kl_emp_exact",
+        "accept_rate",
+        "samples",
+    ]
+    extra_cols = sorted(c for c in score_cols if c not in fieldnames)
+    fieldnames.extend(extra_cols)
     summary_path = out_dir / "hetero_validation_suite.csv"
     with summary_path.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(
-            f,
-            fieldnames=[
-                "formula",
-                "steps_total",
-                "steps_per_chain",
-                "coverage_unique_eq",
-                "kl_exact_emp",
-                "kl_emp_exact",
-                "accept_rate",
-                "samples",
-            ],
-        )
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
-        writer.writerows(summary_rows)
+        for row in summary_rows:
+            writer.writerow(row)
     print(f"[HETERO-SUITE] wrote {summary_path}")
 
 
