@@ -1,7 +1,7 @@
 acid_C3H8O: HETERO-1A acid test (C3H8O)
 steps_total=4000 steps_per_chain=667 burnin=200
 chains=6 samples=702
-accept_rate=0.8428 elapsed_sec=0.16
+accept_rate=0.8428 elapsed_sec=0.40
 coverage_unique_eq=1.0000 support_exact=3 support_emp=3
 KL(exact||emp)=0.000857
 KL(emp||exact)=0.000856

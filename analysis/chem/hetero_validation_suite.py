@@ -2,15 +2,24 @@ from __future__ import annotations
 
 import argparse
 import csv
+import datetime as dt
 from pathlib import Path
+import subprocess
 from typing import List
 
-from analysis.chem.hetero_score_utils import compute_formula_score, compute_state_table
+from analysis.chem.hetero_score_utils import ALPHA_H, RHO_BY_TYPE, compute_formula_scores, compute_state_table
 from analysis.chem.hetero_validation_1_acid import (
     FORMULA_SPECS,
     run_formula_validation,
     write_report,
 )
+
+
+def _git_sha() -> str:
+    try:
+        return subprocess.check_output(["git", "rev-parse", "HEAD"], stderr=subprocess.DEVNULL).decode().strip()
+    except Exception:
+        return "UNKNOWN"
 
 
 def _parse_args(argv: List[str] | None) -> argparse.Namespace:
@@ -64,32 +73,62 @@ def main(argv: List[str] | None = None) -> None:
             p_emp=emp,
         )
         df_states.to_csv(states_dir / f"states_{formula_name}.csv", index=False)
-        score_row = compute_formula_score(df_states, formula=formula_name, weights_col="P_exact")
-        summary_rows.append(
-            {
-                "formula": formula_name,
-                "steps_total": int(meta["steps_total"]),
-                "steps_per_chain": int(meta["steps_per_chain"]),
-                "coverage_unique_eq": float(meta["coverage_unique_eq"]),
-                "kl_exact_emp": float(meta["kl_exact_emp"]),
-                "kl_emp_exact": float(meta["kl_emp_exact"]),
-                "accept_rate": float(meta["accept_rate"]),
-                "samples": int(meta["samples_collected"]),
-                **score_row,
-            }
-        )
-        score_cols.update(score_row.keys())
+        run_meta = {
+            "run_id": f"{formula_name}_{dt.datetime.utcnow().isoformat()}",
+            "git_sha": _git_sha(),
+            "timestamp_utc": dt.datetime.utcnow().isoformat(),
+            "chains": int(args.chains or spec.chains),
+            "steps_per_chain": int(meta["steps_per_chain"]),
+            "burnin_steps": int(meta["burnin"]),
+            "thin": int(args.thin or spec.thin),
+            "seed_base": int(args.seed),
+            "beta": float(args.beta),
+            "rho_C": float(RHO_BY_TYPE[0]),
+            "rho_N": float(RHO_BY_TYPE[1]),
+            "rho_O": float(RHO_BY_TYPE[2]),
+            "alpha_H": float(ALPHA_H),
+            "tau_s": 0.0,
+            "steps_total": int(meta["steps_total"]),
+            "kl_exact_emp": float(meta["kl_exact_emp"]),
+            "kl_emp_exact": float(meta["kl_emp_exact"]),
+            "accept_rate": float(meta["accept_rate"]),
+            "samples": int(meta["samples_collected"]),
+            "coverage_unique_eq": float(meta["coverage_unique_eq"]),
+        }
+        score_rows = compute_formula_scores(df_states, formula=formula_name, weights_col="P_exact", run_meta=run_meta)
+        summary_rows.extend(score_rows)
+        for row in score_rows:
+            score_cols.update(row.keys())
 
-    fieldnames = [
+    base_fields = [
+        "run_id",
+        "git_sha",
+        "timestamp_utc",
         "formula",
+        "weight_source",
+        "chains",
         "steps_total",
         "steps_per_chain",
+        "burnin_steps",
+        "thin",
+        "seed_base",
+        "beta",
+        "rho_C",
+        "rho_N",
+        "rho_O",
+        "alpha_H",
+        "tau_s",
+        "support_exact",
+        "support_emp",
         "coverage_unique_eq",
         "kl_exact_emp",
         "kl_emp_exact",
         "accept_rate",
         "samples",
+        "energy_collision_rate",
+        "fp_collision_rate",
     ]
+    fieldnames = list(base_fields)
     extra_cols = sorted(c for c in score_cols if c not in fieldnames)
     fieldnames.extend(extra_cols)
     summary_path = out_dir / "hetero_validation_suite.csv"
