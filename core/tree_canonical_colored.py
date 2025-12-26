@@ -52,8 +52,15 @@ def canonical_colored_tree_permutation(
     n = int(len(adj_list))
     if n != len(labels):
         raise ValueError("labels must match the number of nodes")
-    if n <= 2:
-        return list(range(n))
+    if n == 0:
+        return []
+    if n == 1:
+        return [0]
+    if n == 2:
+        if int(labels[0]) <= int(labels[1]):
+            return [0, 1]
+        else:
+            return [1, 0]
 
     adj_local = [list(nei) for nei in adj_list]
     centers = _tree_centers(adj_local)

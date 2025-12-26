@@ -48,6 +48,13 @@ def test_colored_canonical_invariant_under_relabel() -> None:
     assert id_base == id_perm
 
 
+def test_colored_canonical_two_nodes_order_by_type() -> None:
+    edges = ((0, 1),)
+    types = (2, 0)
+    _, _, state_id = canonicalize_hetero_state(2, edges, types)
+    assert state_id == "het:edges=0-1;types=0,2"
+
+
 def test_leaf_rewire_respects_valence() -> None:
     state = _make_state()
     rng = np.random.default_rng(42)
@@ -93,9 +100,9 @@ def test_mcmc_matches_exact_small_C3H8O() -> None:
     init = HeteroState(n=4, edges=((0, 1), (1, 2), (2, 3)), types=(0, 0, 0, 2))
     samples, _ = run_hetero_mcmc(
         init=init,
-        steps=4000,
-        burnin=500,
-        thin=5,
+        steps=6000,
+        burnin=800,
+        thin=4,
         beta=1.0,
         rng_seed=0,
         energy_fn=_default_energy,
@@ -114,4 +121,4 @@ def test_mcmc_matches_exact_small_C3H8O() -> None:
         p = exact[k]
         q = emp.get(k, 1e-9)
         kl += p * math.log(p / q)
-    assert kl < 0.2
+    assert kl < 0.02
