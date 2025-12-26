@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import math
 import random
-import pytest
 
 import numpy as np
+import pandas as pd
+import pytest
 
 from analysis.chem.hetero_canonical import canonicalize_hetero_state
 from analysis.chem.hetero_exact_small import (
@@ -14,6 +15,7 @@ from analysis.chem.hetero_exact_small import (
 )
 from analysis.chem.hetero_mcmc import HeteroState, run_hetero_mcmc, step_hetero_mcmc
 from analysis.chem.hetero_operator import build_operator_H, hetero_energy_from_state, hetero_fingerprint
+from analysis.chem.hetero_score_utils import compute_formula_scores
 
 VALENCE = {0: 4, 1: 3, 2: 2}
 RHO = {0: 0.0, 1: 0.2, 2: 0.5}
@@ -221,3 +223,87 @@ def test_state_graph_connected_for_small_formulas() -> None:
                     seen.add(nb)
                     stack.append(nb)
         assert seen == set(exact.keys()), f"{name} graph disconnected"
+
+
+def _score_test_df(
+    *,
+    formula: str,
+    entries: list[tuple[str, float, float, list[float]]],
+) -> pd.DataFrame:
+    rows = []
+    for idx, (cls, energy, weight, fvec) in enumerate(entries):
+        row = {
+            "formula": formula,
+            "state_id": f"{formula}_{idx}",
+            "class_label": cls,
+            "N_heavy": 3,
+            "P_exact": weight,
+            "P_emp": weight,
+            "energy": energy,
+            "is_valid_valence": 1,
+            "degree_seq": "1,1,1",
+        }
+        for fp_idx, val in enumerate(fvec):
+            row[f"fp{fp_idx}"] = val
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def test_score_singleton_class_marked_trivial() -> None:
+    df = _score_test_df(
+        formula="C3H8O",
+        entries=[
+            ("alcohol", 1.0, 1.0, [0.1, 0.2]),
+            ("ether", 2.0, 1.0, [0.4, 0.5]),
+            ("ether", 2.1, 1.0, [0.6, 0.7]),
+        ],
+    )
+    rows = compute_formula_scores(df, formula="C3H8O", weights_col="P_exact", run_meta={"coverage_unique_eq": 1.0})
+    assert rows
+    row = rows[0]
+    assert row["E_is_trivial"] is True
+    assert row["E_auc_raw"] == pytest.approx(0.5)
+    assert row["E_auc_best"] == pytest.approx(0.5)
+    assert math.isnan(row["E_effect_size"])
+    assert row["fp_best_is_trivial"] is True
+    assert row["fp_best_auc_raw"] == pytest.approx(0.5)
+    assert row["fp_best_auc_best"] == pytest.approx(0.5)
+
+
+def test_score_auc_best_one_when_well_separated() -> None:
+    df = _score_test_df(
+        formula="C3H8O",
+        entries=[
+            ("alcohol", 0.0, 1.0, [0.0, 1.0]),
+            ("alcohol", 0.1, 1.0, [0.1, 2.0]),
+            ("ether", 2.0, 1.0, [5.0, 0.0]),
+            ("ether", 2.2, 1.0, [6.0, -1.0]),
+        ],
+    )
+    rows = compute_formula_scores(df, formula="C3H8O", weights_col="P_exact", run_meta={"coverage_unique_eq": 1.0})
+    assert rows
+    row = rows[0]
+    assert row["E_is_trivial"] is False
+    assert row["E_auc_best"] == pytest.approx(1.0, abs=1e-9)
+    assert row["fp_best_is_trivial"] is False
+    assert row["fp_best_auc_best"] == pytest.approx(1.0, abs=1e-9)
+
+
+def test_score_counts_other_for_tertiary() -> None:
+    df = _score_test_df(
+        formula="C2H7N",
+        entries=[
+            ("primary_amine", 0.0, 1.0, [0.0]),
+            ("primary_amine", 0.2, 1.0, [0.1]),
+            ("secondary_amine", 1.0, 1.0, [1.0]),
+            ("secondary_amine", 1.2, 1.0, [1.1]),
+            ("tertiary_amine", 1.5, 1.0, [2.0]),
+        ],
+    )
+    rows = compute_formula_scores(df, formula="C2H7N", weights_col="P_exact", run_meta={"coverage_unique_eq": 1.0})
+    assert rows
+    row = rows[0]
+    assert row["n_a"] == 2
+    assert row["n_b"] == 2
+    assert row["n_other"] == 1
+    assert row["pair_is_exhaustive"] is False

@@ -40,6 +40,10 @@ FORMULA_SPECS: Dict[str, FormulaSpec] = {
     "C2H6O": FormulaSpec("C2H6O", {0: 2, 2: 1}, steps_init=2000, max_steps=8000, chains=4, thin=4, burnin_frac=0.3, p_rewire=0.7),
     "C2H7N": FormulaSpec("C2H7N", {0: 2, 1: 1}, steps_init=2000, max_steps=8000, chains=4, thin=4, burnin_frac=0.3, p_rewire=0.7),
     "C3H8O": FormulaSpec("C3H8O", {0: 3, 2: 1}, steps_init=4000, max_steps=16000, chains=6, thin=4, burnin_frac=0.3, p_rewire=0.7),
+    "C4H10O": FormulaSpec("C4H10O", {0: 4, 2: 1}, steps_init=8000, max_steps=32000, chains=6, thin=4, burnin_frac=0.3, p_rewire=0.7),
+    "C4H11N": FormulaSpec("C4H11N", {0: 4, 1: 1}, steps_init=8000, max_steps=32000, chains=6, thin=4, burnin_frac=0.3, p_rewire=0.7),
+    "C5H12O": FormulaSpec("C5H12O", {0: 5, 2: 1}, steps_init=12000, max_steps=48000, chains=6, thin=4, burnin_frac=0.3, p_rewire=0.7),
+    "C5H13N": FormulaSpec("C5H13N", {0: 5, 1: 1}, steps_init=12000, max_steps=48000, chains=6, thin=4, burnin_frac=0.3, p_rewire=0.7),
 }
 
 DEFAULT_FORMULA = "C3H8O"

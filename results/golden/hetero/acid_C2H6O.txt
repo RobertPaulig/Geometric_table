@@ -1,7 +1,7 @@
 acid_C2H6O: HETERO-1A acid test (C2H6O)
 steps_total=2000 steps_per_chain=500 burnin=150
 chains=4 samples=352
-accept_rate=0.9445 elapsed_sec=0.17
+accept_rate=0.9445 elapsed_sec=0.08
 coverage_unique_eq=1.0000 support_exact=2 support_emp=2
 KL(exact||emp)=0.000905
 KL(emp||exact)=0.000912

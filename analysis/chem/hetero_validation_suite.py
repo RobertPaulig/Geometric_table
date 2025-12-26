@@ -71,6 +71,8 @@ def main(argv: List[str] | None = None) -> None:
             state_ids=state_ids,
             p_exact=exact,
             p_emp=emp,
+            rho_by_type=RHO_BY_TYPE,
+            alpha_H_override=float(args.alpha_H),
         )
         df_states.to_csv(states_dir / f"states_{formula_name}.csv", index=False)
         run_meta = {
@@ -126,9 +128,28 @@ def main(argv: List[str] | None = None) -> None:
         "accept_rate",
         "samples",
         "energy_collision_rate",
+        "energy_collision_eps",
         "fp_collision_rate",
+        "class_a",
+        "class_b",
+        "n_a",
+        "n_b",
+        "n_other",
+        "pair_is_exhaustive",
+        "E_is_trivial",
+        "E_auc_raw",
+        "E_auc_best",
+        "E_delta_abs",
+        "E_effect_size",
+        "fp_dim",
+        "fp_best_idx",
+        "fp_best_is_trivial",
+        "fp_best_auc_raw",
+        "fp_best_auc_best",
+        "fp_best_delta_abs",
+        "fp_best_effect_size",
     ]
-    fieldnames = list(base_fields)
+    fieldnames = list(dict.fromkeys(base_fields))
     extra_cols = sorted(c for c in score_cols if c not in fieldnames)
     fieldnames.extend(extra_cols)
     summary_path = out_dir / "hetero_validation_suite.csv"

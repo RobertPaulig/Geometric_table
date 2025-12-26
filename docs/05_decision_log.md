@@ -2031,3 +2031,17 @@
 DoD:
 - coverage=1.0, `KL < 0.02` на малых формулах,
 - energy/fingerprint различают классы (`delta_abs > eps`, effect_size ≥ 1 при `n>=2`, collision_rate=0).
+
+## [HETERO-1A P0.4] Расширенный acid-suite + calibration loop
+
+Дата: 2025-12-27
+
+Решение:
+- SCORE v2 “обезвреживает” trivial-кейсы: при `n_a<2`/`n_b<2` или `pooled_std<1e-12` метрики жёстко фиксируются (`auc_raw=auc_best=0.5`, `effect_size=NaN`). В `hetero_validation_suite.csv` добавлены явные поля (`E_is_trivial`, `E_auc_raw/best`, `fp_best_*`, `n_other`, `pair_is_exhaustive`, `energy_collision_eps`), а тесты на искусственных данных ловят regression’ы (singleton, zero-variance, perfect-separation, tertiary-count).
+- Acid-suite расширен до C4H10O/C4H11N и fallback C5H12O/C5H13N (tree-only). Для O- и N-кейсов получены нетривиальные пары (`fp_best_is_trivial=False`), а tertiary амин учитывается через `n_other`/`pair_is_exhaustive`.
+- CLI `analysis.chem.hetero_calibration_loop` запускает сетку по (`beta`, `alpha_H`), вызывает suite в per-trial подкаталогах, фильтрует строки `fp_best_is_trivial=False`, считает objective `sum(fp_best_auc_best - λ_other·other_frac - λ_coll·energy_collision_rate)` и фиксирует `calib_trials.csv`, `calib_best.json`, `calib_best_suite.csv`. Fail-fast: если нет ≥2 нетривиальных строк или coverage/KL за пределами DoD, trial считается `fail`.
+- Golden отчёты обновлены: `results/golden/hetero/states/states_<formula>.csv`, `acid_*.txt/csv`, `hetero_validation_suite.csv` (6 формул). Калибровочный запуск (`beta∈{0.9,1.0}`, `alpha_H∈{0.45,0.50}`, формулы C4/C5) дал `best score≈3.43` при `(beta=1.0, alpha_H=0.45)`; артефакты — `results/hetero_calibration/*`.
+
+DoD:
+- suite содержит ≥1 O-кейс и ≥1 N-кейс с `fp_best_is_trivial=False`;
+- `calib_trials.csv` отражает все попытки, `calib_best.json` и `calib_best_suite.csv` присутствуют/обновляются; при отсутствии PASS — явный `status=fail`.
