@@ -455,6 +455,9 @@ def compute_formula_scores(
     fp_exclude_energy_like: bool = True,
     fp_energy_like_threshold: float = 0.999,
     collision_log_dir: Path | None = None,
+    neg_control_permute_labels: bool = False,
+    neg_control_random_fp: bool = False,
+    neg_control_seed: int = 0,
 ) -> List[Dict[str, object]]:
     weights = df_states[weights_col].fillna(0.0).to_numpy(dtype=float)
     if np.all(weights == 0):
@@ -750,6 +753,21 @@ def compute_formula_scores(
                         fp_best_idx=int(row["fp_best_idx"]),
                     )
                 )
+                row["fp_neg_auc_best_perm_labels"] = float("nan")
+                row["fp_neg_auc_best_rand_fp"] = float("nan")
+                if active is not None and (neg_control_permute_labels or neg_control_random_fp):
+                    mask_ab = df_states["class_label"].isin([spec.class_a, spec.class_b]).to_numpy()
+                    scores = df_states[best_col_name].to_numpy(dtype=float)[mask_ab]
+                    weights_ab = df_states[weights_col].to_numpy(dtype=float)[mask_ab]
+                    true_lbl = (df_states["class_label"].to_numpy()[mask_ab] == spec.class_a).astype(int)
+                    rng = np.random.default_rng(int(neg_control_seed))
+                    if neg_control_permute_labels:
+                        perm_lbl = true_lbl.copy()
+                        rng.shuffle(perm_lbl)
+                        row["fp_neg_auc_best_perm_labels"] = _clamp01(_roc_auc(scores, perm_lbl, weights_ab))
+                    if neg_control_random_fp:
+                        rand_scores = rng.standard_normal(size=scores.shape[0]).astype(float)
+                        row["fp_neg_auc_best_rand_fp"] = _clamp01(_roc_auc(rand_scores, true_lbl, weights_ab))
         else:
             row["fp_dim"] = 0
             row["fp_best_idx"] = -1
@@ -775,6 +793,8 @@ def compute_formula_scores(
                     fp_best_idx=int(row["fp_best_idx"]),
                 )
             )
+            row["fp_neg_auc_best_perm_labels"] = float("nan")
+            row["fp_neg_auc_best_rand_fp"] = float("nan")
         score_rows.append(row)
     return score_rows
 def _clamp01(val: float) -> float:

@@ -12,9 +12,9 @@ def _run(cmd: list[str]) -> None:
 
 def main() -> None:
     repo_root = Path(__file__).resolve().parents[2]
-    theta_json = repo_root / "results" / "hetero_calibration" / "calib_best.json"
+    theta_json = repo_root / "analysis" / "chem" / "configs" / "hetero_theta_best.json"
     if not theta_json.exists():
-        raise FileNotFoundError(f"calib_best.json not found at {theta_json}")
+        raise FileNotFoundError(f"hetero_theta_best.json not found at {theta_json}")
     _run([sys.executable, "-m", "pytest", "-q"])
     _run(
         [

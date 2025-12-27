@@ -423,5 +423,28 @@ def test_collision_log_created_when_no_cross(tmp_path) -> None:
     # only header expected because no cross collisions
     assert len(content) == 1
     assert content[0].startswith("state_id_i")
+
+
+def test_negative_controls_near_chance() -> None:
+    entries = []
+    for i in range(50):
+        entries.append(("alcohol", float(i) * 0.01, 1.0, [float(i) * 0.01]))
+        entries.append(("ether", 10.0 + float(i) * 0.01, 1.0, [10.0 + float(i) * 0.01]))
+    df = _score_test_df(formula="C4H10O", entries=entries)
+    rows = compute_formula_scores(
+        df,
+        formula="C4H10O",
+        weights_col="P_exact",
+        run_meta={"coverage_unique_eq": 1.0, "fp_policy_used": "allow_energy_like"},
+        fp_exclude_energy_like=False,
+        neg_control_permute_labels=True,
+        neg_control_random_fp=True,
+        neg_control_seed=0,
+    )
+    assert rows
+    row = rows[0]
+    assert row["fp_best_auc_best"] >= 0.99
+    assert row["fp_neg_auc_best_perm_labels"] <= 0.6
+    assert row["fp_neg_auc_best_rand_fp"] <= 0.6
 def _base_meta() -> dict[str, object]:
     return {"coverage_unique_eq": 1.0, "fp_policy_used": "exclude_energy_like"}
