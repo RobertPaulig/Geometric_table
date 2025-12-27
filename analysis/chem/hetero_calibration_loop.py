@@ -29,6 +29,9 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     ap.add_argument("--min_nontrivial_rows", type=int, default=2)
     ap.add_argument("--suite_kwargs", type=str, nargs="*", help="Extra passthrough pairs key=value for suite CLI.")
     ap.add_argument("--fp_allow_energy_like", action="store_true", help="Allow FP candidates highly correlated with energy.")
+    ap.add_argument("--use_neg_controls", action="store_true", help="Enable negative controls inside suite runs and gate on them.")
+    ap.add_argument("--neg_control_seed", type=int, default=0)
+    ap.add_argument("--neg_auc_max", type=float, default=0.60)
     return ap.parse_args(argv)
 
 
@@ -48,6 +51,8 @@ def _run_suite(
     formulas: List[str] | None,
     extra_args: Dict[str, str],
     fp_allow_energy_like: bool,
+    use_neg_controls: bool,
+    neg_control_seed: int,
 ) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     cmd = [
@@ -65,6 +70,15 @@ def _run_suite(
         cmd.append("--fp_allow_energy_like")
     else:
         cmd.append("--fp_exclude_energy_like")
+    if use_neg_controls:
+        cmd.extend(
+            [
+                "--neg_control_seed",
+                str(int(neg_control_seed)),
+                "--neg_control_permute_labels",
+                "--neg_control_random_fp",
+            ]
+        )
     if formulas:
         cmd.extend(["--formulas", *formulas])
     for key, val in extra_args.items():
@@ -127,6 +141,7 @@ def _evaluate_trial(rows: List[Dict[str, object]], *, args: argparse.Namespace) 
                 "coll_cross_pairs_strict": 0.0,
                 "fp_auc_best": float("inf"),
                 "fp_auc_gap": float("inf"),
+                "neg_auc_max": float("-inf"),
             },
         )
         coverage = float(row.get("coverage_unique_eq", 0.0))
@@ -136,6 +151,17 @@ def _evaluate_trial(rows: List[Dict[str, object]], *, args: argparse.Namespace) 
         cross_pairs_strict = float(row.get("coll_cross_pairs_strict", 0.0) or 0.0)
         fp_auc_best = float(row.get("fp_best_auc_best", 0.0) or 0.0)
         fp_auc_gap = float(row.get("fp_best_auc_gap", 0.0) or 0.0)
+        neg_perm = row.get("fp_neg_auc_best_perm_labels", "")
+        neg_rand = row.get("fp_neg_auc_best_rand_fp", "")
+        neg_vals = []
+        for v in [neg_perm, neg_rand]:
+            if v in {"", "nan", "NaN", None}:
+                continue
+            try:
+                neg_vals.append(float(v))
+            except Exception:
+                continue
+        neg_max = max(neg_vals) if neg_vals else float("-inf")
         stats["coverage"] = min(stats["coverage"], coverage)
         stats["kl"] = max(stats["kl"], kl)
         stats["coll_cross_pairs"] = max(stats["coll_cross_pairs"], cross_pairs)
@@ -143,6 +169,7 @@ def _evaluate_trial(rows: List[Dict[str, object]], *, args: argparse.Namespace) 
         stats["coll_cross_pairs_strict"] = max(stats["coll_cross_pairs_strict"], cross_pairs_strict)
         stats["fp_auc_best"] = min(stats["fp_auc_best"], fp_auc_best)
         stats["fp_auc_gap"] = min(stats["fp_auc_gap"], fp_auc_gap)
+        stats["neg_auc_max"] = max(stats["neg_auc_max"], neg_max)
     gate_reason_any = ""
     gate_formula_any = ""
     for formula, stats in formula_gate.items():
@@ -164,6 +191,10 @@ def _evaluate_trial(rows: List[Dict[str, object]], *, args: argparse.Namespace) 
             break
         if (stats["fp_auc_best"] < args.fp_auc_min) and (stats["fp_auc_gap"] < args.fp_auc_gap_min):
             gate_reason_any = "fp_weak"
+            gate_formula_any = formula
+            break
+        if args.use_neg_controls and stats["neg_auc_max"] > args.neg_auc_max:
+            gate_reason_any = "neg_control"
             gate_formula_any = formula
             break
     gate_failed_any = bool(gate_reason_any)
@@ -233,6 +264,8 @@ def _evaluate_trial(rows: List[Dict[str, object]], *, args: argparse.Namespace) 
         "fp_best_idx_list": ";".join(idx for idx, _ in details_list),
         "fp_best_auc_best_list": ";".join(val for _, val in details_list),
     }
+    if args.use_neg_controls:
+        meta["max_neg_auc_any"] = max((v["neg_auc_max"] for v in formula_gate.values()), default=float("nan"))
     gate_meta = {
         "gate_failed_any": False,
         "gate_reason_any": "",
@@ -273,6 +306,8 @@ def main(argv: Sequence[str] | None = None) -> None:
             formulas=formulas,
             extra_args=extra_kwargs,
             fp_allow_energy_like=bool(args.fp_allow_energy_like),
+            use_neg_controls=bool(args.use_neg_controls),
+            neg_control_seed=int(args.neg_control_seed),
         )
         summary_path = trial_dir / "hetero_validation_suite.csv"
         rows = _read_summary(summary_path)
@@ -299,6 +334,7 @@ def main(argv: Sequence[str] | None = None) -> None:
             "avg_coll_total": meta.get("avg_coll_total"),
             "fp_best_idx_list": meta.get("fp_best_idx_list"),
             "fp_best_auc_best_list": meta.get("fp_best_auc_best_list"),
+            "max_neg_auc_any": meta.get("max_neg_auc_any"),
             "gate_failed": status != "ok",
             "gate_reason": reason,
             "gate_failed_any": gate_meta.get("gate_failed_any"),
@@ -335,6 +371,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         "avg_coll_total",
         "fp_best_idx_list",
         "fp_best_auc_best_list",
+        "max_neg_auc_any",
         "output_dir",
     ]
     with trials_path.open("w", newline="", encoding="utf-8") as f:

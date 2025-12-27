@@ -44,4 +44,7 @@ results/hetero_suite_theta_*/
 results/hetero_suite_ci_smoke*/
 results/hetero_calibration/trial_*/
 results/tmp/
+results/robustness/
+results/hetero_calibration_p07/
+results/hetero_suite_p07_holdout/
 
