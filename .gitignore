@@ -37,3 +37,10 @@ results/**/cache_*.npz
 results/**/submissions/**
 results/**/__pycache__/
 
+# ============================================================
+# HETERO QC runtime artifacts (never commit)
+# ============================================================
+results/hetero_suite_theta_*/
+results/hetero_calibration/trial_*/
+results/tmp/
+

@@ -15,7 +15,7 @@ from analysis.chem.hetero_exact_small import (
 )
 from analysis.chem.hetero_mcmc import HeteroState, run_hetero_mcmc, step_hetero_mcmc
 from analysis.chem.hetero_operator import build_operator_H, hetero_energy_from_state, hetero_fingerprint
-from analysis.chem.hetero_score_utils import compute_formula_scores
+from analysis.chem.hetero_score_utils import _collision_breakdown, _collision_rate, compute_formula_scores
 
 VALENCE = {0: 4, 1: 3, 2: 2}
 RHO = {0: 0.0, 1: 0.2, 2: 0.5}
@@ -258,7 +258,7 @@ def test_score_singleton_class_marked_trivial() -> None:
             ("ether", 2.1, 1.0, [0.6, 0.7]),
         ],
     )
-    rows = compute_formula_scores(df, formula="C3H8O", weights_col="P_exact", run_meta={"coverage_unique_eq": 1.0})
+    rows = compute_formula_scores(df, formula="C3H8O", weights_col="P_exact", run_meta=_base_meta())
     assert rows
     row = rows[0]
     assert row["E_is_trivial"] is True
@@ -280,7 +280,7 @@ def test_score_auc_best_one_when_well_separated() -> None:
             ("ether", 2.2, 1.0, [6.0, -1.0]),
         ],
     )
-    rows = compute_formula_scores(df, formula="C3H8O", weights_col="P_exact", run_meta={"coverage_unique_eq": 1.0})
+    rows = compute_formula_scores(df, formula="C3H8O", weights_col="P_exact", run_meta=_base_meta())
     assert rows
     row = rows[0]
     assert row["E_is_trivial"] is False
@@ -300,10 +300,116 @@ def test_score_counts_other_for_tertiary() -> None:
             ("tertiary_amine", 1.5, 1.0, [2.0]),
         ],
     )
-    rows = compute_formula_scores(df, formula="C2H7N", weights_col="P_exact", run_meta={"coverage_unique_eq": 1.0})
+    rows = compute_formula_scores(df, formula="C2H7N", weights_col="P_exact", run_meta=_base_meta())
     assert rows
     row = rows[0]
     assert row["n_a"] == 2
     assert row["n_b"] == 2
     assert row["n_other"] == 1
     assert row["pair_is_exhaustive"] is False
+    assert row["other_frac"] == pytest.approx(1 / 5)
+
+
+def test_collision_breakdown_additivity() -> None:
+    values = [0.0, 0.0, 1.0, 1.001]
+    labels = ["a", "a", "b", "b"]
+    breakdown = _collision_breakdown(values, labels, tol=1e-3)
+    assert abs(breakdown["coll_total"] - (breakdown["coll_within"] + breakdown["coll_cross"])) < 1e-12
+    assert breakdown["coll_within_pairs"] == 2.0
+    assert breakdown["coll_cross_pairs"] == 0.0
+
+
+def test_collision_breakdown_cross_pair() -> None:
+    values = [0.0, 0.0]
+    labels = ["a", "b"]
+    breakdown = _collision_breakdown(values, labels, tol=1e-9)
+    assert breakdown["coll_cross_pairs"] == 1.0
+    assert breakdown["coll_within_pairs"] == 0.0
+    assert abs(breakdown["coll_total"] - breakdown["coll_cross"]) < 1e-12
+    assert breakdown["max_abs_delta_cross"] == pytest.approx(0.0)
+
+
+def test_collision_breakdown_matches_legacy_rate() -> None:
+    values = [0.0, 0.0, 1.0]
+    breakdown = _collision_breakdown(values, labels=None, tol=1e-9)
+    legacy = _collision_rate(values, tol=1e-9)
+    assert abs(legacy - breakdown["coll_total"]) < 1e-12
+
+
+def test_fp_guardrail_raises_on_energy_alias() -> None:
+    df = _score_test_df(
+        formula="C3H8O",
+        entries=[
+            ("alcohol", 0.0, 1.0, [0.0]),
+            ("alcohol", 0.1, 1.0, [0.0]),
+            ("ether", 0.5, 1.0, [0.0]),
+            ("ether", 0.6, 1.0, [0.0]),
+        ],
+    )
+    # Alias feature containing the word 'energy'; copy exact energy values to trigger guardrail.
+    df["fp_energy_alias"] = df["energy"]
+    with pytest.raises(RuntimeError):
+        compute_formula_scores(
+            df,
+            formula="C3H8O",
+            weights_col="P_exact",
+            run_meta={"coverage_unique_eq": 1.0, "fp_policy_used": "allow_energy_like"},
+            fp_exclude_energy_like=False,
+        )
+
+
+def test_fp_policy_excludes_energy_like_by_default() -> None:
+    df = _score_test_df(
+        formula="C3H8O",
+        entries=[
+            ("alcohol", 0.0, 1.0, [0.0, 0.10]),
+            ("alcohol", 0.2, 1.0, [0.2, 0.15]),
+            ("ether", 1.0, 1.0, [1.0, 0.30]),
+            ("ether", 1.2, 1.0, [1.2, 0.05]),
+        ],
+    )
+    rows = compute_formula_scores(
+        df,
+        formula="C3H8O",
+        weights_col="P_exact",
+        run_meta=_base_meta(),
+    )
+    assert rows
+    row = rows[0]
+    assert row["fp_policy_used"] == "exclude_energy_like"
+    assert row["fp_best_idx"] == 1
+    rows_allow = compute_formula_scores(
+        df,
+        formula="C3H8O",
+        weights_col="P_exact",
+        run_meta={"coverage_unique_eq": 1.0, "fp_policy_used": "allow_energy_like"},
+        fp_exclude_energy_like=False,
+    )
+    assert rows_allow[0]["fp_best_idx"] == 0
+
+
+def test_collision_log_created_when_no_cross(tmp_path) -> None:
+    df = _score_test_df(
+        formula="C3H8O",
+        entries=[
+            ("alcohol", 0.0, 1.0, [0.0]),
+            ("alcohol", 0.2, 1.0, [0.1]),
+            ("ether", 1.0, 1.0, [0.5]),
+            ("ether", 1.2, 1.0, [0.6]),
+        ],
+    )
+    compute_formula_scores(
+        df,
+        formula="C3H8O",
+        weights_col="P_exact",
+        run_meta=_base_meta(),
+        collision_log_dir=tmp_path,
+    )
+    log_path = tmp_path / "C3H8O_cross_collisions.csv"
+    assert log_path.exists()
+    content = log_path.read_text().strip().splitlines()
+    # only header expected because no cross collisions
+    assert len(content) == 1
+    assert content[0].startswith("state_id_i")
+def _base_meta() -> dict[str, object]:
+    return {"coverage_unique_eq": 1.0, "fp_policy_used": "exclude_energy_like"}

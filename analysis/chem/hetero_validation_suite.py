@@ -3,11 +3,17 @@ from __future__ import annotations
 import argparse
 import csv
 import datetime as dt
+import json
 from pathlib import Path
 import subprocess
-from typing import List
+from typing import Dict, List
 
-from analysis.chem.hetero_score_utils import ALPHA_H, RHO_BY_TYPE, compute_formula_scores, compute_state_table
+from analysis.chem.hetero_score_utils import (
+    ALPHA_H,
+    RHO_BY_TYPE,
+    compute_formula_scores,
+    compute_state_table,
+)
 from analysis.chem.hetero_validation_1_acid import (
     FORMULA_SPECS,
     run_formula_validation,
@@ -37,11 +43,48 @@ def _parse_args(argv: List[str] | None) -> argparse.Namespace:
     ap.add_argument("--coverage_target", type=float, default=1.0)
     ap.add_argument("--out_dir", type=str, default="results/golden/hetero")
     ap.add_argument("--stub_prefix", type=str, default="acid")
+    ap.add_argument("--theta_json", type=str, help="Path to JSON with theta overrides.")
+    ap.add_argument(
+        "--fp_exclude_energy_like",
+        dest="fp_exclude_energy_like",
+        action="store_true",
+        help="Drop FP candidates highly correlated with energy (default).",
+    )
+    ap.add_argument(
+        "--fp_allow_energy_like",
+        dest="fp_exclude_energy_like",
+        action="store_false",
+        help="Allow FP candidates even if they are energy-like.",
+    )
+    ap.set_defaults(fp_exclude_energy_like=True)
+    ap.add_argument("--fp_energy_like_threshold", type=float, default=0.999, help="Spearman|corr| threshold for energy-like FP.")
+    ap.add_argument("--debug_fp", action="store_true")
     return ap.parse_args(argv)
 
 
 def main(argv: List[str] | None = None) -> None:
     args = _parse_args(argv)
+    theta_overrides: Dict[str, object] = {}
+    theta_json_path: Path | None = None
+    if args.theta_json:
+        theta_json_path = Path(args.theta_json)
+        if not theta_json_path.exists():
+            raise FileNotFoundError(f"theta_json not found: {theta_json_path}")
+        data = json.loads(theta_json_path.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            raise ValueError("theta_json must contain an object with overrides")
+        for key, value in data.items():
+            if hasattr(args, key):
+                setattr(args, key, value)
+                theta_overrides[key] = value
+    theta_overrides_meta = json.dumps(theta_overrides)
+    theta_values = {
+        "beta": float(args.beta),
+        "alpha_H": float(args.alpha_H),
+    }
+    if args.p_rewire is not None:
+        theta_values["p_rewire"] = float(args.p_rewire)
+    theta_values_meta = json.dumps(theta_values)
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     summary_rows: List[dict] = []
@@ -88,7 +131,7 @@ def main(argv: List[str] | None = None) -> None:
             "rho_C": float(RHO_BY_TYPE[0]),
             "rho_N": float(RHO_BY_TYPE[1]),
             "rho_O": float(RHO_BY_TYPE[2]),
-            "alpha_H": float(ALPHA_H),
+            "alpha_H": float(args.alpha_H),
             "tau_s": 0.0,
             "steps_total": int(meta["steps_total"]),
             "kl_exact_emp": float(meta["kl_exact_emp"]),
@@ -96,8 +139,22 @@ def main(argv: List[str] | None = None) -> None:
             "accept_rate": float(meta["accept_rate"]),
             "samples": int(meta["samples_collected"]),
             "coverage_unique_eq": float(meta["coverage_unique_eq"]),
+            "theta_source": "theta_json" if theta_json_path else "cli",
+            "theta_json_path": str(theta_json_path) if theta_json_path else "",
+            "theta_overrides": theta_overrides_meta,
+            "theta_values": theta_values_meta,
+            "fp_policy_used": "exclude_energy_like" if bool(args.fp_exclude_energy_like) else "allow_energy_like",
         }
-        score_rows = compute_formula_scores(df_states, formula=formula_name, weights_col="P_exact", run_meta=run_meta)
+        score_rows = compute_formula_scores(
+            df_states,
+            formula=formula_name,
+            weights_col="P_exact",
+            run_meta=run_meta,
+            debug_fp=bool(args.debug_fp),
+            fp_exclude_energy_like=bool(args.fp_exclude_energy_like),
+            fp_energy_like_threshold=float(args.fp_energy_like_threshold),
+            collision_log_dir=out_dir / "collisions",
+        )
         summary_rows.extend(score_rows)
         for row in score_rows:
             score_cols.update(row.keys())
@@ -127,14 +184,31 @@ def main(argv: List[str] | None = None) -> None:
         "kl_emp_exact",
         "accept_rate",
         "samples",
+        "theta_source",
+        "theta_json_path",
+        "theta_overrides",
+        "theta_values",
+        "fp_policy_used",
         "energy_collision_rate",
         "energy_collision_eps",
+        "collision_eps",
+        "energy_key_scheme",
+        "coll_total",
+        "coll_within",
+        "coll_cross",
+        "coll_total_pairs",
+        "coll_within_pairs",
+        "coll_cross_pairs",
+        "total_pairs",
+        "max_abs_delta_cross",
         "fp_collision_rate",
+        "fp_energy_spearman_abs",
         "class_a",
         "class_b",
         "n_a",
         "n_b",
         "n_other",
+        "other_frac",
         "pair_is_exhaustive",
         "E_is_trivial",
         "E_auc_raw",
@@ -142,10 +216,17 @@ def main(argv: List[str] | None = None) -> None:
         "E_delta_abs",
         "E_effect_size",
         "fp_dim",
+        "fp_best_idx_default",
+        "fp_best_auc_default",
+        "fp_best_auc_gap_default",
+        "fp_best_idx_excl_energy_like",
+        "fp_best_auc_excl_energy_like",
+        "fp_best_auc_gap_excl_energy_like",
         "fp_best_idx",
         "fp_best_is_trivial",
         "fp_best_auc_raw",
         "fp_best_auc_best",
+        "fp_best_auc_gap",
         "fp_best_delta_abs",
         "fp_best_effect_size",
     ]

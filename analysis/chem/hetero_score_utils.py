@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import csv
 import datetime as dt
 import math
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Dict, Iterable, List, Mapping, Sequence, Tuple
 
 import numpy as np
@@ -18,6 +20,7 @@ EPS_STD = 1e-12
 EPS_WEIGHT = 1e-12
 EPS_SCORE = 1e-12
 ENERGY_COLLISION_EPS = 1e-9
+ENERGY_KEY_SCHEME = "absdiff"
 FP_COLLISION_EPS = 1e-9
 
 
@@ -174,19 +177,92 @@ def _weighted_mean_std(vals: Sequence[float], weights: Sequence[float]) -> Tuple
     return mean, math.sqrt(var)
 
 
-def _collision_rate(values: Sequence[float], tol: float = ENERGY_COLLISION_EPS) -> float:
+def _collision_breakdown(
+    values: Sequence[float],
+    labels: Sequence[str] | None = None,
+    *,
+    tol: float = ENERGY_COLLISION_EPS,
+    state_ids: Sequence[str] | None = None,
+    record_pairs: bool = False,
+    energy_key_scheme: str = ENERGY_KEY_SCHEME,
+) -> Dict[str, object]:
     arr = np.asarray(values, dtype=float)
     n = arr.size
-    if n <= 1:
-        return 0.0
-    collisions = 0
-    total = 0
+    total_pairs = n * (n - 1) // 2
+    breakdown: Dict[str, object] = {
+        "total_pairs": float(total_pairs),
+        "coll_total_pairs": 0.0,
+        "coll_within_pairs": 0.0,
+        "coll_cross_pairs": 0.0,
+        "coll_total": 0.0,
+        "coll_within": 0.0,
+        "coll_cross": 0.0,
+        "collision_eps": float(tol),
+        "energy_key_scheme": energy_key_scheme,
+        "max_abs_delta_cross": 0.0,
+    }
+    details: List[Dict[str, object]] = []
+    if total_pairs <= 0:
+        breakdown["cross_pair_records"] = details
+        if record_pairs:
+            breakdown["cross_pair_records"] = details
+        return breakdown
+    if tol <= 0:
+        raise ValueError("collision tolerance must be > 0")
+    if energy_key_scheme != "absdiff":
+        raise ValueError(f"Unknown energy_key_scheme: {energy_key_scheme}")
+    lab_arr = np.asarray(labels) if labels is not None else np.array([None] * n, dtype=object)
+    sid_arr = np.asarray(state_ids) if state_ids is not None else np.array([None] * n, dtype=object)
+    key_arr = np.round(arr / tol).astype(np.int64)
+    within = 0
+    cross = 0
     for i in range(n):
         for j in range(i + 1, n):
-            total += 1
-            if abs(arr[i] - arr[j]) <= tol:
-                collisions += 1
-    return float(collisions) / float(total) if total > 0 else 0.0
+            abs_delta = abs(arr[i] - arr[j])
+            if abs_delta <= tol:
+                if lab_arr[i] == lab_arr[j]:
+                    within += 1
+                else:
+                    cross += 1
+                    breakdown["max_abs_delta_cross"] = max(float(breakdown["max_abs_delta_cross"]), float(abs_delta))
+                    if record_pairs:
+                        details.append(
+                            {
+                                "state_id_i": sid_arr[i],
+                                "class_i": lab_arr[i],
+                                "E_i": float(arr[i]),
+                                "energy_key_i": str(key_arr[i]),
+                                "state_id_j": sid_arr[j],
+                                "class_j": lab_arr[j],
+                                "E_j": float(arr[j]),
+                                "energy_key_j": str(key_arr[j]),
+                                "abs_delta": float(abs_delta),
+                            }
+                        )
+    total = within + cross
+    breakdown["coll_total_pairs"] = float(total)
+    breakdown["coll_within_pairs"] = float(within)
+    breakdown["coll_cross_pairs"] = float(cross)
+    if total_pairs > 0:
+        breakdown["coll_within"] = within / total_pairs
+        breakdown["coll_cross"] = cross / total_pairs
+        breakdown["coll_total"] = breakdown["coll_within"] + breakdown["coll_cross"]
+    else:
+        breakdown["coll_total"] = 0.0
+    breakdown["cross_pair_records"] = details if record_pairs else []
+    return breakdown
+
+
+def _collision_rate(values: Sequence[float], tol: float = ENERGY_COLLISION_EPS) -> float:
+    return float(
+        _collision_breakdown(
+            values,
+            labels=None,
+            tol=tol,
+            state_ids=None,
+            record_pairs=False,
+        )["coll_total"]
+    )
 
 
 def _fp_collision_rate(fp_vectors: Sequence[Sequence[float]], tol: float = FP_COLLISION_EPS) -> float:
@@ -280,12 +356,34 @@ def _pair_metric_components(
     }
 
 
+def _spearman_abs(x: Sequence[float], y: Sequence[float]) -> float:
+    x_arr = np.asarray(x, dtype=float)
+    y_arr = np.asarray(y, dtype=float)
+    if x_arr.size <= 1 or y_arr.size <= 1:
+        return float("nan")
+    if x_arr.size != y_arr.size:
+        raise ValueError("Spearman arrays must have same length")
+    rx = pd.Series(x_arr).rank(method="average").to_numpy()
+    ry = pd.Series(y_arr).rank(method="average").to_numpy()
+    if np.allclose(rx, ry, atol=1e-12, rtol=1e-12):
+        return 1.0
+    denom = np.std(rx) * np.std(ry)
+    if denom == 0:
+        return float("nan")
+    corr = np.corrcoef(rx, ry)[0, 1]
+    return float(abs(corr))
+
+
 def compute_formula_scores(
     df_states: pd.DataFrame,
     *,
     formula: str,
     weights_col: str,
     run_meta: Mapping[str, object],
+    debug_fp: bool = False,
+    fp_exclude_energy_like: bool = True,
+    fp_energy_like_threshold: float = 0.999,
+    collision_log_dir: Path | None = None,
 ) -> List[Dict[str, object]]:
     weights = df_states[weights_col].fillna(0.0).to_numpy(dtype=float)
     if np.all(weights == 0):
@@ -295,7 +393,14 @@ def compute_formula_scores(
     coverage_meta = float(run_meta.get("coverage_unique_eq", 0.0))
     if coverage_meta == 0.0 and len(df_states) > 0:
         coverage_meta = float((df_states["P_emp"] > 0).sum() / len(df_states))
-    energy_coll = _collision_rate(df_states["energy"].tolist())
+    record_pairs = collision_log_dir is not None
+    collision_info = _collision_breakdown(
+        df_states["energy"].tolist(),
+        df_states["class_label"].tolist(),
+        state_ids=df_states["state_id"].tolist(),
+        record_pairs=record_pairs,
+    )
+    energy_coll = collision_info["coll_total"]
     fp_cols_all = [c for c in df_states.columns if c.startswith("fp")]
     if fp_cols_all:
         fps = df_states[fp_cols_all].fillna(0.0).to_numpy().tolist()
@@ -313,9 +418,41 @@ def compute_formula_scores(
             "coverage_unique_eq": coverage_meta,
             "energy_collision_rate": energy_coll,
             "energy_collision_eps": ENERGY_COLLISION_EPS,
+            "collision_eps": collision_info["collision_eps"],
+            "energy_key_scheme": collision_info["energy_key_scheme"],
+            "coll_total": collision_info["coll_total"],
+            "coll_within": collision_info["coll_within"],
+            "coll_cross": collision_info["coll_cross"],
+            "coll_total_pairs": collision_info["coll_total_pairs"],
+            "coll_within_pairs": collision_info["coll_within_pairs"],
+            "coll_cross_pairs": collision_info["coll_cross_pairs"],
+            "total_pairs": collision_info["total_pairs"],
+            "max_abs_delta_cross": collision_info["max_abs_delta_cross"],
             "fp_collision_rate": fp_coll,
+            "fp_energy_spearman_abs": float("nan"),
+            "fp_policy_used": run_meta.get("fp_policy_used", "unknown"),
         }
     )
+    if collision_log_dir:
+        collision_log_dir.mkdir(parents=True, exist_ok=True)
+        log_path = collision_log_dir / f"{formula}_cross_collisions.csv"
+        fields = [
+            "state_id_i",
+            "class_i",
+            "E_i",
+            "energy_key_i",
+            "state_id_j",
+            "class_j",
+            "E_j",
+            "energy_key_j",
+            "abs_delta",
+        ]
+        records = collision_info.get("cross_pair_records", [])
+        with log_path.open("w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fields)
+            writer.writeheader()
+            for rec in records[:1000]:
+                writer.writerow(rec)
     pair_specs = PAIR_SPECS.get(formula, tuple())
     for spec in pair_specs:
         ga = df_states[df_states["class_label"] == spec.class_a]
@@ -331,6 +468,8 @@ def compute_formula_scores(
         row["n_a"] = int(len(ga))
         row["n_b"] = int(len(gb))
         row["n_other"] = int(n_other)
+        total_groups = row["n_a"] + row["n_b"] + row["n_other"]
+        row["other_frac"] = float(row["n_other"] / total_groups) if total_groups > 0 else 0.0
         row["pair_is_exhaustive"] = bool(n_other == 0)
         w_a = ga[weights_col].to_numpy(dtype=float)
         w_b = gb[weights_col].to_numpy(dtype=float)
@@ -346,40 +485,174 @@ def compute_formula_scores(
         row["E_delta_abs"] = abs(float(energy_metrics["delta"]))
         row["E_effect_size"] = energy_metrics["effect_size"]
         row["E_is_trivial"] = bool(energy_metrics["is_trivial"])
-        row["E_auc_raw"] = float(energy_metrics["auc_raw"])
-        row["E_auc_best"] = float(energy_metrics["auc_best"])
+        row["E_auc_raw"] = _clamp01(float(energy_metrics["auc_raw"]))
+        row["E_auc_best"] = _clamp01(float(energy_metrics["auc_best"]))
         if fp_cols_all:
             best_idx = -1
             best_delta_abs = 0.0
             best_metrics: Dict[str, object] | None = None
+            best_entry: Dict[str, object] | None = None
+            fp_candidates: List[Dict[str, object]] = []
+            energy_concat = np.concatenate(
+                [ga["energy"].to_numpy(dtype=float), gb["energy"].to_numpy(dtype=float)]
+            )
             for idx, col in enumerate(fp_cols_all):
+                vals_a = ga[col].to_numpy(dtype=float)
+                vals_b = gb[col].to_numpy(dtype=float)
                 metrics = _pair_metric_components(
-                    ga[col].to_numpy(dtype=float),
-                    gb[col].to_numpy(dtype=float),
+                    vals_a,
+                    vals_b,
                     weights_a=w_a,
                     weights_b=w_b,
                 )
                 delta_abs = abs(float(metrics["delta"]))
+                values_concat = np.concatenate([vals_a, vals_b])
+                spearman_abs = _spearman_abs(values_concat, energy_concat)
+                fp_candidates.append(
+                    {
+                        "idx": idx,
+                        "col": col,
+                        "metrics": metrics,
+                        "vals_a": vals_a,
+                        "vals_b": vals_b,
+                        "values_concat": values_concat,
+                        "spearman_abs": spearman_abs,
+                    }
+                )
                 if delta_abs > best_delta_abs + EPS_SCORE:
                     best_delta_abs = delta_abs
                     best_idx = idx
                     best_metrics = metrics
-            if best_metrics is None:
+                    best_entry = fp_candidates[-1]
+            if best_entry is None and fp_candidates:
+                best_entry = fp_candidates[0]
+                best_metrics = best_entry["metrics"]
+                best_idx = best_entry["idx"]
+                best_delta_abs = abs(float(best_entry["metrics"]["delta"]))
+            if best_metrics is None or best_entry is None:
                 row["fp_dim"] = len(fp_cols_all)
                 row["fp_best_idx"] = -1
                 row["fp_best_delta_abs"] = 0.0
                 row["fp_best_effect_size"] = float("nan")
                 row["fp_best_auc_raw"] = 0.5
                 row["fp_best_auc_best"] = 0.5
+                row["fp_best_auc_gap"] = row["fp_best_auc_best"] - row["E_auc_best"]
                 row["fp_best_is_trivial"] = True
+                row["fp_energy_spearman_abs"] = float("nan")
+                row["fp_best_idx_default"] = -1
+                row["fp_best_auc_default"] = 0.5
+                row["fp_best_auc_gap_default"] = row["fp_best_auc_default"] - row["E_auc_best"]
+                row["fp_best_idx_excl_energy_like"] = -1
+                row["fp_best_auc_excl_energy_like"] = 0.5
+                row["fp_best_auc_gap_excl_energy_like"] = row["fp_best_auc_excl_energy_like"] - row["E_auc_best"]
             else:
                 row["fp_dim"] = len(fp_cols_all)
-                row["fp_best_idx"] = best_idx
-                row["fp_best_delta_abs"] = best_delta_abs
-                row["fp_best_effect_size"] = best_metrics["effect_size"]
-                row["fp_best_auc_raw"] = float(best_metrics["auc_raw"])
-                row["fp_best_auc_best"] = float(best_metrics["auc_best"])
-                row["fp_best_is_trivial"] = bool(best_metrics["is_trivial"])
+                default_cand = best_entry
+                filtered_candidates = [
+                    cand
+                    for cand in fp_candidates
+                    if not (
+                        np.isfinite(cand["spearman_abs"])
+                        and cand["spearman_abs"] >= fp_energy_like_threshold
+                    )
+                ]
+                filtered_cand = max(
+                    filtered_candidates,
+                    key=lambda c: float(c["metrics"]["auc_best"]),
+                    default=None,
+                )
+                row["fp_best_idx_default"] = int(default_cand["idx"])
+                row["fp_best_auc_default"] = _clamp01(float(default_cand["metrics"]["auc_best"]))
+                row["fp_best_auc_gap_default"] = row["fp_best_auc_default"] - row["E_auc_best"]
+                if filtered_cand is not None:
+                    row["fp_best_idx_excl_energy_like"] = int(filtered_cand["idx"])
+                    row["fp_best_auc_excl_energy_like"] = _clamp01(float(filtered_cand["metrics"]["auc_best"]))
+                    row["fp_best_auc_gap_excl_energy_like"] = (
+                        row["fp_best_auc_excl_energy_like"] - row["E_auc_best"]
+                    )
+                else:
+                    row["fp_best_idx_excl_energy_like"] = -1
+                    row["fp_best_auc_excl_energy_like"] = float("nan")
+                    row["fp_best_auc_gap_excl_energy_like"] = float("nan")
+                active = (
+                    filtered_cand
+                    if fp_exclude_energy_like and filtered_cand is not None
+                    else (default_cand if not fp_exclude_energy_like else None)
+                )
+                if active is None and fp_exclude_energy_like and filtered_cand is None:
+                    row["fp_best_idx"] = -1
+                    row["fp_best_delta_abs"] = 0.0
+                    row["fp_best_effect_size"] = float("nan")
+                    row["fp_best_auc_raw"] = 0.5
+                    row["fp_best_auc_best"] = 0.5
+                    row["fp_best_auc_gap"] = row["fp_best_auc_best"] - row["E_auc_best"]
+                    row["fp_best_is_trivial"] = True
+                    row["fp_energy_spearman_abs"] = float("nan")
+                    spearman_abs = float("nan")
+                    best_col = ""
+                else:
+                    if active is None:
+                        active = default_cand
+                    row["fp_best_idx"] = int(active["idx"])
+                    row["fp_best_delta_abs"] = abs(float(active["metrics"]["delta"]))
+                    row["fp_best_effect_size"] = active["metrics"]["effect_size"]
+                    row["fp_best_auc_raw"] = _clamp01(float(active["metrics"]["auc_raw"]))
+                    row["fp_best_auc_best"] = _clamp01(float(active["metrics"]["auc_best"]))
+                    row["fp_best_auc_gap"] = row["fp_best_auc_best"] - row["E_auc_best"]
+                    row["fp_best_is_trivial"] = bool(active["metrics"]["is_trivial"])
+                    spearman_abs = (
+                        _spearman_abs(active["values_concat"], energy_concat)
+                        if active.get("values_concat") is not None
+                        else float("nan")
+                    )
+                    row["fp_energy_spearman_abs"] = spearman_abs
+                    best_col = (
+                        fp_cols_all[row["fp_best_idx"]]
+                        if 0 <= row["fp_best_idx"] < len(fp_cols_all)
+                        else f"fp{row['fp_best_idx']}"
+                    )
+                if debug_fp:
+                    print(
+                        f"[DEBUG-FP] formula={formula} pair={spec.class_a}/{spec.class_b} "
+                        f"fp_best_idx={row['fp_best_idx']} col={best_col} auc_best={row['fp_best_auc_best']:.6f} "
+                        f"E_auc_best={row['E_auc_best']:.6f} spearman_abs={spearman_abs:.6f}"
+                    )
+                    top_candidates = sorted(
+                        fp_candidates,
+                        key=lambda c: float(c["metrics"]["auc_best"]),
+                        reverse=True,
+                    )[:5]
+                    for cand in top_candidates:
+                        print(
+                            f"  [DEBUG-FP] candidate idx={cand['idx']} col={cand['col']} "
+                            f"auc_best={cand['metrics']['auc_best']:.6f}"
+                        )
+                    if best_col and "energy" in best_col.lower():
+                        print("[DEBUG-FP][ERROR] fp_best is energy column (fingerprint selection degenerated)")
+                    elif active is not None and np.allclose(active["values_concat"], energy_concat, rtol=1e-9, atol=1e-12):
+                        print("[DEBUG-FP][WARNING] fp_best values allclose to energy (possible degeneracy)")
+                    elif np.isfinite(spearman_abs) and spearman_abs >= fp_energy_like_threshold:
+                        print(
+                            "[DEBUG-FP][WARNING] fp_best ranking ~ energy ranking "
+                            "(fp may add little information)"
+                        )
+                if active is not None:
+                    best_col_name = (
+                        fp_cols_all[row["fp_best_idx"]] if 0 <= row["fp_best_idx"] < len(fp_cols_all) else f"fp{row['fp_best_idx']}"
+                    )
+                    if "energy" in best_col_name.lower():
+                        raise RuntimeError(
+                            f"FP best column appears to alias energy ({best_col_name}); aborting for formula {formula}"
+                        )
+                    if np.allclose(active["values_concat"], energy_concat, rtol=1e-9, atol=1e-12):
+                        print(
+                            f"[FP][WARNING] fp_best values nearly identical to energy for formula={formula} pair={spec.class_a}/{spec.class_b}"
+                        )
+                    if np.isfinite(spearman_abs) and spearman_abs >= fp_energy_like_threshold:
+                        print(
+                            f"[FP][WARNING] fp_best spearman_abs={spearman_abs:.6f} exceeds threshold "
+                            f"for formula={formula} pair={spec.class_a}/{spec.class_b}"
+                        )
         else:
             row["fp_dim"] = 0
             row["fp_best_idx"] = -1
@@ -387,6 +660,22 @@ def compute_formula_scores(
             row["fp_best_effect_size"] = float("nan")
             row["fp_best_auc_raw"] = 0.5
             row["fp_best_auc_best"] = 0.5
+            row["fp_best_auc_gap"] = row["fp_best_auc_best"] - row["E_auc_best"]
             row["fp_best_is_trivial"] = True
+            row["fp_energy_spearman_abs"] = float("nan")
+            row["fp_best_idx_default"] = -1
+            row["fp_best_auc_default"] = 0.5
+            row["fp_best_auc_gap_default"] = row["fp_best_auc_default"] - row["E_auc_best"]
+            row["fp_best_idx_excl_energy_like"] = -1
+            row["fp_best_auc_excl_energy_like"] = float("nan")
+            row["fp_best_auc_gap_excl_energy_like"] = float("nan")
         score_rows.append(row)
     return score_rows
+def _clamp01(val: float) -> float:
+    if math.isnan(val):
+        return float("nan")
+    if val < 0.0:
+        return 0.0
+    if val > 1.0:
+        return 1.0
+    return float(val)
