@@ -336,6 +336,16 @@ def test_collision_breakdown_matches_legacy_rate() -> None:
     assert abs(legacy - breakdown["coll_total"]) < 1e-12
 
 
+def test_collision_breakdown_strict_tighter_than_default() -> None:
+    values = [0.0, 2e-12, 1.0]
+    labels = ["a", "a", "b"]
+    default = _collision_breakdown(values, labels, tol=1e-9)
+    strict = _collision_breakdown(values, labels, tol=1e-12)
+    assert default["coll_total_pairs"] > strict["coll_total_pairs"]
+    assert strict["coll_cross_pairs"] == 0.0
+    assert default["coll_cross_pairs"] == 0.0
+
+
 def test_fp_guardrail_raises_on_energy_alias() -> None:
     df = _score_test_df(
         formula="C3H8O",

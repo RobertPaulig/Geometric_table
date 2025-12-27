@@ -20,6 +20,7 @@ EPS_STD = 1e-12
 EPS_WEIGHT = 1e-12
 EPS_SCORE = 1e-12
 ENERGY_COLLISION_EPS = 1e-9
+ENERGY_COLLISION_EPS_STRICT = 1e-12
 ENERGY_KEY_SCHEME = "absdiff"
 FP_COLLISION_EPS = 1e-9
 
@@ -36,9 +37,13 @@ PAIR_SPECS: Dict[str, Tuple[PairSpec, ...]] = {
     "C3H8O": (PairSpec("alcohol", "ether"),),
     "C4H10O": (PairSpec("alcohol", "ether"),),
     "C5H12O": (PairSpec("alcohol", "ether"),),
+    "C6H14O": (PairSpec("alcohol", "ether"),),
+    "C7H16O": (PairSpec("alcohol", "ether"),),
     "C2H7N": (PairSpec("primary_amine", "secondary_amine", ("tertiary_amine",)),),
     "C4H11N": (PairSpec("primary_amine", "secondary_amine", ("tertiary_amine",)),),
     "C5H13N": (PairSpec("primary_amine", "secondary_amine", ("tertiary_amine",)),),
+    "C6H15N": (PairSpec("primary_amine", "secondary_amine", ("tertiary_amine",)),),
+    "C7H17N": (PairSpec("primary_amine", "secondary_amine", ("tertiary_amine",)),),
 }
 
 
@@ -185,6 +190,7 @@ def _collision_breakdown(
     state_ids: Sequence[str] | None = None,
     record_pairs: bool = False,
     energy_key_scheme: str = ENERGY_KEY_SCHEME,
+    pair_tol_fn: callable | None = None,
 ) -> Dict[str, object]:
     arr = np.asarray(values, dtype=float)
     n = arr.size
@@ -209,7 +215,7 @@ def _collision_breakdown(
         return breakdown
     if tol <= 0:
         raise ValueError("collision tolerance must be > 0")
-    if energy_key_scheme != "absdiff":
+    if not str(energy_key_scheme).startswith("absdiff"):
         raise ValueError(f"Unknown energy_key_scheme: {energy_key_scheme}")
     lab_arr = np.asarray(labels) if labels is not None else np.array([None] * n, dtype=object)
     sid_arr = np.asarray(state_ids) if state_ids is not None else np.array([None] * n, dtype=object)
@@ -219,7 +225,8 @@ def _collision_breakdown(
     for i in range(n):
         for j in range(i + 1, n):
             abs_delta = abs(arr[i] - arr[j])
-            if abs_delta <= tol:
+            tol_ij = tol if pair_tol_fn is None else float(pair_tol_fn(arr[i], arr[j]))
+            if abs_delta <= tol_ij:
                 if lab_arr[i] == lab_arr[j]:
                     within += 1
                 else:
@@ -400,6 +407,18 @@ def compute_formula_scores(
         state_ids=df_states["state_id"].tolist(),
         record_pairs=record_pairs,
     )
+    collision_info_strict = _collision_breakdown(
+        df_states["energy"].tolist(),
+        df_states["class_label"].tolist(),
+        state_ids=None,
+        record_pairs=False,
+        tol=ENERGY_COLLISION_EPS_STRICT,
+        pair_tol_fn=lambda ei, ej: max(
+            ENERGY_COLLISION_EPS_STRICT,
+            ENERGY_COLLISION_EPS_STRICT * max(abs(float(ei)), abs(float(ej))),
+        ),
+        energy_key_scheme="absdiff_strict",
+    )
     energy_coll = collision_info["coll_total"]
     fp_cols_all = [c for c in df_states.columns if c.startswith("fp")]
     if fp_cols_all:
@@ -428,6 +447,11 @@ def compute_formula_scores(
             "coll_cross_pairs": collision_info["coll_cross_pairs"],
             "total_pairs": collision_info["total_pairs"],
             "max_abs_delta_cross": collision_info["max_abs_delta_cross"],
+            "collision_eps_strict": collision_info_strict["collision_eps"],
+            "coll_cross_pairs_strict": collision_info_strict["coll_cross_pairs"],
+            "coll_total_pairs_strict": collision_info_strict["coll_total_pairs"],
+            "coll_cross_strict": collision_info_strict["coll_cross"],
+            "coll_total_strict": collision_info_strict["coll_total"],
             "fp_collision_rate": fp_coll,
             "fp_energy_spearman_abs": float("nan"),
             "fp_policy_used": run_meta.get("fp_policy_used", "unknown"),

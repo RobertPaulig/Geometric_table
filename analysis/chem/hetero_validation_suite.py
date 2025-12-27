@@ -229,6 +229,11 @@ def main(argv: List[str] | None = None) -> None:
         "fp_best_auc_gap",
         "fp_best_delta_abs",
         "fp_best_effect_size",
+        "collision_eps_strict",
+        "coll_cross_pairs_strict",
+        "coll_total_pairs_strict",
+        "coll_cross_strict",
+        "coll_total_strict",
     ]
     fieldnames = list(dict.fromkeys(base_fields))
     extra_cols = sorted(c for c in score_cols if c not in fieldnames)
