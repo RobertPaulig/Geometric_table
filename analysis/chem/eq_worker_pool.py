@@ -210,16 +210,20 @@ def run_task(task: EqTask) -> EqTaskResult:
         except Exception:
             pass
 
-    if task.progress_every > 0 and _WORKER_PROGRESS_QUEUE is not None:
-        def _heartbeat(info: Mapping[str, float]) -> None:
-            _send_progress(
-                "heartbeat",
-                {
-                    "step": int(info.get("step", 0)),
-                    "accept_rate": float(info.get("accept_rate", 0.0)),
-                    "hit_rate": float(info.get("energy_cache_hit_rate", 0.0)),
-                },
-            )
+    if task.progress_every > 0:
+        if _WORKER_PROGRESS_QUEUE is not None:
+            def _heartbeat(info: Mapping[str, float]) -> None:
+                _send_progress(
+                    "heartbeat",
+                    {
+                        "step": int(info.get("step", 0)),
+                        "accept_rate": float(info.get("accept_rate", 0.0)),
+                        "hit_rate": float(info.get("energy_cache_hit_rate", 0.0)),
+                    },
+                )
+        else:
+            def _heartbeat(info: Mapping[str, float]) -> None:
+                pass
         heartbeat_every = int(task.progress_every)
     else:
         _heartbeat = None
@@ -227,7 +231,7 @@ def run_task(task: EqTask) -> EqTaskResult:
 
     _send_progress("start", {"step": 0})
 
-    _, summary = run_fixed_n_tree_mcmc(
+    _, summary = RUN_FIXED_MCMC_FN(
         n=int(task.n),
         steps=int(task.steps_per_chain),
         burnin=int(task.burnin_steps),
@@ -271,3 +275,9 @@ def run_task(task: EqTask) -> EqTaskResult:
         steps_total=int(getattr(summary, "steps", task.steps_per_chain)),
         cache_delta=dict(tracking_cache.added),
     )
+RUN_FIXED_MCMC_FN = run_fixed_n_tree_mcmc
+
+
+def set_run_fixed_mcmc_fn(fn):
+    global RUN_FIXED_MCMC_FN
+    RUN_FIXED_MCMC_FN = fn

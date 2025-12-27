@@ -1,0 +1,5 @@
+trial_id,beta,alpha_H,status,reason,score,nontrivial_rows,output_dir
+1,0.9,0.45,ok,pass,3.4299669868726372,4,results\hetero_calibration\trial_001
+2,0.9,0.5,ok,pass,3.42058709406355,4,results\hetero_calibration\trial_002
+3,1.0,0.45,ok,pass,3.430122217352168,4,results\hetero_calibration\trial_003
+4,1.0,0.5,ok,pass,3.4207017445875643,4,results\hetero_calibration\trial_004

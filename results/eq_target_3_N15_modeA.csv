@@ -1,3 +1,2 @@
-N,steps,burnin,thin,chains,starts,elapsed_sec,steps_total,steps_per_sec_total,energy_cache_hit_rate,energy_cache_hits,energy_cache_misses,accept_rate_total,n_unique_eq,coverage_frac,KL_max_pairwise,KL_split_max,Rhat_energy_max,ESS_energy_min
-15,12000000,1200000,10,3,path|max_branch,19213.517846400035,72000000,3747.361653164955,0.9996377500301875,71973924,26082,0.9231066944444445,4347,0.0006708333333333333,0.004186583164377791,0.00872912945182927,1.000000072060131,372730.3245747896
-15,8000000,800000,10,3,path|max_branch,13273.917088699993,48000000,3616.1141944198307,0.9994566250679219,47973924,26082,0.9230588333333334,4347,4347,1.0,0.00100625,0.00624896022194448,0.013524000746958849,1.0000016329050987,247884.09738188182
+N,steps,burnin,thin,chains,starts,elapsed_sec,steps_total,steps_per_sec_total,energy_cache_hit_rate,energy_cache_hits,energy_cache_misses,accept_rate_total,n_unique_eq,expected_unique_eq,coverage_unique_eq,unique_frac_samples,KL_max_pairwise,KL_split_max,Rhat_energy_max,ESS_energy_min
+15,10,1,1,1,path,9.580000187270343e-05,10,104384.13157118454,0.0,0,0,0.0,0,4347,0.0,0.0,nan,0.0,nan,0.0

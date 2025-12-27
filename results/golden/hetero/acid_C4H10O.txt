@@ -1,0 +1,16 @@
+acid_C4H10O: HETERO-1A acid test (C4H10O)
+steps_total=8000 steps_per_chain=1333 burnin=400
+chains=6 samples=1404
+accept_rate=0.8463 elapsed_sec=0.43
+coverage_unique_eq=1.0000 support_exact=7 support_emp=7
+KL(exact||emp)=0.001076
+KL(emp||exact)=0.001045
+
+Top states by P_emp:
+  het:edges=0-1,0-2,1-3,2-4;types=0,0,2,0,0 P_emp=0.248575 P_exact=0.238261
+  het:edges=0-1,0-2,1-3,2-4;types=0,0,0,0,2 P_emp=0.215812 P_exact=0.215588
+  het:edges=0-1,0-2,0-3,2-4;types=0,0,0,2,0 P_emp=0.191595 P_exact=0.195072
+  het:edges=0-1,0-2,1-3,2-4;types=2,0,0,0,0 P_emp=0.122507 P_exact=0.119131
+  het:edges=0-1,0-2,0-3,3-4;types=0,0,0,0,2 P_emp=0.099715 P_exact=0.097536
+  het:edges=0-1,0-2,0-3,3-4;types=0,0,0,2,0 P_emp=0.099715 P_exact=0.107794
+  het:edges=0-1,0-2,0-3,0-4;types=0,0,0,0,2 P_emp=0.022080 P_exact=0.026619

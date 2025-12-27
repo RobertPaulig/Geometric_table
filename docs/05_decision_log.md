@@ -2004,3 +2004,59 @@
   - `burnin_frac=0.30`,
   - строгая coverage: `n_unique_eq=10359/10359`,
   - пороги по KL/Rhat/ESS выполнены, `FAIL` отсутствует.
+
+## [RESULTS-POLICY-1] Трекинг рабочих отчётов в `results/`
+
+Дата: 2025-12-26
+
+Решение:
+- `results/` снова включён в git: текстовые/CSV/json-отчёты (acid, EQ-target, ростовые сводки) считаются “истиной эксперимента” и остаются в истории. Для устойчивых эталонов заведена папка `results/golden/…` (например, `results/golden/hetero/*`).
+- Игнорируются только тяжёлые/машино-специфичные артефакты (`*.pkl`, cache-файлы, submissions/), чтобы не плодить мусор и зависимость от хоста.
+
+Мотивация:
+- Архитекторы и продуктовая команда читают отчёты прямо из репозитория; когда `results/` был в ignore, отчёты терялись и нельзя было воспроизвести состояние эксперимента.
+- Exact-baseline и unit/property тесты важны, но человекочитаемый отчёт по прогону (пороговые метрики, coverage, telemetry) нужен в истории — иначе через неделю непонятно, что именно было запуском “PASS”.
+
+## [HETERO-1A P0.3.1] Functional Separation Gate & score tables
+
+Дата: 2025-12-26
+
+Решение:
+- Для C2H6O/C3H8O/C2H7N введён жёсткий классификатор функциональных классов (alcohol vs ether, primary vs secondary amine) на основе `deg(O)`/`deg(N)` и валентностей.
+- `analysis.chem.hetero_score_utils` и `hetero_validation_suite` формируют две таблицы:
+  - per-state `states_<formula>.csv` (energy, fingerprint, класс, P_exact/P_emp),
+  - score `hetero_validation_suite.csv` с корректными метриками (взвешенные mean/std, delta_abs, effect_size только при `n>=2`, ROC AUC + флаг `*_auc_is_trivial`, collision_rates).
+- Golden отчёты и state-таблицы размещаются в `results/golden/hetero/*`.
+
+DoD:
+- coverage=1.0, `KL < 0.02` на малых формулах,
+- energy/fingerprint различают классы (`delta_abs > eps`, effect_size ≥ 1 при `n>=2`, collision_rate=0).
+
+## [HETERO-1A P0.4] Расширенный acid-suite + calibration loop
+
+Дата: 2025-12-27
+
+Решение:
+- SCORE v2 “обезвреживает” trivial-кейсы: при `n_a<2`/`n_b<2` или `pooled_std<1e-12` метрики жёстко фиксируются (`auc_raw=auc_best=0.5`, `effect_size=NaN`). В `hetero_validation_suite.csv` добавлены явные поля (`E_is_trivial`, `E_auc_raw/best`, `fp_best_*`, `n_other`, `pair_is_exhaustive`, `energy_collision_eps`), а тесты на искусственных данных ловят regression’ы (singleton, zero-variance, perfect-separation, tertiary-count).
+- Acid-suite расширен до C4H10O/C4H11N и fallback C5H12O/C5H13N (tree-only). Для O- и N-кейсов получены нетривиальные пары (`fp_best_is_trivial=False`), а tertiary амин учитывается через `n_other`/`pair_is_exhaustive`.
+- CLI `analysis.chem.hetero_calibration_loop` запускает сетку по (`beta`, `alpha_H`), вызывает suite в per-trial подкаталогах, фильтрует строки `fp_best_is_trivial=False`, считает objective `sum(fp_best_auc_best - λ_other·other_frac - λ_coll·energy_collision_rate)` и фиксирует `calib_trials.csv`, `calib_best.json`, `calib_best_suite.csv`. Fail-fast: если нет ≥2 нетривиальных строк или coverage/KL за пределами DoD, trial считается `fail`.
+- Golden отчёты обновлены: `results/golden/hetero/states/states_<formula>.csv`, `acid_*.txt/csv`, `hetero_validation_suite.csv` (6 формул). Калибровочный запуск (`beta∈{0.9,1.0}`, `alpha_H∈{0.45,0.50}`, формулы C4/C5) дал `best score≈3.43` при `(beta=1.0, alpha_H=0.45)`; артефакты — `results/hetero_calibration/*`.
+
+DoD:
+- suite содержит ≥1 O-кейс и ≥1 N-кейс с `fp_best_is_trivial=False`;
+- `calib_trials.csv` отражает все попытки, `calib_best.json` и `calib_best_suite.csv` присутствуют/обновляются; при отсутствии PASS — явный `status=fail`.
+
+## [HETERO-1A P0.5.3] GO: Reproducible θ_best + collision logs + FP policy
+
+Дата: 2025-12-27
+
+Решение:
+- Зафиксирован рабочий θ_best для HETERO-1A: `beta=1.0`, `alpha_H=0.45` (из `results/hetero_calibration/calib_best.json`).
+- Политика FP для suite и calibration: `fp_policy_used=exclude_energy_like` (energy-like признаки исключаются по умолчанию; для отладки есть allow-режим).
+- Коллизии энергии: `collision_eps=1e-9`, `energy_key_scheme=absdiff`.
+- Артефакты коллизий пишутся внутри `out_dir/collisions/<formula>_cross_collisions.csv` и создаются всегда (header-only при `coll_cross_pairs=0`), чтобы исключить staled-файлы.
+- Наблюдение: на θ_default cross-коллизии на O-формах существуют, но соответствуют дегенерациям энергии (`max_abs_delta_cross ~ 1e-15`/`0.0`); на θ_best `coll_cross_pairs=0`.
+
+DoD:
+- Suite воспроизводимо запускается на θ из JSON (θ_default vs θ_best отличается только θ), и cross-коллизии исчезают на θ_best.
+- Calibration loop применяет trial-level гейты (any-formula-fails ⇒ trial fails), и trial’ы с `coll_cross_pairs>0` отбрасываются.
