@@ -21,6 +21,9 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     ap.add_argument("--alpha_grid", type=float, nargs="+", default=[0.5], help="Grid of alpha_H values.")
     ap.add_argument("--coverage_min", type=float, default=1.0)
     ap.add_argument("--kl_max", type=float, default=0.02)
+    ap.add_argument("--coll_cross_pairs_strict_max", type=int, default=0)
+    ap.add_argument("--fp_auc_min", type=float, default=0.85)
+    ap.add_argument("--fp_auc_gap_min", type=float, default=0.02)
     ap.add_argument("--lambda_other", type=float, default=0.3)
     ap.add_argument("--lambda_collision", type=float, default=0.1)
     ap.add_argument("--min_nontrivial_rows", type=int, default=2)
@@ -90,15 +93,18 @@ def _evaluate_trial(rows: List[Dict[str, object]], *, args: argparse.Namespace) 
     total_pairs_vals = [float(row.get("total_pairs", 0.0) or 0.0) for row in rows]
     coll_total_vals = [float(row.get("coll_total", row.get("energy_collision_rate", 0.0))) for row in rows]
     cross_rate_vals = [float(row.get("coll_cross", 0.0)) for row in rows]
+    cross_pairs_strict_vals = [float(row.get("coll_cross_pairs_strict", 0.0) or 0.0) for row in rows]
     min_cov = min(coverage_vals) if coverage_vals else 0.0
     max_kl = max(kl_vals) if kl_vals else 0.0
     max_cross_pairs = max(cross_pairs_vals) if cross_pairs_vals else 0.0
     max_cross_rate = max(cross_rate_vals) if cross_rate_vals else 0.0
+    max_cross_pairs_strict = max(cross_pairs_strict_vals) if cross_pairs_strict_vals else 0.0
     fail_meta_template = {
         "min_coverage": min_cov,
         "max_kl_exact_emp": max_kl,
         "max_coll_cross_pairs": max_cross_pairs,
         "max_coll_cross_rate": max_cross_rate,
+        "max_coll_cross_pairs_strict": max_cross_pairs_strict,
         "max_coll_within_pairs": max(within_pairs_vals) if within_pairs_vals else 0.0,
         "max_coll_total_pairs": max(
             (c + w) for c, w in zip(cross_pairs_vals, within_pairs_vals)
@@ -118,16 +124,25 @@ def _evaluate_trial(rows: List[Dict[str, object]], *, args: argparse.Namespace) 
                 "kl": 0.0,
                 "coll_cross_pairs": 0.0,
                 "coll_cross_rate": 0.0,
+                "coll_cross_pairs_strict": 0.0,
+                "fp_auc_best": float("inf"),
+                "fp_auc_gap": float("inf"),
             },
         )
         coverage = float(row.get("coverage_unique_eq", 0.0))
         kl = float(row.get("kl_exact_emp", 0.0))
         cross_pairs = float(row.get("coll_cross_pairs", 0.0) or 0.0)
         cross_rate = float(row.get("coll_cross", 0.0) or 0.0)
+        cross_pairs_strict = float(row.get("coll_cross_pairs_strict", 0.0) or 0.0)
+        fp_auc_best = float(row.get("fp_best_auc_best", 0.0) or 0.0)
+        fp_auc_gap = float(row.get("fp_best_auc_gap", 0.0) or 0.0)
         stats["coverage"] = min(stats["coverage"], coverage)
         stats["kl"] = max(stats["kl"], kl)
         stats["coll_cross_pairs"] = max(stats["coll_cross_pairs"], cross_pairs)
         stats["coll_cross_rate"] = max(stats["coll_cross_rate"], cross_rate)
+        stats["coll_cross_pairs_strict"] = max(stats["coll_cross_pairs_strict"], cross_pairs_strict)
+        stats["fp_auc_best"] = min(stats["fp_auc_best"], fp_auc_best)
+        stats["fp_auc_gap"] = min(stats["fp_auc_gap"], fp_auc_gap)
     gate_reason_any = ""
     gate_formula_any = ""
     for formula, stats in formula_gate.items():
@@ -141,6 +156,14 @@ def _evaluate_trial(rows: List[Dict[str, object]], *, args: argparse.Namespace) 
             break
         if stats["coll_cross_pairs"] > 0:
             gate_reason_any = "coll_cross"
+            gate_formula_any = formula
+            break
+        if stats["coll_cross_pairs_strict"] > args.coll_cross_pairs_strict_max:
+            gate_reason_any = "coll_cross_strict"
+            gate_formula_any = formula
+            break
+        if (stats["fp_auc_best"] < args.fp_auc_min) and (stats["fp_auc_gap"] < args.fp_auc_gap_min):
+            gate_reason_any = "fp_weak"
             gate_formula_any = formula
             break
     gate_failed_any = bool(gate_reason_any)
@@ -200,6 +223,7 @@ def _evaluate_trial(rows: List[Dict[str, object]], *, args: argparse.Namespace) 
         "max_kl_exact_emp": max_kl,
         "max_coll_cross_pairs": max_cross_pairs,
         "max_coll_cross_rate": max_cross_rate,
+        "max_coll_cross_pairs_strict": max_cross_pairs_strict,
         "max_coll_within_pairs": fail_meta_template["max_coll_within_pairs"],
         "max_coll_total_pairs": fail_meta_template["max_coll_total_pairs"],
         "max_total_pairs": fail_meta_template["max_total_pairs"],
@@ -266,6 +290,7 @@ def main(argv: Sequence[str] | None = None) -> None:
             "max_kl_exact_emp": meta.get("max_kl_exact_emp"),
             "max_coll_cross_pairs": meta.get("max_coll_cross_pairs"),
             "max_coll_cross_rate": meta.get("max_coll_cross_rate"),
+            "max_coll_cross_pairs_strict": meta.get("max_coll_cross_pairs_strict"),
             "max_coll_within_pairs": meta.get("max_coll_within_pairs"),
             "max_coll_total_pairs": meta.get("max_coll_total_pairs"),
             "max_total_pairs": meta.get("max_total_pairs"),
@@ -301,6 +326,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         "max_kl_exact_emp",
         "max_coll_cross_pairs",
         "max_coll_cross_rate",
+        "max_coll_cross_pairs_strict",
         "max_coll_within_pairs",
         "max_coll_total_pairs",
         "max_total_pairs",

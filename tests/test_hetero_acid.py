@@ -308,6 +308,8 @@ def test_score_counts_other_for_tertiary() -> None:
     assert row["n_other"] == 1
     assert row["pair_is_exhaustive"] is False
     assert row["other_frac"] == pytest.approx(1 / 5)
+    assert "fp_best_auc_best_a_vs_other" in row
+    assert "fp_best_auc_best_b_vs_other" in row
 
 
 def test_collision_breakdown_additivity() -> None:

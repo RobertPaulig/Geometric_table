@@ -363,6 +363,70 @@ def _pair_metric_components(
     }
 
 
+def _row_other_pair_metrics(
+    df_states: pd.DataFrame,
+    *,
+    spec: PairSpec,
+    weights_col: str,
+    fp_cols_all: List[str],
+    fp_best_idx: int,
+) -> Dict[str, object]:
+    if not spec.other_labels:
+        return {
+            "E_auc_best_a_vs_other": float("nan"),
+            "E_auc_best_b_vs_other": float("nan"),
+            "fp_best_auc_best_a_vs_other": float("nan"),
+            "fp_best_auc_best_b_vs_other": float("nan"),
+        }
+    ga = df_states[df_states["class_label"] == spec.class_a]
+    gb = df_states[df_states["class_label"] == spec.class_b]
+    go = df_states[df_states["class_label"].isin(spec.other_labels)]
+    if go.empty:
+        return {
+            "E_auc_best_a_vs_other": float("nan"),
+            "E_auc_best_b_vs_other": float("nan"),
+            "fp_best_auc_best_a_vs_other": float("nan"),
+            "fp_best_auc_best_b_vs_other": float("nan"),
+        }
+    w_a = ga[weights_col].to_numpy(dtype=float)
+    w_b = gb[weights_col].to_numpy(dtype=float)
+    w_o = go[weights_col].to_numpy(dtype=float)
+    e_a = _pair_metric_components(
+        ga["energy"].to_numpy(dtype=float),
+        go["energy"].to_numpy(dtype=float),
+        weights_a=w_a,
+        weights_b=w_o,
+    )
+    e_b = _pair_metric_components(
+        gb["energy"].to_numpy(dtype=float),
+        go["energy"].to_numpy(dtype=float),
+        weights_a=w_b,
+        weights_b=w_o,
+    )
+    fp_a = {"auc_best": float("nan")}
+    fp_b = {"auc_best": float("nan")}
+    if 0 <= fp_best_idx < len(fp_cols_all):
+        col = fp_cols_all[int(fp_best_idx)]
+        fp_a = _pair_metric_components(
+            ga[col].to_numpy(dtype=float),
+            go[col].to_numpy(dtype=float),
+            weights_a=w_a,
+            weights_b=w_o,
+        )
+        fp_b = _pair_metric_components(
+            gb[col].to_numpy(dtype=float),
+            go[col].to_numpy(dtype=float),
+            weights_a=w_b,
+            weights_b=w_o,
+        )
+    return {
+        "E_auc_best_a_vs_other": _clamp01(float(e_a["auc_best"])),
+        "E_auc_best_b_vs_other": _clamp01(float(e_b["auc_best"])),
+        "fp_best_auc_best_a_vs_other": _clamp01(float(fp_a["auc_best"])) if not math.isnan(float(fp_a["auc_best"])) else float("nan"),
+        "fp_best_auc_best_b_vs_other": _clamp01(float(fp_b["auc_best"])) if not math.isnan(float(fp_b["auc_best"])) else float("nan"),
+    }
+
+
 def _spearman_abs(x: Sequence[float], y: Sequence[float]) -> float:
     x_arr = np.asarray(x, dtype=float)
     y_arr = np.asarray(y, dtype=float)
@@ -677,6 +741,15 @@ def compute_formula_scores(
                             f"[FP][WARNING] fp_best spearman_abs={spearman_abs:.6f} exceeds threshold "
                             f"for formula={formula} pair={spec.class_a}/{spec.class_b}"
                         )
+                row.update(
+                    _row_other_pair_metrics(
+                        df_states,
+                        spec=spec,
+                        weights_col=weights_col,
+                        fp_cols_all=fp_cols_all,
+                        fp_best_idx=int(row["fp_best_idx"]),
+                    )
+                )
         else:
             row["fp_dim"] = 0
             row["fp_best_idx"] = -1
@@ -693,6 +766,15 @@ def compute_formula_scores(
             row["fp_best_idx_excl_energy_like"] = -1
             row["fp_best_auc_excl_energy_like"] = float("nan")
             row["fp_best_auc_gap_excl_energy_like"] = float("nan")
+            row.update(
+                _row_other_pair_metrics(
+                    df_states,
+                    spec=spec,
+                    weights_col=weights_col,
+                    fp_cols_all=fp_cols_all,
+                    fp_best_idx=int(row["fp_best_idx"]),
+                )
+            )
         score_rows.append(row)
     return score_rows
 def _clamp01(val: float) -> float:

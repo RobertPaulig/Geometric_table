@@ -2060,3 +2060,14 @@ DoD:
 DoD:
 - Suite воспроизводимо запускается на θ из JSON (θ_default vs θ_best отличается только θ), и cross-коллизии исчезают на θ_best.
 - Calibration loop применяет trial-level гейты (any-formula-fails ⇒ trial fails), и trial’ы с `coll_cross_pairs>0` отбрасываются.
+
+## [HETERO-1A P0.7] Release STOP criteria for HETERO-1B
+
+Дата: 2025-12-27
+
+Решение:
+- Введён релизный STOP → HETERO-1B operator redesign при любом из условий (на train или holdout):
+  - `coll_cross_pairs_strict > 0` на выбранном θ_best,
+  - `coverage_unique_eq < 1.0`,
+  - `kl_exact_emp > 0.05`,
+  - одновременно `fp_best_auc_best < 0.85` и `fp_best_auc_gap < 0.02` (FP не даёт разделения).
