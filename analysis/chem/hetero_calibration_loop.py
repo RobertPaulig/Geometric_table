@@ -32,6 +32,8 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     ap.add_argument("--use_neg_controls", action="store_true", help="Enable negative controls inside suite runs and gate on them.")
     ap.add_argument("--neg_control_seed", type=int, default=0)
     ap.add_argument("--neg_auc_max", type=float, default=0.60)
+    ap.add_argument("--neg_control_reps", type=int, default=50, help="Repetitions for negative controls inside suite.")
+    ap.add_argument("--neg_control_quantile", type=float, default=0.95, help="Quantile used for negative-control AUC gate.")
     return ap.parse_args(argv)
 
 
@@ -53,6 +55,8 @@ def _run_suite(
     fp_allow_energy_like: bool,
     use_neg_controls: bool,
     neg_control_seed: int,
+    neg_control_reps: int,
+    neg_control_quantile: float,
 ) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     cmd = [
@@ -75,6 +79,10 @@ def _run_suite(
             [
                 "--neg_control_seed",
                 str(int(neg_control_seed)),
+                "--neg_control_reps",
+                str(int(neg_control_reps)),
+                "--neg_control_quantile",
+                str(float(neg_control_quantile)),
                 "--neg_control_permute_labels",
                 "--neg_control_random_fp",
             ]
@@ -170,6 +178,17 @@ def _evaluate_trial(rows: List[Dict[str, object]], *, args: argparse.Namespace) 
         stats["fp_auc_best"] = min(stats["fp_auc_best"], fp_auc_best)
         stats["fp_auc_gap"] = min(stats["fp_auc_gap"], fp_auc_gap)
         stats["neg_auc_max"] = max(stats["neg_auc_max"], neg_max)
+    max_neg_auc_any = float("nan")
+    if args.use_neg_controls:
+        max_neg_auc_any = max((v["neg_auc_max"] for v in formula_gate.values()), default=float("nan"))
+        if max_neg_auc_any == float("-inf"):
+            max_neg_auc_any = float("nan")
+        fail_meta_template["max_neg_auc_any"] = max_neg_auc_any
+        fail_meta_template["neg_control_seed"] = int(args.neg_control_seed)
+        fail_meta_template["neg_control_reps"] = int(args.neg_control_reps)
+        fail_meta_template["neg_control_quantile"] = float(args.neg_control_quantile)
+        fail_meta_template["neg_auc_max_gate"] = float(args.neg_auc_max)
+        fail_meta_template["neg_control_sources"] = "perm_labels,rand_fp"
     gate_reason_any = ""
     gate_formula_any = ""
     for formula, stats in formula_gate.items():
@@ -265,7 +284,12 @@ def _evaluate_trial(rows: List[Dict[str, object]], *, args: argparse.Namespace) 
         "fp_best_auc_best_list": ";".join(val for _, val in details_list),
     }
     if args.use_neg_controls:
-        meta["max_neg_auc_any"] = max((v["neg_auc_max"] for v in formula_gate.values()), default=float("nan"))
+        meta["max_neg_auc_any"] = max_neg_auc_any
+        meta["neg_control_seed"] = int(args.neg_control_seed)
+        meta["neg_control_reps"] = int(args.neg_control_reps)
+        meta["neg_control_quantile"] = float(args.neg_control_quantile)
+        meta["neg_auc_max_gate"] = float(args.neg_auc_max)
+        meta["neg_control_sources"] = "perm_labels,rand_fp"
     gate_meta = {
         "gate_failed_any": False,
         "gate_reason_any": "",
@@ -308,6 +332,8 @@ def main(argv: Sequence[str] | None = None) -> None:
             fp_allow_energy_like=bool(args.fp_allow_energy_like),
             use_neg_controls=bool(args.use_neg_controls),
             neg_control_seed=int(args.neg_control_seed),
+            neg_control_reps=int(args.neg_control_reps),
+            neg_control_quantile=float(args.neg_control_quantile),
         )
         summary_path = trial_dir / "hetero_validation_suite.csv"
         rows = _read_summary(summary_path)
@@ -335,6 +361,11 @@ def main(argv: Sequence[str] | None = None) -> None:
             "fp_best_idx_list": meta.get("fp_best_idx_list"),
             "fp_best_auc_best_list": meta.get("fp_best_auc_best_list"),
             "max_neg_auc_any": meta.get("max_neg_auc_any"),
+            "neg_control_seed": meta.get("neg_control_seed"),
+            "neg_control_reps": meta.get("neg_control_reps"),
+            "neg_control_quantile": meta.get("neg_control_quantile"),
+            "neg_auc_max_gate": meta.get("neg_auc_max_gate"),
+            "neg_control_sources": meta.get("neg_control_sources"),
             "gate_failed": status != "ok",
             "gate_reason": reason,
             "gate_failed_any": gate_meta.get("gate_failed_any"),
@@ -372,6 +403,11 @@ def main(argv: Sequence[str] | None = None) -> None:
         "fp_best_idx_list",
         "fp_best_auc_best_list",
         "max_neg_auc_any",
+        "neg_control_seed",
+        "neg_control_reps",
+        "neg_control_quantile",
+        "neg_auc_max_gate",
+        "neg_control_sources",
         "output_dir",
     ]
     with trials_path.open("w", newline="", encoding="utf-8") as f:

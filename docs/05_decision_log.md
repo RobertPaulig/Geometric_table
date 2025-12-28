@@ -2071,3 +2071,15 @@ DoD:
   - `coverage_unique_eq < 1.0`,
   - `kl_exact_emp > 0.05`,
   - одновременно `fp_best_auc_best < 0.85` и `fp_best_auc_gap < 0.02` (FP не даёт разделения).
+
+## [HETERO-1A P0.8.1] Harden neg-controls policy (stable gating)
+
+Дата: 2025-12-28
+
+Решение:
+- Neg-controls больше не одношотные: для каждой формулы AUC по neg-controls считается как квантиль `q=0.95` по `K=50` повторениям (для `perm_labels` и `rand_fp` отдельно), чтобы убрать дискретную “магическую границу” PASS/FAIL на малых N.
+- В suite (`analysis.chem.hetero_validation_suite`) добавлены параметры `--neg_control_reps`, `--neg_control_quantile` и расширенные поля в CSV: `fp_neg_auc_*_mean`, `fp_neg_auc_*_q`, а `fp_neg_auc_best_*` трактуется как выбранный квантиль (gate-метрика).
+- В calibration (`analysis.chem.hetero_calibration_loop`) при `--use_neg_controls` в `calib_trials.csv` логируются `neg_control_seed`, `neg_control_reps`, `neg_control_quantile`, `neg_auc_max_gate`, `neg_control_sources`, а `max_neg_auc_any` заполняется и на FAIL-trial.
+
+DoD:
+- Любой trial, где `max_neg_auc_any > neg_auc_max_gate`, обязан получать `gate_failed_any=True` и `gate_reason_any=neg_control`.

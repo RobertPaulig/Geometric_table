@@ -61,6 +61,8 @@ def _parse_args(argv: List[str] | None) -> argparse.Namespace:
     ap.add_argument("--neg_control_permute_labels", action="store_true", help="Compute negative control AUC with permuted labels.")
     ap.add_argument("--neg_control_random_fp", action="store_true", help="Compute negative control AUC with random FP scores.")
     ap.add_argument("--neg_control_seed", type=int, default=0, help="Seed for negative controls.")
+    ap.add_argument("--neg_control_reps", type=int, default=50, help="Repetitions for negative controls (permute/random).")
+    ap.add_argument("--neg_control_quantile", type=float, default=0.95, help="Quantile for negative-control AUC (e.g. 0.95).")
     ap.add_argument("--debug_fp", action="store_true")
     return ap.parse_args(argv)
 
@@ -160,6 +162,8 @@ def main(argv: List[str] | None = None) -> None:
             neg_control_permute_labels=bool(args.neg_control_permute_labels),
             neg_control_random_fp=bool(args.neg_control_random_fp),
             neg_control_seed=int(args.neg_control_seed),
+            neg_control_reps=int(args.neg_control_reps),
+            neg_control_quantile=float(args.neg_control_quantile),
         )
         summary_rows.extend(score_rows)
         for row in score_rows:
@@ -246,6 +250,12 @@ def main(argv: List[str] | None = None) -> None:
         "fp_best_auc_best_b_vs_other",
         "fp_neg_auc_best_perm_labels",
         "fp_neg_auc_best_rand_fp",
+        "fp_neg_auc_perm_labels_mean",
+        "fp_neg_auc_perm_labels_q",
+        "fp_neg_auc_rand_fp_mean",
+        "fp_neg_auc_rand_fp_q",
+        "fp_neg_auc_reps",
+        "fp_neg_auc_quantile",
     ]
     fieldnames = list(dict.fromkeys(base_fields))
     extra_cols = sorted(c for c in score_cols if c not in fieldnames)
