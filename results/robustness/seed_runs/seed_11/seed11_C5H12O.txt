@@ -1,0 +1,19 @@
+seed11_C5H12O: HETERO-1A acid test (C5H12O)
+steps_total=12000 steps_per_chain=2000 burnin=600
+chains=6 samples=2100
+accept_rate=0.8772 elapsed_sec=1.22
+coverage_unique_eq=1.0000 support_exact=14 support_emp=14
+KL(exact||emp)=0.003967
+KL(emp||exact)=0.003973
+
+Top states by P_emp:
+  het:edges=0-1,0-2,1-3,2-4,4-5;types=0,0,2,0,0,0 P_emp=0.127619 P_exact=0.121674
+  het:edges=0-1,0-2,1-3,2-4,4-5;types=0,0,0,0,2,0 P_emp=0.115714 P_exact=0.121674
+  het:edges=0-1,0-2,0-3,2-4,3-5;types=0,0,0,2,0,0 P_emp=0.112857 P_exact=0.110003
+  het:edges=0-1,0-2,1-3,2-4,2-5;types=0,0,0,0,0,2 P_emp=0.111429 P_exact=0.102225
+  het:edges=0-1,0-2,0-3,2-4,3-5;types=0,0,0,0,0,2 P_emp=0.105238 P_exact=0.102225
+  het:edges=0-1,0-2,1-3,2-4,4-5;types=0,0,0,0,0,2 P_emp=0.098571 P_exact=0.113070
+  het:edges=0-1,0-2,1-3,1-4,2-5;types=0,0,2,0,0,0 P_emp=0.060476 P_exact=0.055002
+  het:edges=0-1,0-2,1-3,2-4,2-5;types=2,0,0,0,0,0 P_emp=0.052381 P_exact=0.055002
+  het:edges=0-1,0-2,0-3,1-4,2-5;types=0,0,0,2,0,0 P_emp=0.050952 P_exact=0.051113
+  het:edges=0-1,0-2,1-3,1-4,2-5;types=0,0,0,0,0,2 P_emp=0.047143 P_exact=0.051113

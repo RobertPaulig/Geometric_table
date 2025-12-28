@@ -1,0 +1,19 @@
+seed9_C7H17N: HETERO-1A acid test (C7H17N)
+steps_total=40000 steps_per_chain=6667 burnin=2000
+chains=6 samples=7002
+accept_rate=0.9187 elapsed_sec=3.31
+coverage_unique_eq=1.0000 support_exact=89 support_emp=89
+KL(exact||emp)=0.006393
+KL(emp||exact)=0.006362
+
+Top states by P_emp:
+  het:edges=0-1,0-2,1-3,1-4,2-5,4-6,5-7;types=1,0,0,0,0,0,0,0 P_emp=0.026135 P_exact=0.021520
+  het:edges=0-1,0-2,1-3,2-4,3-5,4-6,6-7;types=0,0,0,0,0,0,0,1 P_emp=0.024422 P_exact=0.022427
+  het:edges=0-1,0-2,1-3,2-4,3-5,4-6,6-7;types=0,0,0,0,0,0,1,0 P_emp=0.023993 P_exact=0.023211
+  het:edges=0-1,0-2,0-3,2-4,3-5,3-6,6-7;types=0,0,0,1,0,0,0,0 P_emp=0.023850 P_exact=0.020651
+  het:edges=0-1,0-2,1-3,2-4,2-5,3-6,5-7;types=0,0,1,0,0,0,0,0 P_emp=0.022851 P_exact=0.022273
+  het:edges=0-1,0-2,1-3,2-4,3-5,4-6,6-7;types=0,0,0,0,1,0,0,0 P_emp=0.022708 P_exact=0.023211
+  het:edges=0-1,0-2,1-3,1-4,2-5,4-6,5-7;types=0,0,1,0,0,0,0,0 P_emp=0.022422 P_exact=0.021520
+  het:edges=0-1,0-2,0-3,1-4,2-5,3-6,5-7;types=0,0,0,1,0,0,0,0 P_emp=0.022279 P_exact=0.021520
+  het:edges=0-1,0-2,1-3,2-4,3-5,4-6,6-7;types=0,0,1,0,0,0,0,0 P_emp=0.022137 P_exact=0.023211
+  het:edges=0-1,0-2,0-3,1-4,2-5,3-6,5-7;types=0,0,0,0,0,0,1,0 P_emp=0.022137 P_exact=0.020793

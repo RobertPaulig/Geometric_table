@@ -1,0 +1,19 @@
+grid_C5H13N: HETERO-1A acid test (C5H13N)
+steps_total=12000 steps_per_chain=2000 burnin=600
+chains=6 samples=2100
+accept_rate=0.8982 elapsed_sec=1.43
+coverage_unique_eq=1.0000 support_exact=17 support_emp=17
+KL(exact||emp)=0.005601
+KL(emp||exact)=0.005576
+
+Top states by P_emp:
+  het:edges=0-1,0-2,1-3,2-4,4-5;types=0,0,0,0,1,0 P_emp=0.104762 P_exact=0.104730
+  het:edges=0-1,0-2,0-3,2-4,3-5;types=0,0,0,1,0,0 P_emp=0.098571 P_exact=0.095164
+  het:edges=0-1,0-2,1-3,2-4,4-5;types=0,0,0,0,0,1 P_emp=0.097619 P_exact=0.100268
+  het:edges=0-1,0-2,0-3,2-4,3-5;types=0,0,0,0,0,1 P_emp=0.097143 P_exact=0.091109
+  het:edges=0-1,0-2,1-3,2-4,4-5;types=0,0,1,0,0,0 P_emp=0.095238 P_exact=0.104730
+  het:edges=0-1,0-2,1-3,2-4,2-5;types=0,0,0,0,0,1 P_emp=0.090952 P_exact=0.091109
+  het:edges=0-1,0-2,0-3,2-4,3-5;types=1,0,0,0,0,0 P_emp=0.053810 P_exact=0.049699
+  het:edges=0-1,0-2,1-3,2-4,2-5;types=0,0,1,0,0,0 P_emp=0.050476 P_exact=0.049699
+  het:edges=0-1,0-2,0-3,3-4,3-5;types=0,0,0,0,0,1 P_emp=0.049524 P_exact=0.041393
+  het:edges=0-1,0-2,1-3,1-4,2-5;types=0,0,1,0,0,0 P_emp=0.049524 P_exact=0.047582

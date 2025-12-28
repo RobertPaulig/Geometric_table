@@ -1,0 +1,17 @@
+grid_C4H11N: HETERO-1A acid test (C4H11N)
+steps_total=8000 steps_per_chain=1333 burnin=400
+chains=6 samples=1404
+accept_rate=0.8796 elapsed_sec=0.37
+coverage_unique_eq=1.0000 support_exact=8 support_emp=8
+KL(exact||emp)=0.001930
+KL(emp||exact)=0.001907
+
+Top states by P_emp:
+  het:edges=0-1,0-2,1-3,2-4;types=0,0,1,0,0 P_emp=0.212251 P_exact=0.211713
+  het:edges=0-1,0-2,1-3,2-4;types=0,0,0,0,1 P_emp=0.184473 P_exact=0.199363
+  het:edges=0-1,0-2,0-3,2-4;types=0,0,0,1,0 P_emp=0.180912 P_exact=0.177177
+  het:edges=0-1,0-2,1-3,2-4;types=1,0,0,0,0 P_emp=0.110399 P_exact=0.105856
+  het:edges=0-1,0-2,2-3,2-4;types=0,0,1,0,0 P_emp=0.110399 P_exact=0.099904
+  het:edges=0-1,0-2,0-3,3-4;types=0,0,0,1,0 P_emp=0.099003 P_exact=0.094076
+  het:edges=0-1,0-2,0-3,3-4;types=0,0,0,0,1 P_emp=0.083333 P_exact=0.088589
+  het:edges=0-1,0-2,0-3,0-4;types=0,0,0,0,1 P_emp=0.019231 P_exact=0.023323
