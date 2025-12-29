@@ -31,9 +31,15 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     ap.add_argument("--fp_allow_energy_like", action="store_true", help="Allow FP candidates highly correlated with energy.")
     ap.add_argument("--use_neg_controls", action="store_true", help="Enable negative controls inside suite runs and gate on them.")
     ap.add_argument("--neg_control_seed", type=int, default=0)
-    ap.add_argument("--neg_auc_max", type=float, default=0.60)
+    ap.add_argument(
+        "--neg_auc_max",
+        type=float,
+        default=None,
+        help="Optional absolute max AUC for negative controls (override). If omitted, gates use per-row fp_neg_auc_gate.",
+    )
     ap.add_argument("--neg_control_reps", type=int, default=50, help="Repetitions for negative controls inside suite.")
     ap.add_argument("--neg_control_quantile", type=float, default=0.95, help="Quantile used for negative-control AUC gate.")
+    ap.add_argument("--neg_auc_margin", type=float, default=0.05, help="Margin for dynamic neg-controls gate (suite --neg_auc_margin).")
     return ap.parse_args(argv)
 
 
@@ -57,6 +63,7 @@ def _run_suite(
     neg_control_seed: int,
     neg_control_reps: int,
     neg_control_quantile: float,
+    neg_auc_margin: float,
 ) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     cmd = [
@@ -83,6 +90,8 @@ def _run_suite(
                 str(int(neg_control_reps)),
                 "--neg_control_quantile",
                 str(float(neg_control_quantile)),
+                "--neg_auc_margin",
+                str(float(neg_auc_margin)),
                 "--neg_control_permute_labels",
                 "--neg_control_random_fp",
             ]
@@ -179,7 +188,10 @@ def _evaluate_trial(rows: List[Dict[str, object]], *, args: argparse.Namespace) 
         stats["fp_auc_gap"] = min(stats["fp_auc_gap"], fp_auc_gap)
         stats["neg_auc_max"] = max(stats["neg_auc_max"], neg_max)
     max_neg_auc_any = float("nan")
+    max_neg_gate_any = float("nan")
     if args.use_neg_controls:
+        neg_auc_margin = float(getattr(args, "neg_auc_margin", 0.05))
+        neg_auc_max_override = getattr(args, "neg_auc_max", None)
         max_neg_auc_any = max((v["neg_auc_max"] for v in formula_gate.values()), default=float("nan"))
         if max_neg_auc_any == float("-inf"):
             max_neg_auc_any = float("nan")
@@ -187,8 +199,20 @@ def _evaluate_trial(rows: List[Dict[str, object]], *, args: argparse.Namespace) 
         fail_meta_template["neg_control_seed"] = int(args.neg_control_seed)
         fail_meta_template["neg_control_reps"] = int(args.neg_control_reps)
         fail_meta_template["neg_control_quantile"] = float(args.neg_control_quantile)
-        fail_meta_template["neg_auc_max_gate"] = float(args.neg_auc_max)
+        fail_meta_template["neg_auc_margin"] = neg_auc_margin
+        fail_meta_template["neg_auc_max_gate"] = float(neg_auc_max_override) if neg_auc_max_override is not None else float("nan")
         fail_meta_template["neg_control_sources"] = "perm_labels,rand_fp"
+        gates = []
+        for row in rows:
+            g = row.get("fp_neg_auc_gate", None)
+            if g in {"", "nan", "NaN", None}:
+                continue
+            try:
+                gates.append(float(g))
+            except Exception:
+                continue
+        max_neg_gate_any = max(gates) if gates else float("nan")
+        fail_meta_template["neg_auc_gate_any"] = max_neg_gate_any
     gate_reason_any = ""
     gate_formula_any = ""
     for formula, stats in formula_gate.items():
@@ -212,10 +236,48 @@ def _evaluate_trial(rows: List[Dict[str, object]], *, args: argparse.Namespace) 
             gate_reason_any = "fp_weak"
             gate_formula_any = formula
             break
-        if args.use_neg_controls and stats["neg_auc_max"] > args.neg_auc_max:
-            gate_reason_any = "neg_control"
-            gate_formula_any = formula
-            break
+        if args.use_neg_controls:
+            if neg_auc_max_override is not None:
+                if stats["neg_auc_max"] > float(neg_auc_max_override):
+                    gate_reason_any = "neg_control"
+                    gate_formula_any = formula
+                    break
+            else:
+                per_formula_gates = []
+                for row in rows:
+                    if str(row.get("formula", "")) != formula:
+                        continue
+                    g = row.get("fp_neg_auc_gate", None)
+                    if g in {"", "nan", "NaN", None}:
+                        continue
+                    try:
+                        per_formula_gates.append(float(g))
+                    except Exception:
+                        continue
+                gate_val = max(per_formula_gates) if per_formula_gates else float("nan")
+                if not (gate_val == gate_val):
+                    try:
+                        from analysis.chem.neg_control_null_auc import null_auc_quantile
+                    except Exception:
+                        null_auc_quantile = None  # type: ignore[assignment]
+                    if null_auc_quantile is not None:
+                        for row in rows:
+                            if str(row.get("formula", "")) != formula:
+                                continue
+                            try:
+                                m = int(row.get("n_a", 0))
+                                n = int(row.get("n_b", 0))
+                            except Exception:
+                                continue
+                            if m > 0 and n > 0:
+                                gate_val = float(null_auc_quantile(m, n, float(args.neg_control_quantile))) + float(
+                                    neg_auc_margin
+                                )
+                                break
+                if (gate_val == gate_val) and stats["neg_auc_max"] > gate_val:
+                    gate_reason_any = "neg_control"
+                    gate_formula_any = formula
+                    break
     gate_failed_any = bool(gate_reason_any)
     if gate_failed_any:
         meta = dict(fail_meta_template)
@@ -284,12 +346,16 @@ def _evaluate_trial(rows: List[Dict[str, object]], *, args: argparse.Namespace) 
         "fp_best_auc_best_list": ";".join(val for _, val in details_list),
     }
     if args.use_neg_controls:
+        neg_auc_margin = float(getattr(args, "neg_auc_margin", 0.05))
+        neg_auc_max_override = getattr(args, "neg_auc_max", None)
         meta["max_neg_auc_any"] = max_neg_auc_any
         meta["neg_control_seed"] = int(args.neg_control_seed)
         meta["neg_control_reps"] = int(args.neg_control_reps)
         meta["neg_control_quantile"] = float(args.neg_control_quantile)
-        meta["neg_auc_max_gate"] = float(args.neg_auc_max)
+        meta["neg_auc_margin"] = neg_auc_margin
+        meta["neg_auc_max_gate"] = float(neg_auc_max_override) if neg_auc_max_override is not None else float("nan")
         meta["neg_control_sources"] = "perm_labels,rand_fp"
+        meta["neg_auc_gate_any"] = max_neg_gate_any
     gate_meta = {
         "gate_failed_any": False,
         "gate_reason_any": "",
@@ -334,6 +400,7 @@ def main(argv: Sequence[str] | None = None) -> None:
             neg_control_seed=int(args.neg_control_seed),
             neg_control_reps=int(args.neg_control_reps),
             neg_control_quantile=float(args.neg_control_quantile),
+            neg_auc_margin=float(args.neg_auc_margin),
         )
         summary_path = trial_dir / "hetero_validation_suite.csv"
         rows = _read_summary(summary_path)
@@ -364,6 +431,8 @@ def main(argv: Sequence[str] | None = None) -> None:
             "neg_control_seed": meta.get("neg_control_seed"),
             "neg_control_reps": meta.get("neg_control_reps"),
             "neg_control_quantile": meta.get("neg_control_quantile"),
+            "neg_auc_margin": meta.get("neg_auc_margin"),
+            "neg_auc_gate_any": meta.get("neg_auc_gate_any"),
             "neg_auc_max_gate": meta.get("neg_auc_max_gate"),
             "neg_control_sources": meta.get("neg_control_sources"),
             "gate_failed": status != "ok",
@@ -406,6 +475,8 @@ def main(argv: Sequence[str] | None = None) -> None:
         "neg_control_seed",
         "neg_control_reps",
         "neg_control_quantile",
+        "neg_auc_margin",
+        "neg_auc_gate_any",
         "neg_auc_max_gate",
         "neg_control_sources",
         "output_dir",

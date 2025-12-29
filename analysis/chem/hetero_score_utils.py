@@ -290,26 +290,46 @@ def _fp_collision_rate(fp_vectors: Sequence[Sequence[float]], tol: float = FP_CO
 
 
 def _roc_auc(scores: Sequence[float], labels: Sequence[int], weights: Sequence[float]) -> float:
-    scores = np.asarray(scores, dtype=float)
-    labels = np.asarray(labels, dtype=int)
-    weights = np.asarray(weights, dtype=float)
-    pos = labels == 1
-    neg = labels == 0
-    weight_pos = float(np.sum(weights[pos]))
-    weight_neg = float(np.sum(weights[neg]))
+    scores_arr = np.asarray(scores, dtype=float)
+    labels_arr = np.asarray(labels, dtype=int)
+    weights_arr = np.asarray(weights, dtype=float)
+
+    pos = labels_arr == 1
+    neg = labels_arr == 0
+    weight_pos = float(np.sum(weights_arr[pos]))
+    weight_neg = float(np.sum(weights_arr[neg]))
     if weight_pos == 0 or weight_neg == 0:
         return float("nan")
-    rank = np.argsort(scores)
-    scores = scores[rank]
-    labels = labels[rank]
-    weights = weights[rank]
-    cum_neg = 0.0
+
+    # Tie-aware, weight-aware AUC:
+    # Sort by score, then aggregate within equal-score blocks:
+    # auc += pos_w * cum_neg_w + 0.5 * pos_w * neg_w
+    # cum_neg_w += neg_w
+    order = np.argsort(scores_arr, kind="mergesort")
+    scores_sorted = scores_arr[order]
+    labels_sorted = labels_arr[order]
+    weights_sorted = weights_arr[order]
+
+    cum_neg_w = 0.0
     auc = 0.0
-    for lbl, w in zip(labels, weights):
-        if lbl == 1:
-            auc += w * cum_neg
-        else:
-            cum_neg += w
+    i = 0
+    n = int(scores_sorted.size)
+    while i < n:
+        s = scores_sorted[i]
+        j = i
+        pos_w = 0.0
+        neg_w = 0.0
+        while j < n and scores_sorted[j] == s:
+            w = float(weights_sorted[j])
+            if labels_sorted[j] == 1:
+                pos_w += w
+            else:
+                neg_w += w
+            j += 1
+        auc += pos_w * cum_neg_w + 0.5 * pos_w * neg_w
+        cum_neg_w += neg_w
+        i = j
+
     auc /= (weight_pos * weight_neg)
     return float(auc)
 
@@ -460,6 +480,7 @@ def compute_formula_scores(
     neg_control_seed: int = 0,
     neg_control_reps: int = 1,
     neg_control_quantile: float = 0.95,
+    neg_auc_margin: float = 0.05,
 ) -> List[Dict[str, object]]:
     weights = df_states[weights_col].fillna(0.0).to_numpy(dtype=float)
     if np.all(weights == 0):
@@ -763,7 +784,19 @@ def compute_formula_scores(
                 row["fp_neg_auc_rand_fp_q"] = float("nan")
                 row["fp_neg_auc_reps"] = int(neg_control_reps)
                 row["fp_neg_auc_quantile"] = float(neg_control_quantile)
+                row["fp_neg_auc_null_q"] = float("nan")
+                row["fp_neg_auc_margin"] = float(neg_auc_margin)
+                row["fp_neg_auc_gate"] = float("nan")
                 if active is not None and (neg_control_permute_labels or neg_control_random_fp):
+                    try:
+                        from analysis.chem.neg_control_null_auc import null_auc_quantile
+                    except Exception:  # pragma: no cover
+                        null_auc_quantile = None  # type: ignore[assignment]
+                    if null_auc_quantile is not None:
+                        m = int(row["n_a"])
+                        n_other = int(row["n_b"])
+                        row["fp_neg_auc_null_q"] = float(null_auc_quantile(m, n_other, float(neg_control_quantile)))
+                        row["fp_neg_auc_gate"] = float(row["fp_neg_auc_null_q"]) + float(neg_auc_margin)
                     mask_ab = df_states["class_label"].isin([spec.class_a, spec.class_b]).to_numpy()
                     scores = df_states[best_col_name].to_numpy(dtype=float)[mask_ab]
                     weights_ab = df_states[weights_col].to_numpy(dtype=float)[mask_ab]
@@ -827,6 +860,9 @@ def compute_formula_scores(
             row["fp_neg_auc_rand_fp_q"] = float("nan")
             row["fp_neg_auc_reps"] = int(neg_control_reps)
             row["fp_neg_auc_quantile"] = float(neg_control_quantile)
+            row["fp_neg_auc_null_q"] = float("nan")
+            row["fp_neg_auc_margin"] = float(neg_auc_margin)
+            row["fp_neg_auc_gate"] = float("nan")
         score_rows.append(row)
     return score_rows
 def _clamp01(val: float) -> float:

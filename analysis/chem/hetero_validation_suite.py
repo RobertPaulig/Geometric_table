@@ -63,6 +63,7 @@ def _parse_args(argv: List[str] | None) -> argparse.Namespace:
     ap.add_argument("--neg_control_seed", type=int, default=0, help="Seed for negative controls.")
     ap.add_argument("--neg_control_reps", type=int, default=50, help="Repetitions for negative controls (permute/random).")
     ap.add_argument("--neg_control_quantile", type=float, default=0.95, help="Quantile for negative-control AUC (e.g. 0.95).")
+    ap.add_argument("--neg_auc_margin", type=float, default=0.05, help="Additive margin over theoretical null AUC quantile.")
     ap.add_argument("--debug_fp", action="store_true")
     return ap.parse_args(argv)
 
@@ -164,6 +165,7 @@ def main(argv: List[str] | None = None) -> None:
             neg_control_seed=int(args.neg_control_seed),
             neg_control_reps=int(args.neg_control_reps),
             neg_control_quantile=float(args.neg_control_quantile),
+            neg_auc_margin=float(args.neg_auc_margin),
         )
         summary_rows.extend(score_rows)
         for row in score_rows:

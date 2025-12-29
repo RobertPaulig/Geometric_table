@@ -25,7 +25,15 @@ def _parse_args() -> argparse.Namespace:
     ap.add_argument("--kl_max", type=float, default=0.05)
     ap.add_argument("--fp_auc_min", type=float, default=0.95)
     ap.add_argument("--fp_auc_gap_min", type=float, default=0.02)
-    ap.add_argument("--neg_auc_max", type=float, default=0.60)
+    ap.add_argument(
+        "--neg_auc_max",
+        type=float,
+        default=None,
+        help="Optional absolute max AUC for negative controls (override). If omitted, gates use per-row fp_neg_auc_gate.",
+    )
+    ap.add_argument("--neg_control_reps", type=int, default=50)
+    ap.add_argument("--neg_control_quantile", type=float, default=0.95)
+    ap.add_argument("--neg_auc_margin", type=float, default=0.05)
     return ap.parse_args()
 
 
@@ -52,6 +60,12 @@ def main() -> None:
                 f"seed{seed}",
                 "--neg_control_seed",
                 str(int(args.neg_control_seed)),
+                "--neg_control_reps",
+                str(int(args.neg_control_reps)),
+                "--neg_control_quantile",
+                str(float(args.neg_control_quantile)),
+                "--neg_auc_margin",
+                str(float(args.neg_auc_margin)),
                 *(["--neg_control_permute_labels"] if args.neg_controls else []),
                 *(["--neg_control_random_fp"] if args.neg_controls else []),
             ]
@@ -69,9 +83,12 @@ def main() -> None:
                 neg_perm_f = float(neg_perm) if neg_perm not in {"", "nan", "NaN", None} else float("nan")
                 neg_rand_f = float(neg_rand) if neg_rand not in {"", "nan", "NaN", None} else float("nan")
                 max_neg = float("nan")
+                gate_val = float("nan")
                 if args.neg_controls:
                     vals = [v for v in [neg_perm_f, neg_rand_f] if v == v]
                     max_neg = max(vals) if vals else float("nan")
+                    gate_str = row.get("fp_neg_auc_gate", "")
+                    gate_val = float(gate_str) if gate_str not in {"", "nan", "NaN", None} else float("nan")
                 rows_out.append(
                     {
                         "seed": seed,
@@ -84,6 +101,7 @@ def main() -> None:
                         "fp_neg_auc_best_perm_labels": neg_perm_f,
                         "fp_neg_auc_best_rand_fp": neg_rand_f,
                         "max_neg_auc": max_neg,
+                        "neg_auc_gate": gate_val,
                     }
                 )
     fieldnames = [
@@ -97,6 +115,7 @@ def main() -> None:
         "fp_neg_auc_best_perm_labels",
         "fp_neg_auc_best_rand_fp",
         "max_neg_auc",
+        "neg_auc_gate",
     ]
     out_csv.parent.mkdir(parents=True, exist_ok=True)
     with out_csv.open("w", newline="", encoding="utf-8") as f:
@@ -121,13 +140,23 @@ def main() -> None:
             (float(x["max_neg_auc"]) for x in rr if float(x["max_neg_auc"]) == float(x["max_neg_auc"])),
             default=float("nan"),
         )
+        max_neg_gate = max(
+            (float(x["neg_auc_gate"]) for x in rr if float(x["neg_auc_gate"]) == float(x["neg_auc_gate"])),
+            default=float("nan"),
+        )
         gate_ok = (
             min_cov >= float(args.coverage_req)
             and max_kl <= float(args.kl_max)
             and max_cross_strict <= 0.0
             and min_auc >= float(args.fp_auc_min)
             and min_gap >= float(args.fp_auc_gap_min)
-            and (not args.neg_controls or (max_neg_auc == max_neg_auc and max_neg_auc <= float(args.neg_auc_max)))
+            and (
+                (not args.neg_controls)
+                or (
+                    (args.neg_auc_max is not None and max_neg_auc == max_neg_auc and max_neg_auc <= float(args.neg_auc_max))
+                    or (args.neg_auc_max is None and max_neg_auc == max_neg_auc and max_neg_gate == max_neg_gate and max_neg_auc <= max_neg_gate)
+                )
+            )
         )
         summary_rows.append(
             {
@@ -139,6 +168,8 @@ def main() -> None:
                 "min_fp_best_auc_best": min_auc,
                 "min_fp_best_auc_gap": min_gap,
                 "max_neg_auc_any": max_neg_auc,
+                "neg_auc_gate_any": max_neg_gate,
+                "neg_auc_margin": float(args.neg_auc_margin),
                 "gate_pass": bool(gate_ok),
             }
         )
@@ -153,6 +184,8 @@ def main() -> None:
         "min_fp_best_auc_best",
         "min_fp_best_auc_gap",
         "max_neg_auc_any",
+        "neg_auc_gate_any",
+        "neg_auc_margin",
         "gate_pass",
     ]
     with out_summary.open("w", newline="", encoding="utf-8") as f:
