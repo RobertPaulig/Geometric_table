@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Sequence, Tuple
 
 from analysis.chem.audit import run_audit
-from analysis.chem.decoys import _edge_dist, run_decoys
+from analysis.chem.decoys import edge_dist, run_decoys
 
 
 def _utc_now_iso() -> str:
@@ -72,7 +72,7 @@ def _selection_maxmin(decoys_sorted: Sequence[Dict[str, Any]], n: int, k: int) -
             min_d = float("inf")
             for sidx in selected:
                 s_edges = _edges_norm(decoys_sorted[sidx]["edges"])
-                d = _edge_dist(cand_edges, s_edges, n)
+                d = edge_dist(cand_edges, s_edges, n)
                 if d < min_d:
                     min_d = d
             cand_hash = str(decoys_sorted[idx]["hash"])
@@ -95,7 +95,7 @@ def _pairwise_stats(decoys_sorted: Sequence[Dict[str, Any]], n: int, indices: Se
         for j in range(i + 1, len(indices)):
             a = _edges_norm(decoys_sorted[indices[i]]["edges"])
             b = _edges_norm(decoys_sorted[indices[j]]["edges"])
-            dists.append(_edge_dist(a, b, n))
+            dists.append(edge_dist(a, b, n))
     return {
         "min_pairwise_dist": float(min(dists)) if dists else float("nan"),
         "mean_pairwise_dist": float(sum(dists) / len(dists)) if dists else float("nan"),
@@ -129,7 +129,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     items = [{"label": 1, "score": 1.0, "weight": 1.0}]
     for d in decoys_sorted:
-        dist_to_orig = _edge_dist(_edges_norm(d["edges"]), orig_edges, n)
+        dist_to_orig = edge_dist(_edges_norm(d["edges"]), orig_edges, n)
         items.append({"label": 0, "score": float(1.0 - dist_to_orig), "weight": 1.0})
 
     audit_payload = {"dataset_id": f"pipeline:{tree_payload.get('mol_id','')}", "items": items}
@@ -150,19 +150,32 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     selection_metrics = _pairwise_stats(decoys_sorted, n, selected_indices)
 
+    warnings_set = set(decoys_result.get("warnings", []))
+    warnings_set.update(audit_result.get("warnings", []))
+    selection_warnings: List[str] = []
+    if int(len(selected_indices)) < int(select_k):
+        selection_warnings.append("selection_not_enough_decoys")
+    warnings_set.update(selection_warnings)
+
+    selected_hashes = [str(decoys_sorted[i]["hash"]) for i in selected_indices]
+
     out: Dict[str, Any] = {
         "schema_version": "hetero_pipeline.v1",
         "tree_input_id": str(tree_payload.get("mol_id", "")),
+        "score_mode": "toy_edge_dist",
+        "score_definition": "score=1 - dist_to_original",
         "decoys": decoys_result,
         "selection": {
             "method": str(args.selection),
             "k_requested": select_k,
             "k_selected": int(len(selected_indices)),
+            "index_base": "decoys_sorted_by_hash",
             "selected_indices": [int(i) for i in selected_indices],
+            "selected_hashes": selected_hashes,
             "metrics": selection_metrics,
         },
         "audit": audit_result,
-        "warnings": [],
+        "warnings": sorted(warnings_set),
         "run": {"seed": int(args.seed), "timestamp": timestamp, "cmd": _normalized_cmd(sys.argv)},
     }
 
@@ -176,4 +189,3 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

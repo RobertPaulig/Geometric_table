@@ -198,7 +198,7 @@ def _edges_set(edges: Sequence[Tuple[int, int]]) -> set[Tuple[int, int]]:
     return set((min(a, b), max(a, b)) for a, b in edges)
 
 
-def _edge_dist(a: Sequence[Tuple[int, int]], b: Sequence[Tuple[int, int]], n: int) -> float:
+def edge_dist(a: Sequence[Tuple[int, int]], b: Sequence[Tuple[int, int]], n: int) -> float:
     # Normalized symmetric difference for trees with same n.
     ea = _edges_set(a)
     eb = _edges_set(b)
@@ -246,7 +246,7 @@ def run_decoys(
     pairwise_dists: List[float] = []
     for i in range(len(decoys)):
         for j in range(i + 1, len(decoys)):
-            pairwise_dists.append(_edge_dist(decoys[i], decoys[j], n))
+            pairwise_dists.append(edge_dist(decoys[i], decoys[j], n))
 
     def _summary(values: Sequence[float]) -> Dict[str, float]:
         if not values:
@@ -340,14 +340,14 @@ def _generate_decoys(
         if not _degree_ok(new_deg, node_types, max_valence):
             continue
         new_edges_norm = sorted((min(a, b), max(a, b)) for a, b in new_edges)
-        dist_to_orig = _edge_dist(new_edges_norm, orig_edges_norm, n)
+        dist_to_orig = edge_dist(new_edges_norm, orig_edges_norm, n)
         if dist_to_orig < min_dist_to_original:
             rejected_too_close_to_original += 1
             continue
         if min_pair_dist > 0.0:
             too_close = False
             for existing in decoys:
-                if _edge_dist(new_edges_norm, existing, n) < min_pair_dist:
+                if edge_dist(new_edges_norm, existing, n) < min_pair_dist:
                     too_close = True
                     break
             if too_close:
