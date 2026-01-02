@@ -14,8 +14,8 @@
 
 1. `README.md` — краткий обзор и быстрый старт.
 2. `docs/README.md` — полная документация и навигация.
-3. Том I (Конституция/ТЗ): `docs/name3.pdf` (а также `docs/name3.tex`, `docs/name3.md`).
-4. Том II (линия развития): `docs/name4.pdf` / `docs/name4.tex`.
+3. Том I (Конституция/ТЗ, source of truth): `docs/name3.tex` (доп.: `docs/name3.md`; `docs/name3.pdf` — производный артефакт, если присутствует).
+4. Том II (линия развития, source of truth): `docs/name4.tex` (`docs/name4.pdf` — производный артефакт, если присутствует).
 5. `docs/04_backlog.md` и `docs/05_decision_log.md` — гипотезы/эксперименты и принятые решения.
 6. `docs/90_lineage.md` — lineage: решения → эксперименты → тесты → выводы.
 7. `docs/99_index.md` — индекс литературы/источников (ID, назначение, где используется).
