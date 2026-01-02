@@ -32,6 +32,22 @@ To run tests locally:
 pytest -q
 ```
 
+## HETERO-1A audit (стабильный JSON-отчёт)
+
+Публичный entrypoint: `python -m analysis.chem.audit`.
+
+Пример запуска:
+```bash
+python -m analysis.chem.audit --input tests/data/hetero_audit_min.json --seed 0 --out audit.json
+```
+
+Выход: JSON со стабильными ключами:
+- `version`, `dataset_id`
+- `n_pos`, `n_neg`
+- `auc_tie_aware`
+- `neg_controls`: `{null_q, gate, margin, slack, verdict}`
+- `run`: `{seed, timestamp, cmd}`
+
 ## Scripts
 
 ### 1. `scan_virtual_island.py`
