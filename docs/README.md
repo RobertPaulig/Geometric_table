@@ -53,6 +53,30 @@ python -m analysis.chem.audit --input tests/data/hetero_audit_min.json --seed 0 
 Примечание: `null_q` сейчас считается по `(n_pos, n_neg)` без учёта весов. Если веса не все равны 1.0, в `warnings`
 появляется `weights_used_in_auc_but_null_q_is_unweighted`. Это сигнал к будущему расширению (weighted null).
 
+## HETERO-1A decoys (tree, degree-preserving)
+
+Публичный entrypoint: `python -m analysis.chem.decoys`.
+
+Пример запуска:
+```bash
+python -m analysis.chem.decoys --input tests/data/hetero_tree_min.json --out decoys.json
+```
+
+Вход: дерево с `node_types`, `edges`, `k`, `seed`, `timestamp`, `max_valence`.
+
+Выход (стабильная схема):
+- `schema_version`, `mol_id`, `n`
+- `k_requested`, `k_generated`
+- `constraints`: `{preserve_degree, preserve_types}`
+- `decoys`: список `{edges, hash}`
+- `warnings`
+- `run`: `{seed, timestamp, cmd}`
+
+Гарантии v1:
+- декои — деревья с тем же degree-sequence, что и исходный граф
+- типы узлов сохраняются (индексы вершин не меняются)
+- не нарушаются `max_valence`
+
 ## Scripts
 
 ### 1. `scan_virtual_island.py`
