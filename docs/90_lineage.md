@@ -60,3 +60,14 @@
 - **Обновлены доки:** `docs/README.md`
 - **Коммит(ы):** `73e32dd`, `67191a3`
 - **Дальше:** добавить базовую метрику разнообразия/покрытия и минимальный фильтр по структурным инвариантам.
+
+### 2026-01-02 — Decoys v1.1: diversity/coverage + фильтр
+
+- **Гипотеза:** для decoys нужен минимальный контроль разнообразия и дистанции от оригинала, иначе набор может быть тривиальным.
+- **Метод:** метрика `dist(A,B)=|E_A Δ E_B|/(2*(n-1))`, фильтры `min_dist_to_original` и `min_pair_dist`, счетчики отброшенных кандидатов.
+- **Эксперимент:** `python -m analysis.chem.decoys --input tests/data/hetero_tree_min.json --min_pair_dist 0.5 --min_dist_to_original 0.5 --max_attempts 50 --out decoys.json`
+- **Результат:** JSON содержит `metrics` и `filter`; при жёстких порогах возможен warning `could_not_generate_k_decoys_under_constraints`.
+- **Добавлен тест:** `tests/test_hetero_decoys_cli.py`
+- **Обновлены доки:** `docs/README.md`
+- **Коммит(ы):** `0e70794`, `06aaec6`
+- **Дальше:** добавить рекомендации (recommendations) по подбору порогов и минимальный diversity-score.

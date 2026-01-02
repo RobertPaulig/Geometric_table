@@ -62,12 +62,19 @@ python -m analysis.chem.audit --input tests/data/hetero_audit_min.json --seed 0 
 python -m analysis.chem.decoys --input tests/data/hetero_tree_min.json --out decoys.json
 ```
 
+Дополнительные флаги:
+- `--min_dist_to_original` (float, default 0.0)
+- `--min_pair_dist` (float, default 0.0)
+- `--max_attempts` (int, default: `k*200`)
+
 Вход: дерево с `node_types`, `edges`, `k`, `seed`, `timestamp`, `max_valence`.
 
 Выход (стабильная схема):
 - `schema_version`, `mol_id`, `n`
 - `k_requested`, `k_generated`
 - `constraints`: `{preserve_degree, preserve_types}`
+- `metrics`: `{dist_to_original, pairwise_dist, edge_overlap_to_original_mean}`
+- `filter`: `{min_dist_to_original, min_pair_dist, attempts, rejected_too_close_to_original, rejected_too_close_to_existing, rejected_duplicate}`
 - `decoys`: список `{edges, hash}`
 - `warnings`
 - `run`: `{seed, timestamp, cmd}`
