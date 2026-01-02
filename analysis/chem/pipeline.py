@@ -162,6 +162,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     out: Dict[str, Any] = {
         "schema_version": "hetero_pipeline.v1",
         "tree_input_id": str(tree_payload.get("mol_id", "")),
+        "tree_input": {
+            "mol_id": str(tree_payload.get("mol_id", "")),
+            "node_types": list(tree_payload.get("node_types", [])),
+            "edges": list(tree_payload.get("edges", [])),
+        },
         "score_mode": "toy_edge_dist",
         "score_definition": "score=1 - dist_to_original",
         "decoys": decoys_result,
