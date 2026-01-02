@@ -102,5 +102,5 @@
 - **Результат:** стабильные `example.report.md` и `example.decoys.csv`.
 - **Добавлен тест:** `tests/test_hetero_report_cli.py`
 - **Обновлены доки:** `docs/README.md`
-- **Коммит(ы):** `TBD`
+- **Коммит(ы):** `9b8fce1`, `d81b0a9`, `e1f1bf9`
 - **Дальше:** добавить `score_mode=external_scores` и формат отчёта для пользовательского скоринга.
