@@ -1,5 +1,7 @@
 # geom-spec v4.0 Visualization Suite
 
+> Start from `CONTEXT.md` (single entry point). Then continue with this `docs/README.md`.
+
 ## Overview
 
 This directory contains Python scripts to visualize and validate the geometric-spectral model (geom-spec v4.0). The scripts perform numerical experiments to verify theoretical laws about atomic properties, molecular complexity, and virtual element stability.
@@ -34,14 +36,14 @@ pytest -q
 
 ### 1. `scan_virtual_island.py`
 
-**Purpose**: Map the "island of stability" for virtual atoms `X(p, ε)` by scanning parameter space.
+**Purpose**: Map the "island of stability" for virtual atoms `X(p, eps)` by scanning parameter space.
 
 **Usage**:
 ```bash
-# Default scan (p=1..4, ε=-6..-0.1)
+# Default scan (p=1..4, eps=-6..-0.1)
 python scan_virtual_island.py
 
-# Extended scan (p=0..8, ε=-10..0)
+# Extended scan (p=0..8, eps=-10..0)
 python scan_virtual_island.py --p-min 0 --p-max 8 --eps-min -10.0 --eps-max 0.0 --n-eps 30
 ```
 
@@ -194,7 +196,7 @@ $env:PYTHONPATH="C:\path\to\book2;$env:PYTHONPATH"  # Windows PowerShell
 - Expect: Mixed > Acceptor-only > Donor-only
 
 ### Correlation Analysis
-- **Spearman r**: -1 to 1 (0 = no correlation, ±1 = perfect correlation)
+- **Spearman r**: -1 to 1 (0 = no correlation, +/-1 = perfect correlation)
 - **p-value**: < 0.05 = statistically significant
 
 ## Citation
