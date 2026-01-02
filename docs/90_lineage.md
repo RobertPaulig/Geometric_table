@@ -115,3 +115,14 @@
 - **Обновлены доки:** `docs/README.md`
 - **Коммит(ы):** `21c2c60`, `60c0fc4`, `d4847ad`
 - **Дальше:** вынести score_mode в отдельный блок и добавить SDK facade.
+
+### 2026-01-02 — Examples as contract tests (v0.1.1)
+
+- **Гипотеза:** examples должны быть воспроизводимыми контрактами, а не только документацией.
+- **Метод:** интеграционные тесты для smoke (CLI) и external_scores (SDK).
+- **Эксперимент:** запуск `hetero-pipeline/hetero-report` в tmp_path и `run_pipeline(score_mode=external_scores)`.
+- **Результат:** проверены артефакты и warnings без записи в repo.
+- **Добавлен тест:** `tests/test_examples_smoke_cli.py`, `tests/test_examples_external_scores.py`
+- **Обновлены доки:** `CHANGELOG.md`
+- **Коммит(ы):** `TBD`
+- **Дальше:** добавить public demo command в README и закрепить schema_version policy.
