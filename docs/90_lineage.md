@@ -80,5 +80,5 @@
 - **Результат:** JSON `hetero_pipeline.v1` содержит `decoys`, `selection`, `audit` в одном отчёте; `maxmin` не хуже `firstk` по `min_pairwise_dist`.
 - **Добавлен тест:** `tests/test_hetero_pipeline_cli.py`
 - **Обновлены доки:** `docs/README.md`
-- **Коммит(ы):** `TBD`
+- **Коммит(ы):** `7ffe729`, `9c9506d`, `92f4fd7`
 - **Дальше:** вынести toy-score в `score_mode` и добавить экспорт отчёта (CSV/MD) для пользователя.
