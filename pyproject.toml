@@ -19,6 +19,9 @@ dependencies = [
 dev = [
   "pytest>=7.0",
 ]
+demo = [
+  "rdkit-pypi",
+]
 
 [project.scripts]
 hetero-audit = "hetero1a.cli:hetero_audit"
