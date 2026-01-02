@@ -124,5 +124,5 @@
 - **Результат:** проверены артефакты и warnings без записи в repo.
 - **Добавлен тест:** `tests/test_examples_smoke_cli.py`, `tests/test_examples_external_scores.py`
 - **Обновлены доки:** `CHANGELOG.md`
-- **Коммит(ы):** `TBD`
+- **Коммит(ы):** `8c2f5df`, `639cd7a`, `d16e4cf`
 - **Дальше:** добавить public demo command в README и закрепить schema_version policy.
