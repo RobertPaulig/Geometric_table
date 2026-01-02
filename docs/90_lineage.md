@@ -27,3 +27,14 @@
 - **Обновлены доки:** `docs/README.md`
 - **Коммит(ы):** `310978c`, `41089df`
 - **Дальше:** привязать audit к реальному мини-датасету из `analysis/chem` (или curated baseline) и формализовать “verdict invariants” (ε для float).
+
+### 2026-01-02 — Mendoza-step: neg-controls exact для малых N
+
+- **Гипотеза:** для малых выборок (N≤10) neg-controls должны быть детерминированными без Монте-Карло, чтобы гейт не “гулял” от сидов/порядка.
+- **Метод:** в `analysis.chem.audit` считать `perm_q` точным перебором всех разметок при фиксированных `n_pos/n_neg`; `rand_q` приравнять `null_q`; добавить `method`/`reps_used`.
+- **Эксперимент:** `python -m analysis.chem.audit --input tests/data/hetero_audit_min.json --seed 0 --neg_control_reps 999 --out audit.json`
+- **Результат:** на `hetero_audit_min_v1` выставляется `method=exact`, `reps_used=0`, и `rand_q == null_q`.
+- **Добавлен тест:** `tests/test_hetero_audit_cli.py`
+- **Обновлены доки:** `docs/README.md`
+- **Коммит(ы):** `4247e78`, `676ec59`
+- **Дальше:** расширить exact-ветку до N≤12 (если нужно) и/или добавить ε-инварианты для float-полей в контракте.
