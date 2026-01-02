@@ -1,21 +1,41 @@
-# Index of References (docs/99_index.md)
+# Индекс источников (`docs/99_index.md`)
 
-This is a lightweight catalogue of “why a document exists in this repo” and where it is used.
+Назначение: лёгкий каталог “что это за документ, зачем он в проекте и где используется”.
 
-## Core
+## Core (обязательное)
 
-- **REF-GEOMSPEC-VOL1** — `docs/name3.pdf` / `docs/name3.tex` / `docs/name3.md`  
-  Constitution + technical spec for the model and computation.
+- **REF-VOL1-SPEC** — `docs/name3.pdf`, `docs/name3.tex`, `docs/name3.md`  
+  Зачем: Конституция/ТЗ модели и вычислительного контура.  
+  Где используется: как источник определений/инвариантов для `core/`, `analysis/`, метрик и DoD.
 
-- **REF-GEOMSPEC-VOL2** — `docs/name4.pdf` / `docs/name4.tex`  
-  Development line v6.x+ (R&D zone, applied contours like HETERO, gating/metrics).
+- **REF-VOL2-DEVLINE** — `docs/name4.pdf`, `docs/name4.tex`  
+  Зачем: линия развития v6.x+ (R&D зоны, Spectral Lab, прикладные контуры вроде HETERO).  
+  Где используется: ориентир для новых R&D-скриптов и для формулировки/проверки метрик и гейтов.
 
-## Background (optional)
+## Repo-управление (обязательное)
 
-Add items here as needed. For each reference, include:
+- **REF-ENTRYPOINT** — `CONTEXT.md`, `ENTRYPOINT.md`, `docs/README.md`  
+  Зачем: единая точка входа и порядок загрузки контекста.  
+  Где используется: всегда (для ИИ/онбординга и дисциплины документации).
 
-- **ID** (stable)
-- **File path(s)**
-- **Why it’s in the project** (2–5 lines)
-- **Used by** (links to docs/scripts where it matters)
+- **REF-BACKLOG** — `docs/04_backlog.md`  
+  Зачем: склад гипотез/задач (сырьё, не “истина”).  
+  Где используется: постановка R&D-экспериментов и планирование работ.
 
+- **REF-DECISION-LOG** — `docs/05_decision_log.md`  
+  Зачем: фиксируем принятые решения, инварианты, гейты, изменения метрик и интерпретаций.  
+  Где используется: аудит изменений и восстановление причинно-следственной линии.
+
+- **REF-LINEAGE** — `docs/90_lineage.md`  
+  Зачем: последовательная “наследственность” (идея → эксперимент → тест → док → коммит).  
+  Где используется: закрытие задач; подготовка к обсуждениям с Архитектором.
+
+## Отчёты/срезы (по необходимости)
+
+- **REF-REPORTS** — `REPORT.md`, `REPORT_baseline.md`, `REPORT_wsZ1.md`  
+  Зачем: зафиксированные базлайны и “снимки состояния” проекта.  
+  Где используется: сверка поведения/метрик между версиями.
+
+- **REF-CHEM-RELEASE** — `docs/chem_validation_5_release_note.md`  
+  Зачем: release note по хим-валидации (контур HETERO).  
+  Где используется: интерпретация результатов `analysis/chem/*` и `results/`.
