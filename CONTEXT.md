@@ -1,45 +1,45 @@
-# Geometric_table - CONTEXT (single entry point)
+# Geometric_table — CONTEXT (единая точка входа)
 
-This file is intended to be the only starting point you hand to an AI assistant (or a new contributor).
+Этот файл — **канонический entrypoint**: его можно давать ИИ как единственную ссылку. Дальше ИИ обязан следовать порядку загрузки.
 
-## Loading Order (strict)
+## Порядок загрузки (строго)
 
-1. `README.md` - repo overview and quickstart.
-2. `docs/README.md` - full documentation and navigation.
-3. Vol I (Constitution/spec): `docs/name3.pdf` (or `docs/name3.tex`, `docs/name3.md`).
-4. Vol II (development line): `docs/name4.pdf` / `docs/name4.tex`.
-5. `docs/04_backlog.md` and `docs/05_decision_log.md` - experiments + decisions.
-6. `docs/90_lineage.md` - lineage of decisions/experiments/tests.
-7. `docs/99_index.md` - index of literature/refs.
-8. `VERSION` - current baseline version tag.
-9. Run `pytest -q` - changes are not done unless tests are green.
+1. `README.md` — краткий обзор и быстрый старт.
+2. `docs/README.md` — полная документация и навигация.
+3. Том I (Конституция/ТЗ): `docs/name3.pdf` (а также `docs/name3.tex`, `docs/name3.md`).
+4. Том II (линия развития): `docs/name4.pdf` / `docs/name4.tex`.
+5. `docs/04_backlog.md` и `docs/05_decision_log.md` — гипотезы/эксперименты и принятые решения.
+6. `docs/90_lineage.md` — lineage: решения → эксперименты → тесты → выводы.
+7. `docs/99_index.md` — индекс литературы/источников (ID, назначение, где используется).
+8. `VERSION` — текущий baseline версии.
+9. Запустить `pytest -q` — задача не считается завершённой, пока тесты не зелёные.
 
-## Repo Map
+## Карта репозитория
 
-- `core/` - model core (`geom_atoms`, `grower`, `complexity`, nuclear modules).
-- `analysis/` - scans/tests/visualizations and CLI entrypoints.
-- `data/` - indices and aggregated tables (do not change formats casually).
-- `results/` - produced artifacts (CSV/TXT/PNG reports).
-- `docs/` - documentation, backlog, decision log, spec sources (Vol I/II).
-- `run_pipeline.py` - main pipeline entrypoint (when relevant).
+- `core/` — ядро модели (`geom_atoms`, `grower`, `complexity`, nuclear modules).
+- `analysis/` — сканы/эксперименты/визуализации и CLI entrypoints.
+- `data/` — индексы и агрегированные таблицы (форматы не менять без явной команды Архитектора).
+- `results/` — артефакты запусков (CSV/TXT/PNG отчёты).
+- `docs/` — документация, backlog, decision log, исходники томов.
+- `run_pipeline.py` — основной пайплайн (когда актуально).
 
-## Definition of Done
+## Definition of Done (DoD)
 
-A change is DONE only if:
+Задача DONE, только если:
 
-1. `pytest -q` is green.
-2. There is a minimal reproduction command (script/CLI).
-3. Outputs land in `results/` (or the absence is explained).
-4. Docs are updated:
-   - workflow/engineering changes -> `docs/README.md`
-   - assumptions/metrics/gates -> `docs/05_decision_log.md`
-   - new tasks/experiments -> `docs/04_backlog.md`
-   - proven evolution -> `docs/90_lineage.md`
+1. `pytest -q` зелёный.
+2. Есть минимальная команда воспроизведения (скрипт/CLI).
+3. Результаты сохраняются в `results/` (или явно объяснено, почему артефактов нет).
+4. Обновлена документация:
+   - workflow/эксплуатация → `docs/README.md`
+   - допущения/метрики/гейты → `docs/05_decision_log.md`
+   - новые задачи/эксперименты → `docs/04_backlog.md`
+   - завершённая история работы → `docs/90_lineage.md`
 
-## Protocol: add an idea without losing it
+## Протокол: как добавлять идеи без хаоса
 
-1. Put the hypothesis into `docs/04_backlog.md` (short, testable).
-2. Implement the minimal experiment under `analysis/` producing an artifact in `results/`.
-3. Add/extend tests under `tests/`.
-4. Record decisions/gates in `docs/05_decision_log.md`.
-5. Record the completed story in `docs/90_lineage.md`.
+1. Записать гипотезу в `docs/04_backlog.md` (коротко, проверяемо).
+2. Сделать минимальный эксперимент в `analysis/`, который производит артефакт в `results/`.
+3. Добавить/обновить тесты в `tests/`.
+4. Зафиксировать решение/гейты/метрики в `docs/05_decision_log.md`.
+5. Добавить запись по шаблону в `docs/90_lineage.md`.

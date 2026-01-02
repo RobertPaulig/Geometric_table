@@ -1,6 +1,6 @@
 # ENTRYPOINT
 
-Edinstvennaya tochka vhoda po kontekstu: `CONTEXT.md`.
+Единая точка входа по контексту: `CONTEXT.md`.
 
-- AI/assistant: start with `CONTEXT.md` and follow **Loading Order**.
-- Humans: `README.md` -> `CONTEXT.md` -> `docs/README.md`.
+- Для ИИ/ассистента: начните с `CONTEXT.md` и следуйте **Порядку загрузки**.
+- Для человека: `README.md` -> `CONTEXT.md` -> `docs/README.md`.
