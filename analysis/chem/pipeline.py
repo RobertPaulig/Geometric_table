@@ -37,6 +37,8 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     ap.add_argument("--k", type=int, default=50, help="Number of decoys to request.")
     ap.add_argument("--seed", type=int, default=0, help="Seed.")
     ap.add_argument("--timestamp", default="", help="UTC timestamp override (ISO). Default: now().")
+    ap.add_argument("--score_mode", choices=["toy_edge_dist", "external_scores"], default="toy_edge_dist")
+    ap.add_argument("--scores_input", default="", help="Path to hetero_scores.v1 JSON (external_scores).")
 
     ap.add_argument("--min_dist_to_original", type=float, default=0.0)
     ap.add_argument("--min_pair_dist", type=float, default=0.0)
@@ -127,10 +129,48 @@ def main(argv: Sequence[str] | None = None) -> int:
     n = int(decoys_result.get("n", 0))
     orig_edges = _edges_norm(tree_payload["edges"])
 
-    items = [{"label": 1, "score": 1.0, "weight": 1.0}]
-    for d in decoys_sorted:
-        dist_to_orig = edge_dist(_edges_norm(d["edges"]), orig_edges, n)
-        items.append({"label": 0, "score": float(1.0 - dist_to_orig), "weight": 1.0})
+    selection_warnings: List[str] = []
+    missing_scores = 0
+    scored_decoys = 0
+    score_mode = str(args.score_mode)
+    score_definition = "score=1 - dist_to_original"
+    scores_input_id = ""
+
+    items: List[Dict[str, float]] = []
+    if score_mode == "external_scores":
+        if not args.scores_input:
+            raise ValueError("--scores_input is required for score_mode=external_scores")
+        scores_path = Path(args.scores_input)
+        scores_input_id = scores_path.name
+        scores_payload = json.loads(scores_path.read_text(encoding="utf-8"))
+        if str(scores_payload.get("schema_version", "")) != "hetero_scores.v1":
+            raise ValueError("scores_input schema_version must be hetero_scores.v1")
+        score_definition = "score from scores_input"
+        original = scores_payload.get("original", {})
+        items.append(
+            {
+                "label": 1,
+                "score": float(original.get("score", 0.0)),
+                "weight": float(original.get("weight", 1.0)),
+            }
+        )
+        scores_map = scores_payload.get("decoys", {}) or {}
+        for d in decoys_sorted:
+            h = str(d.get("hash", ""))
+            if h not in scores_map:
+                missing_scores += 1
+                continue
+            scored_decoys += 1
+            entry = scores_map[h]
+            items.append({"label": 0, "score": float(entry.get("score", 0.0)), "weight": float(entry.get("weight", 1.0))})
+        if missing_scores > 0:
+            selection_warnings.append(f"missing_scores_for_some_decoys:{missing_scores}")
+    else:
+        items.append({"label": 1, "score": 1.0, "weight": 1.0})
+        for d in decoys_sorted:
+            dist_to_orig = edge_dist(_edges_norm(d["edges"]), orig_edges, n)
+            items.append({"label": 0, "score": float(1.0 - dist_to_orig), "weight": 1.0})
+        scored_decoys = len(decoys_sorted)
 
     audit_payload = {"dataset_id": f"pipeline:{tree_payload.get('mol_id','')}", "items": items}
     audit_result = run_audit(
@@ -152,7 +192,6 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     warnings_set = set(decoys_result.get("warnings", []))
     warnings_set.update(audit_result.get("warnings", []))
-    selection_warnings: List[str] = []
     if int(len(selected_indices)) < int(select_k):
         selection_warnings.append("selection_not_enough_decoys")
     warnings_set.update(selection_warnings)
@@ -167,8 +206,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             "node_types": list(tree_payload.get("node_types", [])),
             "edges": list(tree_payload.get("edges", [])),
         },
-        "score_mode": "toy_edge_dist",
-        "score_definition": "score=1 - dist_to_original",
+        "score_mode": score_mode,
+        "score_definition": score_definition,
+        "audit_input": {
+            "score_mode": score_mode,
+            "scores_input_id": scores_input_id,
+            "n_decoys_scored": int(scored_decoys),
+            "n_decoys_missing_scores": int(missing_scores),
+        },
         "decoys": decoys_result,
         "selection": {
             "method": str(args.selection),
@@ -179,7 +224,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "selected_hashes": selected_hashes,
             "metrics": selection_metrics,
         },
-        "audit": audit_result,
+        "audit": {**audit_result, "audit_input": {"score_mode": score_mode}},
         "warnings": sorted(warnings_set),
         "run": {"seed": int(args.seed), "timestamp": timestamp, "cmd": _normalized_cmd(sys.argv)},
     }
