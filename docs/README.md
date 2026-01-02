@@ -84,6 +84,24 @@ python -m analysis.chem.decoys --input tests/data/hetero_tree_min.json --out dec
 - типы узлов сохраняются (индексы вершин не меняются)
 - не нарушаются `max_valence`
 
+## HETERO-1A pipeline (decoys -> selection -> audit)
+
+Публичный entrypoint: `python -m analysis.chem.pipeline`.
+
+Пример запуска:
+```bash
+python -m analysis.chem.pipeline --tree_input tests/data/hetero_tree_min.json --k 50 --seed 0 --timestamp 2026-01-02T00:00:00+00:00 --select_k 20 --selection maxmin --out pipeline.json
+```
+
+Что делает:
+- генерирует decoys (см. `analysis.chem.decoys`)
+- делает coverage selection (`firstk` или `maxmin`)
+- собирает toy audit-датасет и запускает audit (см. `analysis.chem.audit`)
+
+Метод selection:
+- `firstk`: первые `k` по стабильному порядку (по `hash`)
+- `maxmin`: жадный max-min по `pairwise_dist` (tie-break: `hash`)
+
 ## Scripts
 
 ### 1. `scan_virtual_island.py`

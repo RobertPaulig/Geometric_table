@@ -71,3 +71,14 @@
 - **Обновлены доки:** `docs/README.md`
 - **Коммит(ы):** `0e70794`, `06aaec6`
 - **Дальше:** добавить рекомендации (recommendations) по подбору порогов и минимальный diversity-score.
+
+### 2026-01-02 — Pipeline v1: decoys -> selection -> audit
+
+- **Гипотеза:** можно склеить контуры (decoys + coverage selection + audit) в один воспроизводимый JSON-артефакт.
+- **Метод:** один CLI `analysis.chem.pipeline`, два режима селекции (`firstk`, `maxmin`), детерминированный toy-score из `dist_to_original`.
+- **Эксперимент:** `python -m analysis.chem.pipeline --tree_input tests/data/hetero_tree_min.json --k 10 --seed 0 --timestamp 2026-01-02T00:00:00+00:00 --select_k 5 --selection maxmin --out pipeline.json`
+- **Результат:** JSON `hetero_pipeline.v1` содержит `decoys`, `selection`, `audit` в одном отчёте; `maxmin` не хуже `firstk` по `min_pairwise_dist`.
+- **Добавлен тест:** `tests/test_hetero_pipeline_cli.py`
+- **Обновлены доки:** `docs/README.md`
+- **Коммит(ы):** `TBD`
+- **Дальше:** вынести toy-score в `score_mode` и добавить экспорт отчёта (CSV/MD) для пользователя.
