@@ -91,5 +91,5 @@
 - **Результат:** JSON содержит агрегированный `warnings` и стабильные `selected_hashes`.
 - **Добавлен тест:** `tests/test_hetero_pipeline_cli.py`
 - **Обновлены доки:** `docs/README.md`
-- **Коммит(ы):** `TBD`
+- **Коммит(ы):** `482f6ec`, `84a3d11`, `aeafc54`
 - **Дальше:** добавить `report` CLI (md/csv) поверх pipeline JSON.
