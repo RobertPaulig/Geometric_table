@@ -17,11 +17,19 @@ The original documentation lives in `docs/README.md`. For full usage details (re
 
 - Install runtime dependencies: `pip install -r requirements.txt`
 - (Optional) install dev tools: `pip install -r requirements-dev.txt`
+- Recommended (editable + dev): `pip install -e ".[dev]"`
 - Run tests:
 
 ```bash
 pytest -q
 ```
+
+Example CLI:
+```bash
+hetero-audit --input tests/data/hetero_audit_min.json --out audit.json
+```
+
+Legacy install via requirements.txt is supported but will be deprecated.
 
 ## Key directories
 
