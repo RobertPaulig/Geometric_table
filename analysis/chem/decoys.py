@@ -206,6 +206,97 @@ def _edge_dist(a: Sequence[Tuple[int, int]], b: Sequence[Tuple[int, int]], n: in
     return float(len(diff)) / float(2 * (n - 1))
 
 
+def run_decoys(
+    payload: Dict[str, object],
+    *,
+    k: int | None = None,
+    seed: int | None = None,
+    timestamp: str | None = None,
+    min_dist_to_original: float = 0.0,
+    min_pair_dist: float = 0.0,
+    max_attempts: int | None = None,
+    cmd_argv: Sequence[str] | None = None,
+) -> Dict[str, object]:
+    args = argparse.Namespace(seed=seed, timestamp=timestamp)
+    data = _load_input(payload, args=args)
+    if k is not None:
+        data = _Input(
+            mol_id=data.mol_id,
+            node_types=data.node_types,
+            edges=data.edges,
+            k=int(k),
+            seed=data.seed,
+            timestamp=data.timestamp,
+            max_valence=data.max_valence,
+        )
+    n = len(data.node_types)
+    _validate_tree(n, data.edges)
+
+    decoys, warnings, stats, dists_to_original = _generate_decoys(
+        edges=data.edges,
+        node_types=data.node_types,
+        k=data.k,
+        seed=data.seed,
+        max_valence=data.max_valence,
+        min_dist_to_original=float(min_dist_to_original),
+        min_pair_dist=float(min_pair_dist),
+        max_attempts=max_attempts,
+    )
+
+    pairwise_dists: List[float] = []
+    for i in range(len(decoys)):
+        for j in range(i + 1, len(decoys)):
+            pairwise_dists.append(_edge_dist(decoys[i], decoys[j], n))
+
+    def _summary(values: Sequence[float]) -> Dict[str, float]:
+        if not values:
+            return {"min": float("nan"), "mean": float("nan"), "max": float("nan")}
+        return {
+            "min": float(min(values)),
+            "mean": float(sum(values) / len(values)),
+            "max": float(max(values)),
+        }
+
+    overlap_vals: List[float] = []
+    orig_edges_norm = sorted((min(a, b), max(a, b)) for a, b in data.edges)
+    orig_set = _edges_set(orig_edges_norm)
+    for edges in decoys:
+        overlap = len(orig_set.intersection(_edges_set(edges)))
+        overlap_vals.append(float(overlap) / float(n - 1))
+
+    return {
+        "schema_version": "hetero_decoys.v1",
+        "mol_id": data.mol_id,
+        "n": n,
+        "k_requested": int(data.k),
+        "k_generated": int(len(decoys)),
+        "constraints": {"preserve_degree": True, "preserve_types": True},
+        "metrics": {
+            "dist_to_original": _summary(dists_to_original),
+            "pairwise_dist": {
+                "min": _summary(pairwise_dists)["min"],
+                "mean": _summary(pairwise_dists)["mean"],
+            },
+            "edge_overlap_to_original_mean": float(sum(overlap_vals) / len(overlap_vals)) if overlap_vals else float("nan"),
+        },
+        "filter": {
+            "min_dist_to_original": float(min_dist_to_original),
+            "min_pair_dist": float(min_pair_dist),
+            "attempts": int(stats["attempts"]),
+            "rejected_too_close_to_original": int(stats["rejected_too_close_to_original"]),
+            "rejected_too_close_to_existing": int(stats["rejected_too_close_to_existing"]),
+            "rejected_duplicate": int(stats["rejected_duplicate"]),
+        },
+        "decoys": [{"edges": edges, "hash": _edge_hash(edges)} for edges in decoys],
+        "warnings": warnings,
+        "run": {
+            "seed": int(data.seed),
+            "timestamp": data.timestamp,
+            "cmd": _normalized_cmd(list(cmd_argv) if cmd_argv is not None else sys.argv),
+        },
+    }
+
+
 def _generate_decoys(
     *,
     edges: Sequence[Tuple[int, int]],
@@ -283,74 +374,15 @@ def _generate_decoys(
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parse_args(argv)
     payload = json.loads(Path(args.input).read_text(encoding="utf-8"))
-    data = _load_input(payload, args=args)
-
-    n = len(data.node_types)
-    _validate_tree(n, data.edges)
-
-    decoys, warnings, stats, dists_to_original = _generate_decoys(
-        edges=data.edges,
-        node_types=data.node_types,
-        k=data.k,
-        seed=data.seed,
-        max_valence=data.max_valence,
+    out = run_decoys(
+        payload,
+        seed=args.seed,
+        timestamp=args.timestamp,
         min_dist_to_original=float(args.min_dist_to_original),
         min_pair_dist=float(args.min_pair_dist),
         max_attempts=int(args.max_attempts) if args.max_attempts is not None else None,
+        cmd_argv=sys.argv,
     )
-
-    pairwise_dists: List[float] = []
-    for i in range(len(decoys)):
-        for j in range(i + 1, len(decoys)):
-            pairwise_dists.append(_edge_dist(decoys[i], decoys[j], n))
-
-    def _summary(values: Sequence[float]) -> Dict[str, float]:
-        if not values:
-            return {"min": float("nan"), "mean": float("nan"), "max": float("nan")}
-        return {
-            "min": float(min(values)),
-            "mean": float(sum(values) / len(values)),
-            "max": float(max(values)),
-        }
-
-    overlap_vals: List[float] = []
-    orig_edges_norm = sorted((min(a, b), max(a, b)) for a, b in data.edges)
-    orig_set = _edges_set(orig_edges_norm)
-    for edges in decoys:
-        overlap = len(orig_set.intersection(_edges_set(edges)))
-        overlap_vals.append(float(overlap) / float(n - 1))
-
-    out = {
-        "schema_version": "hetero_decoys.v1",
-        "mol_id": data.mol_id,
-        "n": n,
-        "k_requested": int(data.k),
-        "k_generated": int(len(decoys)),
-        "constraints": {"preserve_degree": True, "preserve_types": True},
-        "metrics": {
-            "dist_to_original": _summary(dists_to_original),
-            "pairwise_dist": {
-                "min": _summary(pairwise_dists)["min"],
-                "mean": _summary(pairwise_dists)["mean"],
-            },
-            "edge_overlap_to_original_mean": float(sum(overlap_vals) / len(overlap_vals)) if overlap_vals else float("nan"),
-        },
-        "filter": {
-            "min_dist_to_original": float(args.min_dist_to_original),
-            "min_pair_dist": float(args.min_pair_dist),
-            "attempts": int(stats["attempts"]),
-            "rejected_too_close_to_original": int(stats["rejected_too_close_to_original"]),
-            "rejected_too_close_to_existing": int(stats["rejected_too_close_to_existing"]),
-            "rejected_duplicate": int(stats["rejected_duplicate"]),
-        },
-        "decoys": [{"edges": edges, "hash": _edge_hash(edges)} for edges in decoys],
-        "warnings": warnings,
-        "run": {
-            "seed": int(data.seed),
-            "timestamp": data.timestamp,
-            "cmd": _normalized_cmd(sys.argv),
-        },
-    }
 
     text = json.dumps(out, ensure_ascii=False, sort_keys=True, indent=2) + os.linesep
     if args.out:

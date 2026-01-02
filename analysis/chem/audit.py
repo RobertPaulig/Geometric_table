@@ -138,10 +138,16 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     return ap.parse_args(list(argv) if argv is not None else None)
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    args = _parse_args(argv)
-
-    payload = json.loads(Path(args.input).read_text(encoding="utf-8"))
+def run_audit(
+    payload: Dict[str, Any],
+    *,
+    seed: int = 0,
+    timestamp: str = "",
+    cmd_argv: Sequence[str] | None = None,
+    neg_control_reps: int = 200,
+    neg_control_quantile: float = 0.95,
+    neg_auc_margin: float = 0.05,
+) -> Dict[str, Any]:
     dataset_id, items = _load_items(payload)
 
     n_pos = sum(1 for it in items if it.label == 1)
@@ -151,15 +157,14 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     perm_q, rand_q, method, reps_used = _neg_control_quantiles(
         items=items,
-        seed=int(args.seed),
-        reps=int(args.neg_control_reps),
-        q=float(args.neg_control_quantile),
+        seed=int(seed),
+        reps=int(neg_control_reps),
+        q=float(neg_control_quantile),
     )
-    null_q = float(null_auc_quantile(n_pos, n_neg, float(args.neg_control_quantile)))
-    # Deterministic: "random fingerprint" null is treated as the same null quantile.
+    null_q = float(null_auc_quantile(n_pos, n_neg, float(neg_control_quantile)))
     rand_q = null_q
     neg_auc_max = max(perm_q, rand_q)
-    margin = float(args.neg_auc_margin)
+    margin = float(neg_auc_margin)
     gate = float(null_q + margin)
     slack = float(gate - neg_auc_max)
     verdict = "PASS" if slack >= 0.0 else "FAIL"
@@ -184,17 +189,34 @@ def main(argv: Sequence[str] | None = None) -> int:
             "slack": slack,
             "verdict": verdict,
         },
-        "run": {
-            "seed": int(args.seed),
-            "timestamp": str(args.timestamp).strip() or _utc_now_iso(),
-            "cmd": " ".join(_normalized_cmd(sys.argv)),
-        },
     }
 
     warnings_list: List[str] = []
     if any(it.weight != 1.0 for it in items):
         warnings_list.append("weights_used_in_auc_but_null_q_is_unweighted")
     out["warnings"] = warnings_list
+
+    out["run"] = {
+        "seed": int(seed),
+        "timestamp": str(timestamp).strip() or _utc_now_iso(),
+        "cmd": " ".join(_normalized_cmd(list(cmd_argv) if cmd_argv is not None else sys.argv)),
+    }
+    return out
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    args = _parse_args(argv)
+
+    payload = json.loads(Path(args.input).read_text(encoding="utf-8"))
+    out = run_audit(
+        payload,
+        seed=int(args.seed),
+        timestamp=str(args.timestamp).strip(),
+        cmd_argv=sys.argv,
+        neg_control_reps=int(args.neg_control_reps),
+        neg_control_quantile=float(args.neg_control_quantile),
+        neg_auc_margin=float(args.neg_auc_margin),
+    )
 
     text = json.dumps(out, ensure_ascii=False, sort_keys=True, indent=2) + os.linesep
     if args.out:
