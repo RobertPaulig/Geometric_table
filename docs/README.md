@@ -98,6 +98,12 @@ python -m analysis.chem.pipeline --tree_input tests/data/hetero_tree_min.json --
 - делает coverage selection (`firstk` или `maxmin`)
 - собирает toy audit-датасет и запускает audit (см. `analysis.chem.audit`)
 
+Примечание: `score_mode=toy_edge_dist` — это демонстрационный скоринг (score = 1 - dist_to_original).
+На следующих итерациях будет поддержан `score_mode=external_scores`.
+
+Warnings:
+- верхнеуровневый `warnings` — это объединение `decoys.warnings`, `audit.warnings` и предупреждений селекции.
+
 Метод selection:
 - `firstk`: первые `k` по стабильному порядку (по `hash`)
 - `maxmin`: жадный max-min по `pairwise_dist` (tie-break: `hash`)

@@ -82,3 +82,14 @@
 - **Обновлены доки:** `docs/README.md`
 - **Коммит(ы):** `7ffe729`, `9c9506d`, `92f4fd7`
 - **Дальше:** вынести toy-score в `score_mode` и добавить экспорт отчёта (CSV/MD) для пользователя.
+
+### 2026-01-02 — Pipeline v1.1: score_mode + warnings + stable selection IDs
+
+- **Гипотеза:** pipeline должен явно маркировать toy-скоринг, агрегировать warnings и давать устойчивые идентификаторы выбора.
+- **Метод:** добавить `score_mode/score_definition`, агрегировать `warnings` из всех блоков, хранить `selected_hashes` и `index_base`.
+- **Эксперимент:** `python -m analysis.chem.pipeline --tree_input tests/data/hetero_tree_min.json --k 10 --seed 0 --timestamp 2026-01-02T00:00:00+00:00 --select_k 5 --selection maxmin --out pipeline.json`
+- **Результат:** JSON содержит агрегированный `warnings` и стабильные `selected_hashes`.
+- **Добавлен тест:** `tests/test_hetero_pipeline_cli.py`
+- **Обновлены доки:** `docs/README.md`
+- **Коммит(ы):** `TBD`
+- **Дальше:** добавить `report` CLI (md/csv) поверх pipeline JSON.
