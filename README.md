@@ -1,5 +1,7 @@
 # Geometric_table (geom-spec v4.0 Visualization Suite)
 
+Single entry point for AI/context loading: `CONTEXT.md`.
+
 This repository contains Python code and analysis scripts for the geometric–spectral model (geom-spec v4.0). The core model lives in `core/` (`geom_atoms`, `grower`, `complexity`, nuclear modules), while scans, tests and visualizations are in `analysis/`.
 
 The original documentation lives in `docs/README.md`. For full usage details (requirements, scripts, workflow, troubleshooting) see:
