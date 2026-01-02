@@ -74,3 +74,42 @@ def test_decoys_deterministic_and_constraints(tmp_path: Path) -> None:
             assert t is True
             node_type = json.loads(input_path.read_text(encoding="utf-8"))["node_types"][i]
             assert d <= max_valence[node_type]
+
+
+def test_decoys_filter_behavior(tmp_path: Path) -> None:
+    input_path = Path("tests/data/hetero_tree_min.json")
+    out_no_filter = tmp_path / "no_filter.json"
+    out_filtered = tmp_path / "filtered.json"
+    base = [
+        sys.executable,
+        "-m",
+        "analysis.chem.decoys",
+        "--input",
+        str(input_path),
+        "--out",
+    ]
+
+    subprocess.run([*base, str(out_no_filter)], check=True)
+    data_no = json.loads(out_no_filter.read_text(encoding="utf-8"))
+    assert data_no["k_generated"] == data_no["k_requested"]
+    assert data_no["warnings"] == []
+
+    subprocess.run(
+        [
+            *base,
+            str(out_filtered),
+            "--min_pair_dist",
+            "0.5",
+            "--min_dist_to_original",
+            "0.5",
+            "--max_attempts",
+            "50",
+        ],
+        check=True,
+    )
+    data_f = json.loads(out_filtered.read_text(encoding="utf-8"))
+    if data_f["k_generated"] < data_f["k_requested"]:
+        assert "could_not_generate_k_decoys_under_constraints" in data_f["warnings"]
+    else:
+        assert data_f["metrics"]["dist_to_original"]["min"] >= 0.5
+        assert data_f["metrics"]["pairwise_dist"]["min"] >= 0.5
