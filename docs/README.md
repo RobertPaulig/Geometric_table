@@ -134,6 +134,10 @@ python -m analysis.chem.report --input pipeline.json --out_dir . --stem example
 
 Детерминизм: один и тот же pipeline JSON даёт одинаковые md/csv.
 
+## Контракты и совместимость
+
+См. `docs/10_contracts_policy.md` — правила schema_version и breaking changes.
+
 Метод selection:
 - `firstk`: первые `k` по стабильному порядку (по `hash`)
 - `maxmin`: жадный max-min по `pairwise_dist` (tie-break: `hash`)
