@@ -90,6 +90,25 @@ def _neg_control_quantiles(
 
     n = len(labels_orig)
     m = sum(1 for y in labels_orig if y == 1)
+    if m == 1 or m == n - 1:
+        # Exact null for single-positive/single-negative without MC.
+        dist: Dict[float, int] = {}
+        for idx in range(n):
+            labels = [1] * n if m == n - 1 else [0] * n
+            labels[idx] = 0 if m == n - 1 else 1
+            auc = float(_roc_auc(scores, labels, weights))
+            dist[auc] = dist.get(auc, 0) + 1
+        target = q * sum(dist.values())
+        cum = 0
+        perm_q = float("nan")
+        for auc in sorted(dist):
+            cum += dist[auc]
+            if cum >= target:
+                perm_q = float(auc)
+                break
+        if not (perm_q == perm_q):
+            perm_q = float(max(dist)) if dist else float("nan")
+        return perm_q, float("nan"), "exact", 0
     if n <= 10:
         # Exact null for permuted labels: enumerate all labelings with fixed m positives.
         # Each labeling is equally likely under label permutation with fixed score order.
@@ -168,6 +187,7 @@ def run_audit(
     gate = float(null_q + margin)
     slack = float(gate - neg_auc_max)
     verdict = "PASS" if slack >= 0.0 else "FAIL"
+    null_q_method = "m1_exact" if n_pos == 1 or n_neg == 1 else "unweighted_counts"
 
     out: Dict[str, Any] = {
         "schema_version": "hetero_audit.v1",
@@ -181,7 +201,7 @@ def run_audit(
             "perm_q": perm_q,
             "rand_q": rand_q,
             "neg_auc_max": neg_auc_max,
-            "null_q_method": "unweighted_counts",
+            "null_q_method": null_q_method,
             "method": method,
             "reps_used": reps_used,
             "gate": gate,

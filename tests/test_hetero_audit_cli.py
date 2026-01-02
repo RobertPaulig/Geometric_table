@@ -143,3 +143,36 @@ def test_hetero_audit_warns_on_weighted_inputs(tmp_path: Path) -> None:
     subprocess.run(cmd, check=True)
     data = json.loads(out.read_text(encoding="utf-8"))
     assert "weights_used_in_auc_but_null_q_is_unweighted" in data["warnings"]
+
+
+def test_hetero_audit_exact_for_single_positive(tmp_path: Path) -> None:
+    payload = {
+        "dataset_id": "m1_exact_v1",
+        "items": [
+            {"score": float(i), "label": 1 if i == 10 else 0, "weight": 1.0}
+            for i in range(11)
+        ],
+    }
+    input_path = tmp_path / "m1.json"
+    input_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    out = tmp_path / "out.json"
+    cmd = [
+        sys.executable,
+        "-m",
+        "analysis.chem.audit",
+        "--input",
+        str(input_path),
+        "--seed",
+        "0",
+        "--timestamp",
+        "2026-01-02T00:00:00+00:00",
+        "--neg_control_reps",
+        "123",
+        "--out",
+        str(out),
+    ]
+    subprocess.run(cmd, check=True)
+    data = json.loads(out.read_text(encoding="utf-8"))
+    assert data["neg_controls"]["method"] == "exact"
+    assert data["neg_controls"]["reps_used"] == 0
+    assert data["neg_controls"]["null_q_method"] == "m1_exact"
