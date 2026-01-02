@@ -18,24 +18,14 @@ name3.out
 name3.toc
 
 # ============================================================
-# RESULTS POLICY (track reports; ignore heavy/cache artifacts)
+# RESULTS POLICY
+# - By default: ignore generated artifacts in `results/`
+# - Track only: `results/README.md` and `results/baselines/**` (curated baselines)
 # ============================================================
-!results/
-!results/**/
-
-!results/**/*.txt
-!results/**/*.csv
-!results/**/*.json
-!results/**/*.jsonl
-!results/**/*.md
-!results/**/*.png
-
-results_dist_*
-results/**/*.pkl
-results/**/cache_*.pkl
-results/**/cache_*.npz
-results/**/submissions/**
-results/**/__pycache__/
+results/**
+!results/README.md
+!results/baselines/
+!results/baselines/**
 
 # ============================================================
 # HETERO QC runtime artifacts (never commit)
