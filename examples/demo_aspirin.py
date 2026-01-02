@@ -14,7 +14,7 @@ from hetero1a.api import run_decoys, run_pipeline
 SMILES_ASPIRIN = "CC(=O)OC1=CC=CC=C1C(=O)O"
 TREE_FALLBACK = {
     "node_types": ["C", "C", "O", "C", "C", "O", "C", "O"],
-    "edges": [(0, 1), (1, 2), (1, 3), (3, 4), (4, 5), (4, 6), (6, 7)],
+    "edges": [[0, 1], [1, 2], [1, 3], [3, 4], [4, 5], [4, 6], [6, 7]],
 }
 
 
@@ -22,7 +22,7 @@ def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
-def _try_rdkit() -> Tuple[List[str], List[Tuple[int, int]], str]:
+def _try_rdkit() -> Tuple[List[str], List[List[int]], str]:
     try:
         from rdkit import Chem
     except Exception:
@@ -34,9 +34,9 @@ def _try_rdkit() -> Tuple[List[str], List[Tuple[int, int]], str]:
 
     n = mol.GetNumAtoms()
     node_types = [atom.GetSymbol() for atom in mol.GetAtoms()]
-    edges: List[Tuple[int, int]] = []
+    edges: List[List[int]] = []
     for bond in mol.GetBonds():
-        edges.append((bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()))
+        edges.append([bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()])
     if n < 2 or not edges:
         return [], [], "RDKit produced empty graph; demo runs in toy mode."
 
@@ -44,7 +44,7 @@ def _try_rdkit() -> Tuple[List[str], List[Tuple[int, int]], str]:
     for u, v in edges:
         adj[u].append(v)
         adj[v].append(u)
-    tree_edges: List[Tuple[int, int]] = []
+    tree_edges: List[List[int]] = []
     seen = {0}
     stack = [0]
     while stack:
@@ -53,7 +53,7 @@ def _try_rdkit() -> Tuple[List[str], List[Tuple[int, int]], str]:
             if nxt in seen:
                 continue
             seen.add(nxt)
-            tree_edges.append((cur, nxt))
+            tree_edges.append([cur, nxt])
             stack.append(nxt)
     if len(tree_edges) != n - 1:
         return [], [], "RDKit graph not connected; demo runs in toy mode."

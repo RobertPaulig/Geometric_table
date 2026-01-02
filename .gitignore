@@ -38,6 +38,8 @@ results/**
 
 # Examples output
 examples/out/
+aspirin_report.md
+aspirin.decoys.csv
 
 # ============================================================
 # HETERO QC runtime artifacts (never commit)
