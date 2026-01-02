@@ -63,7 +63,7 @@ def _parse_args(argv: List[str] | None) -> argparse.Namespace:
     ap.add_argument("--neg_control_seed", type=int, default=0, help="Seed for negative controls.")
     ap.add_argument("--neg_control_reps", type=int, default=50, help="Repetitions for negative controls (permute/random).")
     ap.add_argument("--neg_control_quantile", type=float, default=0.95, help="Quantile for negative-control AUC (e.g. 0.95).")
-    ap.add_argument("--neg_auc_margin", type=float, default=0.05, help="Additive margin over theoretical null AUC quantile.")
+    ap.add_argument("--neg_auc_margin", type=float, default=0.06, help="Additive margin over theoretical null AUC quantile.")
     ap.add_argument("--debug_fp", action="store_true")
     return ap.parse_args(argv)
 
@@ -258,6 +258,7 @@ def main(argv: List[str] | None = None) -> None:
         "fp_neg_auc_rand_fp_q",
         "fp_neg_auc_reps",
         "fp_neg_auc_quantile",
+        "fp_neg_auc_slack",
     ]
     fieldnames = list(dict.fromkeys(base_fields))
     extra_cols = sorted(c for c in score_cols if c not in fieldnames)

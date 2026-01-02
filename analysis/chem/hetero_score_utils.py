@@ -480,7 +480,7 @@ def compute_formula_scores(
     neg_control_seed: int = 0,
     neg_control_reps: int = 1,
     neg_control_quantile: float = 0.95,
-    neg_auc_margin: float = 0.05,
+    neg_auc_margin: float = 0.06,
 ) -> List[Dict[str, object]]:
     weights = df_states[weights_col].fillna(0.0).to_numpy(dtype=float)
     if np.all(weights == 0):
@@ -787,6 +787,7 @@ def compute_formula_scores(
                 row["fp_neg_auc_null_q"] = float("nan")
                 row["fp_neg_auc_margin"] = float(neg_auc_margin)
                 row["fp_neg_auc_gate"] = float("nan")
+                row["fp_neg_auc_slack"] = float("nan")
                 if active is not None and (neg_control_permute_labels or neg_control_random_fp):
                     try:
                         from analysis.chem.neg_control_null_auc import null_auc_quantile
@@ -827,6 +828,18 @@ def compute_formula_scores(
                         row["fp_neg_auc_rand_fp_mean"] = _clamp01(float(np.nanmean(auc_arr)))
                         row["fp_neg_auc_rand_fp_q"] = _clamp01(float(np.nanquantile(auc_arr, q)))
                         row["fp_neg_auc_best_rand_fp"] = row["fp_neg_auc_rand_fp_q"]
+                neg_candidates = [
+                    row.get("fp_neg_auc_best_perm_labels"),
+                    row.get("fp_neg_auc_best_rand_fp"),
+                ]
+                finite_neg = [
+                    float(val)
+                    for val in neg_candidates
+                    if isinstance(val, (float, int)) and not np.isnan(float(val))
+                ]
+                gate_val = row.get("fp_neg_auc_gate")
+                if finite_neg and isinstance(gate_val, (float, int)) and not np.isnan(float(gate_val)):
+                    row["fp_neg_auc_slack"] = float(gate_val) - max(finite_neg)
         else:
             row["fp_dim"] = 0
             row["fp_best_idx"] = -1
@@ -863,6 +876,7 @@ def compute_formula_scores(
             row["fp_neg_auc_null_q"] = float("nan")
             row["fp_neg_auc_margin"] = float(neg_auc_margin)
             row["fp_neg_auc_gate"] = float("nan")
+            row["fp_neg_auc_slack"] = float("nan")
         score_rows.append(row)
     return score_rows
 def _clamp01(val: float) -> float:

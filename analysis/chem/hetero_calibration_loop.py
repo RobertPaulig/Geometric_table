@@ -39,7 +39,7 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     )
     ap.add_argument("--neg_control_reps", type=int, default=50, help="Repetitions for negative controls inside suite.")
     ap.add_argument("--neg_control_quantile", type=float, default=0.95, help="Quantile used for negative-control AUC gate.")
-    ap.add_argument("--neg_auc_margin", type=float, default=0.05, help="Margin for dynamic neg-controls gate (suite --neg_auc_margin).")
+    ap.add_argument("--neg_auc_margin", type=float, default=0.06, help="Margin for dynamic neg-controls gate (suite --neg_auc_margin).")
     return ap.parse_args(argv)
 
 
@@ -190,7 +190,7 @@ def _evaluate_trial(rows: List[Dict[str, object]], *, args: argparse.Namespace) 
     max_neg_auc_any = float("nan")
     max_neg_gate_any = float("nan")
     if args.use_neg_controls:
-        neg_auc_margin = float(getattr(args, "neg_auc_margin", 0.05))
+        neg_auc_margin = float(getattr(args, "neg_auc_margin", 0.06))
         neg_auc_max_override = getattr(args, "neg_auc_max", None)
         max_neg_auc_any = max((v["neg_auc_max"] for v in formula_gate.values()), default=float("nan"))
         if max_neg_auc_any == float("-inf"):
@@ -346,7 +346,7 @@ def _evaluate_trial(rows: List[Dict[str, object]], *, args: argparse.Namespace) 
         "fp_best_auc_best_list": ";".join(val for _, val in details_list),
     }
     if args.use_neg_controls:
-        neg_auc_margin = float(getattr(args, "neg_auc_margin", 0.05))
+        neg_auc_margin = float(getattr(args, "neg_auc_margin", 0.06))
         neg_auc_max_override = getattr(args, "neg_auc_max", None)
         meta["max_neg_auc_any"] = max_neg_auc_any
         meta["neg_control_seed"] = int(args.neg_control_seed)

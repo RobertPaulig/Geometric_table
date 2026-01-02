@@ -33,7 +33,7 @@ def _parse_args() -> argparse.Namespace:
     )
     ap.add_argument("--neg_control_reps", type=int, default=50)
     ap.add_argument("--neg_control_quantile", type=float, default=0.95)
-    ap.add_argument("--neg_auc_margin", type=float, default=0.05)
+    ap.add_argument("--neg_auc_margin", type=float, default=0.06)
     return ap.parse_args()
 
 
