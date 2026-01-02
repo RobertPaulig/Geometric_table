@@ -17,6 +17,15 @@ name3.log
 name3.out
 name3.toc
 
+# LaTeX build artifacts
+*.aux
+*.log
+*.out
+*.toc
+*.synctex.gz
+*.fls
+*.fdb_latexmk
+
 # ============================================================
 # RESULTS POLICY
 # - By default: ignore generated artifacts in `results/`
