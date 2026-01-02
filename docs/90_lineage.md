@@ -104,3 +104,14 @@
 - **Обновлены доки:** `docs/README.md`
 - **Коммит(ы):** `9b8fce1`, `d81b0a9`, `e1f1bf9`
 - **Дальше:** добавить `score_mode=external_scores` и формат отчёта для пользовательского скоринга.
+
+### 2026-01-02 — Pipeline v1.2: external_scores
+
+- **Гипотеза:** pipeline должен принимать внешние скоры по hash без привязки к индексам decoys.
+- **Метод:** новый режим `score_mode=external_scores` + формат `hetero_scores.v1`; неполные скоры дают warning.
+- **Эксперимент:** `python -m analysis.chem.pipeline --tree_input tests/data/hetero_tree_min.json --score_mode external_scores --scores_input scores.json --out pipeline.json`
+- **Результат:** `audit` строится из внешних score/weight; `warnings` фиксирует пропуски.
+- **Добавлен тест:** `tests/test_hetero_pipeline_cli.py`
+- **Обновлены доки:** `docs/README.md`
+- **Коммит(ы):** `TBD`
+- **Дальше:** вынести score_mode в отдельный блок и добавить SDK facade.

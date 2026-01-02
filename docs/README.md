@@ -104,6 +104,21 @@ python -m analysis.chem.pipeline --tree_input tests/data/hetero_tree_min.json --
 Warnings:
 - верхнеуровневый `warnings` — это объединение `decoys.warnings`, `audit.warnings` и предупреждений селекции.
 
+External scores:
+- `--score_mode external_scores`
+- `--scores_input path/to/scores.json`
+
+Формат `scores_input`:
+```json
+{
+  "schema_version": "hetero_scores.v1",
+  "original": {"score": 1.0, "weight": 1.0},
+  "decoys": {
+    "<hash>": {"score": 0.12, "weight": 1.0}
+  }
+}
+```
+
 ## HETERO-1A report (pipeline -> md + csv)
 
 Публичный entrypoint: `python -m analysis.chem.report`.
