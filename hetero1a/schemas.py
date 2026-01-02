@@ -1,0 +1,5 @@
+AUDIT_SCHEMA = "hetero_audit.v1"
+DECOYS_SCHEMA = "hetero_decoys.v1"
+PIPELINE_SCHEMA = "hetero_pipeline.v1"
+SCORES_SCHEMA = "hetero_scores.v1"
+REPORT_SCHEMA = "hetero_report.v1"

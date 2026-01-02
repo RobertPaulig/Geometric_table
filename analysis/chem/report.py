@@ -31,13 +31,10 @@ def _edge_overlap_mean(decoys: Sequence[Dict[str, Any]], orig_edges: Sequence[Tu
     return {"mean": float(sum(values) / len(values)) if values else float("nan")}
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    args = _parse_args(argv)
-    payload = json.loads(Path(args.input).read_text(encoding="utf-8"))
-
-    out_dir = Path(args.out_dir).resolve()
-    out_dir.mkdir(parents=True, exist_ok=True)
-    stem = args.stem or str(payload.get("tree_input_id", "report"))
+def render_report(payload: Dict[str, Any], *, out_dir: str = ".", stem: str = "") -> tuple[str, str]:
+    out_dir_path = Path(out_dir).resolve()
+    out_dir_path.mkdir(parents=True, exist_ok=True)
+    stem_name = stem or str(payload.get("tree_input_id", "report"))
 
     schema_version = str(payload.get("schema_version", ""))
     run = payload.get("run", {})
@@ -62,8 +59,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     selected_hashes = set(selection.get("selected_hashes", []))
 
-    report_md = out_dir / f"{stem}.report.md"
-    report_csv = out_dir / f"{stem}.decoys.csv"
+    report_md = out_dir_path / f"{stem_name}.report.md"
+    report_csv = out_dir_path / f"{stem_name}.decoys.csv"
 
     md_lines = [
         "HETERO-1A Report (hetero_pipeline.v1)",
@@ -113,9 +110,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             overlap = float(len(set(orig_edges).intersection(set(d_edges)))) / float(n - 1) if n > 1 else 0.0
             writer.writerow([idx, h, selected, f"{dist:.6f}", f"{overlap:.6f}"])
 
+    return str(report_md), str(report_csv)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    args = _parse_args(argv)
+    payload = json.loads(Path(args.input).read_text(encoding="utf-8"))
+    render_report(payload, out_dir=args.out_dir, stem=args.stem)
     return 0
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

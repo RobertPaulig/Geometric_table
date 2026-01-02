@@ -104,24 +104,39 @@ def _pairwise_stats(decoys_sorted: Sequence[Dict[str, Any]], n: int, indices: Se
     }
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    args = _parse_args(argv)
-    timestamp = str(args.timestamp).strip() or _utc_now_iso()
+def run_pipeline(
+    tree_payload: Dict[str, Any],
+    *,
+    k: int = 50,
+    seed: int = 0,
+    timestamp: str = "",
+    min_dist_to_original: float = 0.0,
+    min_pair_dist: float = 0.0,
+    max_attempts: int | None = None,
+    neg_control_reps: int = 200,
+    margin: float = 0.05,
+    select_k: int = 20,
+    selection: str = "maxmin",
+    score_mode: str = "toy_edge_dist",
+    scores_input: str = "",
+    cmd_argv: Sequence[str] | None = None,
+) -> Dict[str, Any]:
+    timestamp = str(timestamp).strip() or _utc_now_iso()
 
-    tree_payload = json.loads(Path(args.tree_input).read_text(encoding="utf-8"))
-    tree_payload["k"] = int(args.k)
-    tree_payload["seed"] = int(args.seed)
+    tree_payload = dict(tree_payload)
+    tree_payload["k"] = int(k)
+    tree_payload["seed"] = int(seed)
     tree_payload["timestamp"] = timestamp
 
     decoys_result = run_decoys(
         tree_payload,
-        k=int(args.k),
-        seed=int(args.seed),
+        k=int(k),
+        seed=int(seed),
         timestamp=timestamp,
-        min_dist_to_original=float(args.min_dist_to_original),
-        min_pair_dist=float(args.min_pair_dist),
-        max_attempts=int(args.max_attempts) if args.max_attempts is not None else None,
-        cmd_argv=sys.argv,
+        min_dist_to_original=float(min_dist_to_original),
+        min_pair_dist=float(min_pair_dist),
+        max_attempts=max_attempts,
+        cmd_argv=cmd_argv,
     )
 
     decoys_list = list(decoys_result.get("decoys", []))
@@ -132,15 +147,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     selection_warnings: List[str] = []
     missing_scores = 0
     scored_decoys = 0
-    score_mode = str(args.score_mode)
     score_definition = "score=1 - dist_to_original"
     scores_input_id = ""
 
     items: List[Dict[str, float]] = []
     if score_mode == "external_scores":
-        if not args.scores_input:
+        if not scores_input:
             raise ValueError("--scores_input is required for score_mode=external_scores")
-        scores_path = Path(args.scores_input)
+        scores_path = Path(scores_input)
         scores_input_id = scores_path.name
         scores_payload = json.loads(scores_path.read_text(encoding="utf-8"))
         if str(scores_payload.get("schema_version", "")) != "hetero_scores.v1":
@@ -175,18 +189,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     audit_payload = {"dataset_id": f"pipeline:{tree_payload.get('mol_id','')}", "items": items}
     audit_result = run_audit(
         audit_payload,
-        seed=int(args.seed),
+        seed=int(seed),
         timestamp=timestamp,
-        cmd_argv=sys.argv,
-        neg_control_reps=int(args.neg_control_reps),
-        neg_auc_margin=float(args.margin),
+        cmd_argv=cmd_argv if cmd_argv is not None else sys.argv,
+        neg_control_reps=int(neg_control_reps),
+        neg_auc_margin=float(margin),
     )
 
-    select_k = int(args.select_k)
-    if args.selection == "firstk":
-        selected_indices = _selection_firstk(decoys_sorted, select_k)
+    if selection == "firstk":
+        selected_indices = _selection_firstk(decoys_sorted, int(select_k))
     else:
-        selected_indices = _selection_maxmin(decoys_sorted, n, select_k)
+        selected_indices = _selection_maxmin(decoys_sorted, n, int(select_k))
 
     selection_metrics = _pairwise_stats(decoys_sorted, n, selected_indices)
 
@@ -198,7 +211,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     selected_hashes = [str(decoys_sorted[i]["hash"]) for i in selected_indices]
 
-    out: Dict[str, Any] = {
+    return {
         "schema_version": "hetero_pipeline.v1",
         "tree_input_id": str(tree_payload.get("mol_id", "")),
         "tree_input": {
@@ -216,8 +229,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         },
         "decoys": decoys_result,
         "selection": {
-            "method": str(args.selection),
-            "k_requested": select_k,
+            "method": str(selection),
+            "k_requested": int(select_k),
             "k_selected": int(len(selected_indices)),
             "index_base": "decoys_sorted_by_hash",
             "selected_indices": [int(i) for i in selected_indices],
@@ -226,8 +239,29 @@ def main(argv: Sequence[str] | None = None) -> int:
         },
         "audit": {**audit_result, "audit_input": {"score_mode": score_mode}},
         "warnings": sorted(warnings_set),
-        "run": {"seed": int(args.seed), "timestamp": timestamp, "cmd": _normalized_cmd(sys.argv)},
+        "run": {"seed": int(seed), "timestamp": timestamp, "cmd": _normalized_cmd(list(cmd_argv) if cmd_argv is not None else sys.argv)},
     }
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    args = _parse_args(argv)
+    tree_payload = json.loads(Path(args.tree_input).read_text(encoding="utf-8"))
+    out = run_pipeline(
+        tree_payload,
+        k=int(args.k),
+        seed=int(args.seed),
+        timestamp=str(args.timestamp).strip(),
+        min_dist_to_original=float(args.min_dist_to_original),
+        min_pair_dist=float(args.min_pair_dist),
+        max_attempts=int(args.max_attempts) if args.max_attempts is not None else None,
+        neg_control_reps=int(args.neg_control_reps),
+        margin=float(args.margin),
+        select_k=int(args.select_k),
+        selection=str(args.selection),
+        score_mode=str(args.score_mode),
+        scores_input=str(args.scores_input),
+        cmd_argv=sys.argv,
+    )
 
     text = json.dumps(out, ensure_ascii=False, sort_keys=True, indent=2) + os.linesep
     if args.out:
