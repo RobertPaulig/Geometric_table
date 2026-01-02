@@ -20,7 +20,6 @@ EXCLUDED_DIRS = {
 
 # Extensions that are typically binary or not useful for code/architecture review
 EXCLUDED_EXTENSIONS = {
-    ".txt",  # user requested to skip source txt files
     ".pdf",
     ".png",
     ".jpg",
@@ -63,10 +62,16 @@ def iter_project_files(root: Path, output_file: Path) -> Iterable[Path]:
             # Directory-level exclusions are handled via the traversal in build_tree;
             # here we only yield files.
             continue
-        # Всегда пропускаем файлы внутри каталога results/
+        # results policy: по умолчанию не включаем артефакты прогонов из results/,
+        # но включаем курируемые baseline/README.
         parts = path.relative_to(root).parts
         if parts and parts[0] == "results":
-            continue
+            if len(parts) == 2 and parts[1] == "README.md":
+                pass
+            elif len(parts) >= 2 and parts[1] == "baselines":
+                pass
+            else:
+                continue
 
         if should_exclude_file(path, output_file):
             continue
