@@ -21,3 +21,10 @@ jobs:
           pip install -e ".[dev]"
       - name: Run tests
         run: pytest -q
+      - name: Smoke entry points
+        run: |
+          hetero-audit --help
+          hetero-decoys --help
+          hetero-pipeline --help
+          hetero-report --help
+          python -c "import hetero1a; from hetero1a.api import run_pipeline; print('ok')"
