@@ -36,6 +36,9 @@ results/**
 !results/baselines/
 !results/baselines/**
 
+# Examples output
+examples/out/
+
 # ============================================================
 # HETERO QC runtime artifacts (never commit)
 # ============================================================
