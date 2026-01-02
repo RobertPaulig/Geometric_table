@@ -52,6 +52,7 @@ def _load_items(payload: Dict[str, Any]) -> Tuple[str, List[_Item]]:
         weight = float(row.get("weight", 1.0))
         items.append(_Item(score=score, label=label, weight=weight))
 
+    items.sort(key=lambda it: (it.score, it.label, it.weight))
     return dataset_id, items
 
 
@@ -145,6 +146,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         "auc_tie_aware": auc,
         "neg_controls": {
             "null_q": null_q,
+            "perm_q": perm_q,
+            "rand_q": rand_q,
+            "neg_auc_max": neg_auc_max,
             "gate": gate,
             "margin": margin,
             "slack": slack,
@@ -166,14 +170,16 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 def _normalized_cmd(argv: Sequence[str]) -> List[str]:
-    # Keep a stable command string for audits/tests: drop `--out <path>` because it varies by environment.
+    # Keep a stable command string for audits/tests:
+    # - drop `--out <path>` because it varies by environment,
+    # - drop `--input <path>` because it varies by dataset location/order-invariance tests.
     out: List[str] = []
     skip_next = False
     for token in argv:
         if skip_next:
             skip_next = False
             continue
-        if token == "--out":
+        if token in {"--out", "--input"}:
             skip_next = True
             continue
         out.append(token)

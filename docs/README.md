@@ -45,7 +45,7 @@ python -m analysis.chem.audit --input tests/data/hetero_audit_min.json --seed 0 
 - `version`, `dataset_id`
 - `n_pos`, `n_neg`
 - `auc_tie_aware`
-- `neg_controls`: `{null_q, gate, margin, slack, verdict}`
+- `neg_controls`: `{null_q, perm_q, rand_q, neg_auc_max, gate, margin, slack, verdict}`
 - `run`: `{seed, timestamp, cmd}`
 
 ## Scripts
