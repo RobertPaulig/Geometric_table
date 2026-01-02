@@ -33,7 +33,18 @@ def test_hetero_audit_is_deterministic(tmp_path: Path) -> None:
 
     for key in ["version", "dataset_id", "n_pos", "n_neg", "auc_tie_aware", "neg_controls", "run"]:
         assert key in a
-    for key in ["null_q", "perm_q", "rand_q", "neg_auc_max", "gate", "margin", "slack", "verdict"]:
+    for key in [
+        "null_q",
+        "perm_q",
+        "rand_q",
+        "neg_auc_max",
+        "method",
+        "reps_used",
+        "gate",
+        "margin",
+        "slack",
+        "verdict",
+    ]:
         assert key in a["neg_controls"]
     for key in ["seed", "timestamp", "cmd"]:
         assert key in a["run"]
@@ -67,3 +78,34 @@ def test_hetero_audit_is_invariant_to_item_order(tmp_path: Path) -> None:
     a = json.loads(out1.read_text(encoding="utf-8"))
     b = json.loads(out2.read_text(encoding="utf-8"))
     assert a == b
+
+
+def test_hetero_audit_uses_exact_neg_controls_for_small_n(tmp_path: Path) -> None:
+    input_path = Path("tests/data/hetero_audit_min.json")
+    out = tmp_path / "out.json"
+    cmd = [
+        sys.executable,
+        "-m",
+        "analysis.chem.audit",
+        "--input",
+        str(input_path),
+        "--seed",
+        "0",
+        "--timestamp",
+        "2026-01-02T00:00:00+00:00",
+        "--neg_control_reps",
+        "7",
+        "--out",
+        str(out),
+    ]
+    subprocess.run(cmd, check=True)
+    a = json.loads(out.read_text(encoding="utf-8"))
+
+    assert a["neg_controls"]["method"] == "exact"
+    assert a["neg_controls"]["reps_used"] == 0
+    assert a["neg_controls"]["rand_q"] == a["neg_controls"]["null_q"]
+
+    out2 = tmp_path / "out2.json"
+    subprocess.run([*cmd[:-3], "999", "--out", str(out2)], check=True)
+    b = json.loads(out2.read_text(encoding="utf-8"))
+    assert a["neg_controls"]["perm_q"] == b["neg_controls"]["perm_q"]
