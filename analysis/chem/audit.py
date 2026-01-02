@@ -7,6 +7,7 @@ import random
 import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from itertools import combinations
 from pathlib import Path
 from typing import Any, Dict, List, Sequence, Tuple
 
@@ -69,26 +70,15 @@ def _neg_control_quantiles(
     seed: int,
     reps: int,
     q: float,
-) -> Tuple[float, float]:
+) -> Tuple[float, float, str, int]:
     if reps <= 0:
         raise ValueError("reps must be positive")
     if not (0.0 < q <= 1.0):
         raise ValueError("q must be in (0,1]")
 
-    rng = random.Random(seed)
     scores = [it.score for it in items]
     weights = [it.weight for it in items]
     labels_orig = [it.label for it in items]
-
-    aucs_perm: List[float] = []
-    aucs_rand_fp: List[float] = []
-    for _ in range(reps):
-        labels = labels_orig[:]
-        rng.shuffle(labels)
-        aucs_perm.append(float(_roc_auc(scores, labels, weights)))
-
-        rand_scores = [rng.random() for _ in scores]
-        aucs_rand_fp.append(float(_roc_auc(rand_scores, labels_orig, weights)))
 
     def _quantile(values: Sequence[float], q_val: float) -> float:
         vals = sorted(values)
@@ -98,7 +88,42 @@ def _neg_control_quantiles(
         k = max(1, int(round(q_val * len(vals))))
         return float(vals[min(k - 1, len(vals) - 1)])
 
-    return _quantile(aucs_perm, q), _quantile(aucs_rand_fp, q)
+    n = len(labels_orig)
+    m = sum(1 for y in labels_orig if y == 1)
+    if n <= 10:
+        # Exact null for permuted labels: enumerate all labelings with fixed m positives.
+        # Each labeling is equally likely under label permutation with fixed score order.
+        dist: Dict[float, int] = {}
+        for pos_idx in combinations(range(n), m):
+            labels = [0] * n
+            for i in pos_idx:
+                labels[i] = 1
+            auc = float(_roc_auc(scores, labels, weights))
+            dist[auc] = dist.get(auc, 0) + 1
+
+        total = 0
+        target = q * 0.0
+        target = q * sum(dist.values())
+        total = sum(dist.values())
+        cum = 0
+        perm_q = float("nan")
+        for auc in sorted(dist):
+            cum += dist[auc]
+            if cum >= target:
+                perm_q = float(auc)
+                break
+        if not (perm_q == perm_q):
+            perm_q = float(max(dist)) if dist else float("nan")
+        return perm_q, float("nan"), "exact", 0
+
+    rng = random.Random(seed)
+    aucs_perm: List[float] = []
+    for _ in range(reps):
+        labels = labels_orig[:]
+        rng.shuffle(labels)
+        aucs_perm.append(float(_roc_auc(scores, labels, weights)))
+
+    return _quantile(aucs_perm, q), float("nan"), "mc", int(reps)
 
 
 def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
@@ -124,15 +149,16 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     auc = _auc_from_items(items)
 
-    perm_q, rand_q = _neg_control_quantiles(
+    perm_q, rand_q, method, reps_used = _neg_control_quantiles(
         items=items,
         seed=int(args.seed),
         reps=int(args.neg_control_reps),
         q=float(args.neg_control_quantile),
     )
-    neg_auc_max = max(perm_q, rand_q)
-
     null_q = float(null_auc_quantile(n_pos, n_neg, float(args.neg_control_quantile)))
+    # Deterministic: "random fingerprint" null is treated as the same null quantile.
+    rand_q = null_q
+    neg_auc_max = max(perm_q, rand_q)
     margin = float(args.neg_auc_margin)
     gate = float(null_q + margin)
     slack = float(gate - neg_auc_max)
@@ -149,6 +175,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             "perm_q": perm_q,
             "rand_q": rand_q,
             "neg_auc_max": neg_auc_max,
+            "method": method,
+            "reps_used": reps_used,
             "gate": gate,
             "margin": margin,
             "slack": slack,
