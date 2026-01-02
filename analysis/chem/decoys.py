@@ -48,6 +48,9 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     ap.add_argument("--out", default="", help="Output JSON path (default: stdout).")
     ap.add_argument("--seed", type=int, default=None, help="Override seed from input JSON.")
     ap.add_argument("--timestamp", default=None, help="Override timestamp from input JSON (ISO).")
+    ap.add_argument("--min_dist_to_original", type=float, default=0.0, help="Minimum distance to original tree.")
+    ap.add_argument("--min_pair_dist", type=float, default=0.0, help="Minimum pairwise distance between decoys.")
+    ap.add_argument("--max_attempts", type=int, default=None, help="Maximum attempts to generate decoys.")
     return ap.parse_args(list(argv) if argv is not None else None)
 
 
@@ -191,6 +194,18 @@ def _degree_ok(deg: Sequence[int], node_types: Sequence[str], max_valence: Dict[
     return True
 
 
+def _edges_set(edges: Sequence[Tuple[int, int]]) -> set[Tuple[int, int]]:
+    return set((min(a, b), max(a, b)) for a, b in edges)
+
+
+def _edge_dist(a: Sequence[Tuple[int, int]], b: Sequence[Tuple[int, int]], n: int) -> float:
+    # Normalized symmetric difference for trees with same n.
+    ea = _edges_set(a)
+    eb = _edges_set(b)
+    diff = ea.symmetric_difference(eb)
+    return float(len(diff)) / float(2 * (n - 1))
+
+
 def _generate_decoys(
     *,
     edges: Sequence[Tuple[int, int]],
@@ -198,38 +213,71 @@ def _generate_decoys(
     k: int,
     seed: int,
     max_valence: Dict[str, int],
-) -> Tuple[List[List[Tuple[int, int]]], List[str]]:
+    min_dist_to_original: float,
+    min_pair_dist: float,
+    max_attempts: int | None,
+) -> Tuple[List[List[Tuple[int, int]]], List[str], Dict[str, int], List[float]]:
     n = len(node_types)
     orig_deg = _degree_sequence(n, edges)
     if not _degree_ok(orig_deg, node_types, max_valence):
         raise ValueError("input violates max_valence constraints")
     orig_hash = _edge_hash(edges)
+    orig_edges_norm = sorted((min(a, b), max(a, b)) for a, b in edges)
 
     rng = random.Random(seed)
     decoys: List[List[Tuple[int, int]]] = []
     seen = {orig_hash}
     warnings: List[str] = []
-
-    max_attempts = max(100, k * 50)
     attempts = 0
-    while len(decoys) < k and attempts < max_attempts:
+    rejected_duplicate = 0
+    rejected_too_close_to_original = 0
+    rejected_too_close_to_existing = 0
+    dists_to_original: List[float] = []
+
+    max_attempts_eff = max_attempts if max_attempts is not None else max(100, k * 200)
+    while len(decoys) < k and attempts < max_attempts_eff:
         attempts += 1
         seq = _prufer_from_degree(orig_deg, rng)
         new_edges = _tree_from_prufer(seq)
         new_hash = _edge_hash(new_edges)
         if new_hash in seen:
+            rejected_duplicate += 1
             continue
         new_deg = _degree_sequence(n, new_edges)
         if new_deg != orig_deg:
             continue
         if not _degree_ok(new_deg, node_types, max_valence):
             continue
+        new_edges_norm = sorted((min(a, b), max(a, b)) for a, b in new_edges)
+        dist_to_orig = _edge_dist(new_edges_norm, orig_edges_norm, n)
+        if dist_to_orig < min_dist_to_original:
+            rejected_too_close_to_original += 1
+            continue
+        if min_pair_dist > 0.0:
+            too_close = False
+            for existing in decoys:
+                if _edge_dist(new_edges_norm, existing, n) < min_pair_dist:
+                    too_close = True
+                    break
+            if too_close:
+                rejected_too_close_to_existing += 1
+                continue
         seen.add(new_hash)
-        decoys.append(sorted((min(a, b), max(a, b)) for a, b in new_edges))
+        decoys.append(new_edges_norm)
+        dists_to_original.append(dist_to_orig)
 
     if len(decoys) < k:
         warnings.append("not_enough_unique_decoys")
-    return decoys, warnings
+    if len(decoys) < k and (min_dist_to_original > 0.0 or min_pair_dist > 0.0):
+        warnings.append("could_not_generate_k_decoys_under_constraints")
+
+    stats = {
+        "attempts": attempts,
+        "rejected_duplicate": rejected_duplicate,
+        "rejected_too_close_to_original": rejected_too_close_to_original,
+        "rejected_too_close_to_existing": rejected_too_close_to_existing,
+    }
+    return decoys, warnings, stats, dists_to_original
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -240,13 +288,37 @@ def main(argv: Sequence[str] | None = None) -> int:
     n = len(data.node_types)
     _validate_tree(n, data.edges)
 
-    decoys, warnings = _generate_decoys(
+    decoys, warnings, stats, dists_to_original = _generate_decoys(
         edges=data.edges,
         node_types=data.node_types,
         k=data.k,
         seed=data.seed,
         max_valence=data.max_valence,
+        min_dist_to_original=float(args.min_dist_to_original),
+        min_pair_dist=float(args.min_pair_dist),
+        max_attempts=int(args.max_attempts) if args.max_attempts is not None else None,
     )
+
+    pairwise_dists: List[float] = []
+    for i in range(len(decoys)):
+        for j in range(i + 1, len(decoys)):
+            pairwise_dists.append(_edge_dist(decoys[i], decoys[j], n))
+
+    def _summary(values: Sequence[float]) -> Dict[str, float]:
+        if not values:
+            return {"min": float("nan"), "mean": float("nan"), "max": float("nan")}
+        return {
+            "min": float(min(values)),
+            "mean": float(sum(values) / len(values)),
+            "max": float(max(values)),
+        }
+
+    overlap_vals: List[float] = []
+    orig_edges_norm = sorted((min(a, b), max(a, b)) for a, b in data.edges)
+    orig_set = _edges_set(orig_edges_norm)
+    for edges in decoys:
+        overlap = len(orig_set.intersection(_edges_set(edges)))
+        overlap_vals.append(float(overlap) / float(n - 1))
 
     out = {
         "schema_version": "hetero_decoys.v1",
@@ -255,6 +327,22 @@ def main(argv: Sequence[str] | None = None) -> int:
         "k_requested": int(data.k),
         "k_generated": int(len(decoys)),
         "constraints": {"preserve_degree": True, "preserve_types": True},
+        "metrics": {
+            "dist_to_original": _summary(dists_to_original),
+            "pairwise_dist": {
+                "min": _summary(pairwise_dists)["min"],
+                "mean": _summary(pairwise_dists)["mean"],
+            },
+            "edge_overlap_to_original_mean": float(sum(overlap_vals) / len(overlap_vals)) if overlap_vals else float("nan"),
+        },
+        "filter": {
+            "min_dist_to_original": float(args.min_dist_to_original),
+            "min_pair_dist": float(args.min_pair_dist),
+            "attempts": int(stats["attempts"]),
+            "rejected_too_close_to_original": int(stats["rejected_too_close_to_original"]),
+            "rejected_too_close_to_existing": int(stats["rejected_too_close_to_existing"]),
+            "rejected_duplicate": int(stats["rejected_duplicate"]),
+        },
         "decoys": [{"edges": edges, "hash": _edge_hash(edges)} for edges in decoys],
         "warnings": warnings,
         "run": {
@@ -274,4 +362,3 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
