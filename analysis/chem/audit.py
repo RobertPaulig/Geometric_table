@@ -165,6 +165,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     verdict = "PASS" if slack >= 0.0 else "FAIL"
 
     out: Dict[str, Any] = {
+        "schema_version": "hetero_audit.v1",
         "version": _read_version(),
         "dataset_id": dataset_id,
         "n_pos": int(n_pos),
@@ -175,6 +176,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "perm_q": perm_q,
             "rand_q": rand_q,
             "neg_auc_max": neg_auc_max,
+            "null_q_method": "unweighted_counts",
             "method": method,
             "reps_used": reps_used,
             "gate": gate,
@@ -188,6 +190,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             "cmd": " ".join(_normalized_cmd(sys.argv)),
         },
     }
+
+    warnings_list: List[str] = []
+    if any(it.weight != 1.0 for it in items):
+        warnings_list.append("weights_used_in_auc_but_null_q_is_unweighted")
+    out["warnings"] = warnings_list
 
     text = json.dumps(out, ensure_ascii=False, sort_keys=True, indent=2) + os.linesep
     if args.out:

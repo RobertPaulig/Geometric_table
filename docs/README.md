@@ -42,11 +42,16 @@ python -m analysis.chem.audit --input tests/data/hetero_audit_min.json --seed 0 
 ```
 
 Выход: JSON со стабильными ключами:
+- `schema_version`
 - `version`, `dataset_id`
 - `n_pos`, `n_neg`
 - `auc_tie_aware`
-- `neg_controls`: `{null_q, perm_q, rand_q, neg_auc_max, method, reps_used, gate, margin, slack, verdict}`
+- `neg_controls`: `{null_q, perm_q, rand_q, neg_auc_max, null_q_method, method, reps_used, gate, margin, slack, verdict}`
+- `warnings`
 - `run`: `{seed, timestamp, cmd}`
+
+Примечание: `null_q` сейчас считается по `(n_pos, n_neg)` без учёта весов. Если веса не все равны 1.0, в `warnings`
+появляется `weights_used_in_auc_but_null_q_is_unweighted`. Это сигнал к будущему расширению (weighted null).
 
 ## Scripts
 
