@@ -1,6 +1,10 @@
 # Geometric_table (geom-spec v4.0 Visualization Suite)
 
+[![pytest](https://github.com/RobertPaulig/Geometric_table/actions/workflows/pytest.yml/badge.svg)](https://github.com/RobertPaulig/Geometric_table/actions/workflows/pytest.yml)
+
 Старт: `CONTEXT.md` (единая точка входа).
+
+CI обязателен: merge/PR считаются DONE только при зелёном GitHub Actions `pytest`.
 
 This repository contains Python code and analysis scripts for the geometric–spectral model (geom-spec v4.0). The core model lives in `core/` (`geom_atoms`, `grower`, `complexity`, nuclear modules), while scans, tests and visualizations are in `analysis/`.
 
