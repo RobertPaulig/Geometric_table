@@ -38,3 +38,14 @@
 - **Обновлены доки:** `docs/README.md`
 - **Коммит(ы):** `4247e78`, `676ec59`
 - **Дальше:** расширить exact-ветку до N≤12 (если нужно) и/или добавить ε-инварианты для float-полей в контракте.
+
+### 2026-01-02 — Warning: веса vs unweighted null_q
+
+- **Гипотеза:** при наличии весов в данных нужно явно сигнализировать, что `null_q` сейчас считается без учёта весов.
+- **Метод:** добавить `schema_version` и `warnings` в JSON, зафиксировать `null_q_method`, и предупредить при неединичных весах.
+- **Эксперимент:** `python -m analysis.chem.audit --input tests/data/hetero_audit_min.json --seed 0 --out audit.json`
+- **Результат:** `warnings` включает `weights_used_in_auc_but_null_q_is_unweighted` на weighted-датасете.
+- **Добавлен тест:** `tests/test_hetero_audit_cli.py`
+- **Обновлены доки:** `docs/README.md`
+- **Коммит(ы):** `315b047`, `ada4bcb`
+- **Дальше:** добавить weighted-null и сверку с известными значениями.
