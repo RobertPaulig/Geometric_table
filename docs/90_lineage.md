@@ -93,3 +93,14 @@
 - **Обновлены доки:** `docs/README.md`
 - **Коммит(ы):** `482f6ec`, `84a3d11`, `aeafc54`
 - **Дальше:** добавить `report` CLI (md/csv) поверх pipeline JSON.
+
+### 2026-01-02 — Report v1: pipeline.json -> report.md + decoys.csv
+
+- **Гипотеза:** продуктовый отчёт должен быть отделён от pipeline и воспроизводим из одного JSON.
+- **Метод:** отдельный CLI `analysis.chem.report`, сборка summary + таблицы decoys.
+- **Эксперимент:** `python -m analysis.chem.report --input pipeline.json --out_dir . --stem example`
+- **Результат:** стабильные `example.report.md` и `example.decoys.csv`.
+- **Добавлен тест:** `tests/test_hetero_report_cli.py`
+- **Обновлены доки:** `docs/README.md`
+- **Коммит(ы):** `TBD`
+- **Дальше:** добавить `score_mode=external_scores` и формат отчёта для пользовательского скоринга.

@@ -104,6 +104,21 @@ python -m analysis.chem.pipeline --tree_input tests/data/hetero_tree_min.json --
 Warnings:
 - верхнеуровневый `warnings` — это объединение `decoys.warnings`, `audit.warnings` и предупреждений селекции.
 
+## HETERO-1A report (pipeline -> md + csv)
+
+Публичный entrypoint: `python -m analysis.chem.report`.
+
+Пример запуска:
+```bash
+python -m analysis.chem.report --input pipeline.json --out_dir . --stem example
+```
+
+Выход:
+- `<stem>.report.md` (1 страница: verdict/gate/slack, k_generated/k_selected, min/mean расстояния, warnings)
+- `<stem>.decoys.csv` (hash, selected, dist_to_original, edge_overlap_to_original, index)
+
+Детерминизм: один и тот же pipeline JSON даёт одинаковые md/csv.
+
 Метод selection:
 - `firstk`: первые `k` по стабильному порядку (по `hash`)
 - `maxmin`: жадный max-min по `pairwise_dist` (tie-break: `hash`)
