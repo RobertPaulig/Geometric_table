@@ -49,10 +49,6 @@ def should_exclude_file(path: Path, output_file: Path) -> bool:
     if path.resolve() == output_file.resolve():
         return True
 
-    # Skip anything starting with "name3" in any directory
-    if name.startswith("name3"):
-        return True
-
     # Skip by extension
     if path.suffix.lower() in EXCLUDED_EXTENSIONS:
         return True
@@ -91,9 +87,6 @@ def build_tree(root: Path) -> str:
         for entry in dir_path.iterdir():
             # Exclude directories
             if entry.is_dir() and entry.name in EXCLUDED_DIRS:
-                continue
-            # Exclude name3* files at tree level as well
-            if entry.is_file() and entry.name.startswith("name3"):
                 continue
             # Exclude typical binary/non-code files at tree level
             if entry.is_file() and entry.suffix.lower() in EXCLUDED_EXTENSIONS:
