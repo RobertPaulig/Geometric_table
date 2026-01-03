@@ -31,6 +31,12 @@ hetero-audit --input tests/data/hetero_audit_min.json --out audit.json
 
 Legacy install via requirements.txt is supported but will be deprecated.
 
+## HETERO-2 Quick Demo (rings / WOW)
+
+- Install with RDKit: `pip install -e ".[dev,chem]"`
+- Run demo: `hetero2-demo-aspirin`
+- Outputs: `aspirin_report.md` + `aspirin_assets/` (images of molecule + hard negatives)
+
 ## Key directories
 
 - `core/` – model (geom_atoms, grower, complexity, thermo, nuclear)

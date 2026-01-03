@@ -159,3 +159,14 @@
 - **Обновлены доки:** `docs/90_lineage.md`
 - **Коммит(ы):** `2679e83`, `e79c503`, `7b8f808`
 - **Дальше:** demo_aspirin_v2 (красная кнопка), cycle selection/hardness metrics, интеграция с decoys_v2 в pipeline/report.
+
+### 2026-01-03 в?" HETERO-2 Sprint-3: Productize WOW (CLI + images + contracts)
+
+- **Гипотеза:** публичный CLI + визуальный отчет с картинками повышает доверие к HETERO-2 как продукту.
+- **Метод:** CLI entrypoints `hetero2-*`, отчёт v2 с RDKit-картинками и таблицами hard negatives, контрактные интеграционные тесты (demo+CLI).
+- **Эксперимент:** Aspirin через CLI/demo -> pipeline v2 -> report v2 (md + assets) в tmp_path.
+- **Результат:** детерминированный отчет с картинками, таблицей decoys, предупреждениями; CLI работает из упаковки.
+- **Добавлен тест:** `tests/test_hetero2_cli_entrypoints.py`, `tests/test_hetero2_demo_aspirin_contract.py`
+- **Обновлены доки:** `README.md`, `CHANGELOG.md`, `docs/90_lineage.md`
+- **Коммит(ы):** `4f3af4a`, `0fcecdd`, `<sprint3-final>`
+- **Дальше:** selection/hardness метрики + публичный отчетный формат для клиента.
