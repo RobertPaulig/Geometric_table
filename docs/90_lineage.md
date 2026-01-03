@@ -176,8 +176,8 @@
 - **Гипотеза:** спектральная сумма (PHI) может быть маркером hardness для decoys с кольцами.
 - **Метод:** RayAuditor (divisor_sum_profile), phi_from_eigs/phi_from_smiles на спектре Лапласиана, первые числа на аспирине + decoys.
 - **Эксперимент:** aspirin -> phi_original vs phi_decoys (mock decoys), self-check sigma sum=8299.
-- **Результат:** экспериментальный скрипт и тесты, продукт не меняется.
+- **Результат:** экспериментальный скрипт и тесты, продукт не меняется. Bench (scale=300, seed=0, k≈30): aspirin (delta=-71, count=2), acetaminophen (decoys=0), ibuprofen (delta=-1477, count=9), naproxen (delta=+1254, count=3), salicylic_acid (decoys=0); сигнал неустойчив.
 - **Добавлен тест:** `tests/experimental/test_ray_constant.py`, `tests/experimental/test_ray_phi_determinism.py`, `tests/experimental/test_ray_phi_runs_on_aspirin.py`
 - **Обновлены доки:** `docs/04_backlog.md`, `docs/05_decision_log.md`, `docs/90_lineage.md`
-- **Коммит(ы):** `b92b70f`, `228873f`
-- **Дальше:** собрать PHI по ≥3 молекулам с кольцами, проверить критерий принятия перед включением в отчет.
+- **Коммит(ы):** `b92b70f`, `228873f`, `183bf42`, `228873f`
+- **Дальше:** собрать PHI по ≥3 молекулам с кольцами, проверить критерий принятия перед включением в отчет; улучшить генерацию decoys для сложных кольцевых молекул.

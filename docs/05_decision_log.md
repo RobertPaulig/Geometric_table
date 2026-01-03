@@ -2122,3 +2122,14 @@ DoD:
 Решение:
 - Реализовать PHI в экспериментальном модуле (analysis/experimental), не трогая core/report.
 - Критерий принятия: на ≥3 кольцевых молекулах устойчиво `median(phi_decoys) > phi_original` при разных seed; иначе — остаётся R&D.
+
+### PHI-EXP-1 (bench 5 ring molecules, k≈30)
+
+Результаты (scale=300, seed=0):
+- aspirin: phi_orig=14898.59, phi_decoys_median=14827.60 (count=2, delta=-71)
+- acetaminophen: decoys=0 (sanitization/rewire не прошли)
+- ibuprofen: phi_orig=20301.70, phi_decoys_median=18824.56 (count=9, delta=-1477)
+- naproxen: phi_orig=16970.21, phi_decoys_median=18224.90 (count=3, delta=+1254)
+- salicylic_acid: decoys=0
+
+Вывод: сигнала пока нет (медианы часто ниже или выборка отсутствует). PHI остаётся экспериментом; перед включением в продукт требуется стабильный сдвиг на ≥3 молекулах и при других seed.
