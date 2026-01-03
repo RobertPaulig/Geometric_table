@@ -1,3 +1,4 @@
+import os
 import shutil
 import subprocess
 import sys
@@ -10,7 +11,13 @@ def test_dockerfile_exists() -> None:
     assert Path("Dockerfile").exists()
 
 
-@pytest.mark.skipif(shutil.which("docker") is None, reason="docker not available")
+RUN = os.environ.get("HETERO2_DOCKER_SMOKE", "") == "1"
+
+
+@pytest.mark.skipif(
+    (not RUN) or (shutil.which("docker") is None),
+    reason="docker smoke validated by CI job docker-smoke; set HETERO2_DOCKER_SMOKE=1 to run locally",
+)
 def test_docker_smoke_local(tmp_path: Path) -> None:
     # Light local smoke: build and run hetero2 demo if docker available
     image = "hetero2:test-smoke"
