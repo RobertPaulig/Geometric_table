@@ -38,14 +38,36 @@ class RayAuditor:
         return sum(self.divisor_sum_profile[i] for i in range(1, limit + 1))
 
 
-def phi_from_eigs(eigs: Iterable[float], scale: int = 100) -> float:
+def _lerp_profile(idx_float: float, profile: Dict[int, int], size: int) -> float:
+    if idx_float <= 1.0:
+        return float(profile.get(1, 0))
+    if idx_float >= size:
+        return float(profile.get(size, profile.get(max(profile), 0)))
+    lo = int(np.floor(idx_float))
+    hi = int(np.ceil(idx_float))
+    frac = idx_float - lo
+    v_lo = float(profile.get(lo, profile.get(max(profile), 0)))
+    v_hi = float(profile.get(hi, v_lo))
+    if hi == lo:
+        return v_lo
+    return v_lo + frac * (v_hi - v_lo)
+
+
+def phi_from_eigs(
+    eigs: Iterable[float],
+    *,
+    scale: int = 100,
+    auditor_size: int = 2048,
+    num_rays: int | None = None,
+) -> float:
     vals = [float(x) for x in eigs]
     if not vals:
         return float("nan")
-    # Simple, deterministic aggregation: scaled L1 norm of eigenvalues.
+    rays = RayAuditor(size=int(auditor_size), num_rays=int(num_rays or auditor_size))
     acc = 0.0
     for x in vals:
-        acc += abs(x) * float(scale)
+        idx_float = abs(x) * float(scale)
+        acc += _lerp_profile(idx_float, rays.divisor_sum_profile, rays.size)
     return acc
 
 
