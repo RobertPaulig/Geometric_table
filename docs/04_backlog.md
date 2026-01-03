@@ -83,3 +83,26 @@
 - [SPECTRAL-GEOM-1C] После SPECTRAL-WS-Z-1: сделать ws_sp_gap действительно элемент-специфичным: centered hybrid_strength(gap_ref, scale), скан gap(Z), калибровка на B/C/N/O/Si/P/S.
 - [SPECTRAL-DENSITY-1C] После SPECTRAL-WS-Z-1: добавить shape-sensitive observables (⟨r⟩, ⟨r²⟩, r_rms, kurtosis) для rho_gauss vs rho_ws_scaled; при необходимости R&D-терм в FDM energy, чувствительный к форме.
 - [SPECTRAL-REPORT-CLI-1] Привести compare_density_sources и compare_port_geometry_sources к поддержке --thermo-config и CLI override’ов (в т.ч. coupling_ws_Z), печатать Effective ThermoConfig в консоль, добавить --out в scan_ws_gap_vs_Z чтобы не затирать результаты.
+## HETERO-2 (P0) — Spectral Cycle Engine (WOW hard negatives)
+
+### [HETERO2-EPIC-0] Цель продукта (стандарт отчета)
+Описание:
+- HETERO-report становится обязательным артефактом проверки модели на hard negatives с кольцами.
+DoD:
+- demo_aspirin_v2.py (красная кнопка) + aspirin_report.md
+- pytest -q зеленый, CI зеленый
+
+### [HETERO2-RDKIT-1] RDKit SMILES -> Graph + базовые дескрипторы
+Задачи:
+- ChemGraph(SMILES) -> adjacency/laplacian
+- physchem: MW/LogP/TPSA (для отчета)
+
+### [HETERO2-REWIRE-1] Cycle decoys: degree-preserving double-edge-swap + RDKit sanitize
+Задачи:
+- генерация K hard negatives с сохранением degrees
+- фильтры валидности (rdkit sanitize), дедуп, not-isomorphic
+
+### [HETERO2-SPECTRAL-1] Spectral fingerprint (Laplacian spectrum / LDOS)
+Задачи:
+- spectrum/ldos vector детерминированно
+- тест: инвариантность к порядку, стабильность при фиксированных seed
