@@ -35,6 +35,7 @@ hetero-report = "hetero1a.cli:hetero_report"
 hetero2-pipeline = "hetero2.cli:main_pipeline"
 hetero2-report = "hetero2.cli:main_report"
 hetero2-demo-aspirin = "hetero2.cli:main_demo_aspirin"
+hetero2-batch = "hetero2.cli:main_batch"
 
 [tool.setuptools.packages.find]
 where = [".", "src"]

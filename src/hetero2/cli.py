@@ -7,6 +7,7 @@ from pathlib import Path
 
 from hetero2.pipeline import run_pipeline_v2
 from hetero2.report import render_report_v2
+from hetero2.batch import run_batch
 
 
 def _parse_pipeline_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -33,6 +34,17 @@ def _parse_demo_args(argv: list[str] | None = None) -> argparse.Namespace:
     ap = argparse.ArgumentParser(description="HETERO-2 aspirin demo (SMILES -> report).")
     ap.add_argument("--out_dir", default=".", help="Output directory (default: current dir).")
     ap.add_argument("--stem", default="aspirin", help="Filename stem for outputs.")
+    return ap.parse_args(argv)
+
+
+def _parse_batch_args(argv: list[str] | None = None) -> argparse.Namespace:
+    ap = argparse.ArgumentParser(description="HETERO-2 batch runner from CSV (id,smiles[,scores_input]).")
+    ap.add_argument("--input", required=True, help="Input CSV with columns: id, smiles [,scores_input].")
+    ap.add_argument("--out_dir", default="out", help="Output directory for artifacts.")
+    ap.add_argument("--k_decoys", type=int, default=20, help="Decoys per molecule.")
+    ap.add_argument("--seed", type=int, default=0, help="Seed.")
+    ap.add_argument("--timestamp", default="", help="Timestamp override.")
+    ap.add_argument("--scores_input", default="", help="Global scores_input path (optional).")
     return ap.parse_args(argv)
 
 
@@ -83,6 +95,22 @@ def main_demo_aspirin(argv: list[str] | None = None) -> int:
     render_report_v2(pipeline, out_path=str(report_out), assets_dir=out_dir / f"{stem}_assets")
     sys.stdout.write(f"Pipeline JSON: {pipeline_out}\n")
     sys.stdout.write(f"Report: {report_out}\n")
+    return 0
+
+
+def main_batch(argv: list[str] | None = None) -> int:
+    args = _parse_batch_args(argv)
+    input_csv = Path(args.input).resolve()
+    out_dir = Path(args.out_dir).resolve()
+    run_batch(
+        input_csv=input_csv,
+        out_dir=out_dir,
+        seed=int(args.seed),
+        timestamp=str(args.timestamp),
+        k_decoys=int(args.k_decoys),
+        score_mode="external_scores" if args.scores_input else "mock",
+        scores_input=str(args.scores_input) if args.scores_input else None,
+    )
     return 0
 
 

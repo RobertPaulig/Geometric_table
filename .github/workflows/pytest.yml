@@ -77,3 +77,34 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             https://api.github.com/repos/${{ github.repository }}/statuses/${{ github.sha }} \
             -d "{\"state\":\"failure\",\"context\":\"ci/test-chem\",\"description\":\"RDKit tests failed\",\"target_url\":\"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}"
+  docker-smoke:
+    runs-on: ubuntu-latest
+    permissions:
+      statuses: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t hetero2:smoke .
+      - name: Run hetero2 demo inside container
+        run: |
+          mkdir -p /tmp/hetero2_out
+          docker run --rm -v /tmp/hetero2_out:/out hetero2:smoke hetero2-demo-aspirin --out_dir /out/aspirin
+          test -f /tmp/hetero2_out/aspirin/aspirin_report.md
+          test -d /tmp/hetero2_out/aspirin/aspirin_assets
+      - name: Set Commit Status (docker success)
+        if: success()
+        run: |
+          curl -s -X POST \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/${{ github.repository }}/statuses/${{ github.sha }} \
+            -d "{\"state\":\"success\",\"context\":\"ci/docker\",\"description\":\"docker smoke passed\",\"target_url\":\"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}"
+      - name: Set Commit Status (docker failure)
+        if: failure()
+        run: |
+          curl -s -X POST \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/${{ github.repository }}/statuses/${{ github.sha }} \
+            -d "{\"state\":\"failure\",\"context\":\"ci/docker\",\"description\":\"docker smoke failed\",\"target_url\":\"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}"

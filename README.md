@@ -37,6 +37,13 @@ Legacy install via requirements.txt is supported but will be deprecated.
 - Run demo: `hetero2-demo-aspirin`
 - Outputs: `aspirin_report.md` + `aspirin_assets/` (images of molecule + hard negatives)
 
+## HETERO-2 batch & docker (enterprise)
+
+- Batch: `hetero2-batch --input molecules.csv --out_dir out_batch` (CSV: id,smiles[,scores_input])
+- Output per molecule: `<id>.pipeline.json`, `<id>.report.md`, `<id>_assets/`; summary: `summary.csv`
+- Docker smoke: `docker build -t hetero2:latest .` then `docker run -v $PWD/out:/out hetero2:latest hetero2-demo-aspirin --out_dir /out/aspirin`
+- CI exposes commit statuses: `ci/test`, `ci/test-chem`, `ci/docker`
+
 ## Key directories
 
 - `core/` – model (geom_atoms, grower, complexity, thermo, nuclear)
