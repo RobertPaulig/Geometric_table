@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hetero1a"
-version = "0.1.1"
+version = "0.2.0"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -24,6 +24,7 @@ demo = [
 ]
 chem = [
   "rdkit-pypi",
+  "Pillow",
 ]
 
 [project.scripts]
@@ -31,6 +32,9 @@ hetero-audit = "hetero1a.cli:hetero_audit"
 hetero-decoys = "hetero1a.cli:hetero_decoys"
 hetero-pipeline = "hetero1a.cli:hetero_pipeline"
 hetero-report = "hetero1a.cli:hetero_report"
+hetero2-pipeline = "hetero2.cli:main_pipeline"
+hetero2-report = "hetero2.cli:main_report"
+hetero2-demo-aspirin = "hetero2.cli:main_demo_aspirin"
 
 [tool.setuptools.packages.find]
 where = [".", "src"]
