@@ -148,3 +148,14 @@
 - **Обновлены доки:** `docs/04_backlog.md`, `docs/05_decision_log.md`, `docs/90_lineage.md`
 - **Коммит(ы):** `7c6ee87`, `88870ae`
 - **Дальше:** decoys_rewire (double-edge-swap) + RDKit sanitize + pipeline v2.
+
+### 2026-01-03 в?" HETERO-2 Sprint-2: Cycle decoys + pipeline v2
+
+- **Гипотеза:** degree-preserving rewiring + RDKit sanitize даёт hard negatives с кольцами, пригодные для аудита.
+- **Метод:** double-edge swap на разрешённых связях (non-ring, non-aromatic), RDKit sanitize + канонизация SMILES; pipeline v2 на SMILES с внешними/мок-скорами; отчёт с Rings/PhysChem/Hardness.
+- **Эксперимент:** Aspirin SMILES -> rewire decoys (k=5/20) -> external_scores (mock) -> audit -> report.
+- **Результат:** детерминированный pipeline v2, отчёт содержит кольца, physchem, tanimoto-hardness, verdict из аудита.
+- **Добавлен тест:** `tests/test_hetero2_decoys_rewire.py`, `tests/test_hetero2_pipeline_report.py`
+- **Обновлены доки:** `docs/90_lineage.md`
+- **Коммит(ы):** `2679e83`, `e79c503`, `7b8f808`
+- **Дальше:** demo_aspirin_v2 (красная кнопка), cycle selection/hardness metrics, интеграция с decoys_v2 в pipeline/report.
