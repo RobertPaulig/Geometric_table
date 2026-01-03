@@ -28,3 +28,17 @@ jobs:
           hetero-pipeline --help
           hetero-report --help
           python -c "import hetero1a; from hetero1a.api import run_pipeline; print('ok')"
+  test-chem:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - name: Install dependencies (chem)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,chem]"
+      - name: Run tests (chem)
+        run: pytest -q

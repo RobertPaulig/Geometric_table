@@ -137,3 +137,14 @@
 - **Обновлены доки:** ...
 - **Коммит(ы):** ...
 - **Дальше:** ...
+
+### 2026-01-03 в?" HETERO-2 Sprint-1: ChemGraph + Spectral FP
+
+- **Гипотеза:** циклы в молекулах дают отличимый спектральный отпечаток, пригодный для hard negatives.
+- **Метод:** RDKit ChemGraph (adjacency/laplacian/physchem) + спектр Лапласиана и LDOS-вектор.
+- **Эксперимент:** aspirin SMILES -> граф -> спектр; проверка инвариантности к перестановке узлов.
+- **Результат:** детерминированный спектральный fp, инвариантный к перестановке.
+- **Добавлен тест:** `tests/test_hetero2_chemgraph.py`, `tests/test_hetero2_spectral.py`
+- **Обновлены доки:** `docs/04_backlog.md`, `docs/05_decision_log.md`, `docs/90_lineage.md`
+- **Коммит(ы):** `7c6ee87`, `88870ae`
+- **Дальше:** decoys_rewire (double-edge-swap) + RDKit sanitize + pipeline v2.
