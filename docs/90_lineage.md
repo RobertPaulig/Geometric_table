@@ -181,3 +181,14 @@
 - **Обновлены доки:** `docs/04_backlog.md`, `docs/05_decision_log.md`, `docs/90_lineage.md`
 - **Коммит(ы):** `b92b70f`, `228873f`, `183bf42`, `228873f`
 - **Дальше:** собрать PHI по ≥3 молекулам с кольцами, проверить критерий принятия перед включением в отчет; улучшить генерацию decoys для сложных кольцевых молекул.
+
+### 2026-01-04 в?" HETERO-2 Sprint-4: Batch + Docker (industrial delivery)
+
+- **Гипотеза:** корпоративному пользователю нужен batch/CLI/Docker контур с гарантированным RDKit и отчетами.
+- **Метод:** batch CLI (`hetero2-batch`), Dockerfile с rdkit, CI docker-smoke + commit statuses, отчеты/asset per molecule.
+- **Эксперимент:** CSV (id,smiles) -> batch -> summary.csv + reports; docker run demo -> report + assets.
+- **Результат:** детерминированные артефакты per molecule, статусы `ci/docker`/`ci/test`/`ci/test-chem`.
+- **Добавлен тест:** `tests/test_hetero2_batch_contract.py`, `tests/test_docker_smoke_contract.py`
+- **Обновлены доки:** `README.md`
+- **Коммит(ы):** `183bf42`, `ebfa640` (добавить коммиты Sprint-4 после пуша)
+- **Дальше:** улучшить batch (параллелизм/пер-строковый seed), расширить docker smoke (external_scores), не включать PHI в продукт до принятия.
