@@ -106,3 +106,8 @@ DoD:
 Задачи:
 - spectrum/ldos vector детерминированно
 - тест: инвариантность к порядку, стабильность при фиксированных seed
+
+### [HETERO2-PHI-EXP-0] Ray Harmony (эксперимент)
+Задачи:
+- Реализовать RayAuditor (divisor_sum_profile) + phi_from_eigs/phi_from_smiles (эксперимент)
+- Собрать первые числа по 3+ молекулам с кольцами; критерий принятия: устойчивый сдвиг phi_decoys vs phi_original
