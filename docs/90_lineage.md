@@ -168,5 +168,5 @@
 - **Результат:** детерминированный отчет с картинками, таблицей decoys, предупреждениями; CLI работает из упаковки.
 - **Добавлен тест:** `tests/test_hetero2_cli_entrypoints.py`, `tests/test_hetero2_demo_aspirin_contract.py`
 - **Обновлены доки:** `README.md`, `CHANGELOG.md`, `docs/90_lineage.md`
-- **Коммит(ы):** `4f3af4a`, `0fcecdd`, `<sprint3-final>`
+- **Коммит(ы):** `4f3af4a`, `0fcecdd`, `db1347f`
 - **Дальше:** selection/hardness метрики + публичный отчетный формат для клиента.
