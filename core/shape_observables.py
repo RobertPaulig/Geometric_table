@@ -7,6 +7,8 @@ from typing import Tuple
 import math
 import numpy as np
 
+_trapz = getattr(np, "trapezoid", np.trapz)
+
 from core.thermo_config import ThermoConfig, get_current_thermo_config
 from core.spectral_density_ws import WSRadialParams, make_ws_rho3d_with_diagnostics
 from core.density_models import beta_effective
@@ -27,16 +29,16 @@ def radial_kurtosis_excess_from_rho3d(r: np.ndarray, rho3d: np.ndarray) -> float
     rho3d = np.asarray(rho3d, dtype=float)
 
     p = 4.0 * math.pi * (r ** 2) * rho3d
-    norm = np.trapezoid(p, r)
+    norm = _trapz(p, r)
     if not np.isfinite(norm) or norm <= 0:
         return float("nan")
     p = p / norm
 
-    mu = np.trapezoid(r * p, r)
-    var = np.trapezoid((r - mu) ** 2 * p, r)
+    mu = _trapz(r * p, r)
+    var = _trapz((r - mu) ** 2 * p, r)
     if not np.isfinite(var) or var <= 0:
         return float("nan")
-    mu4 = np.trapezoid((r - mu) ** 4 * p, r)
+    mu4 = _trapz((r - mu) ** 4 * p, r)
     return float(mu4 / (var ** 2) - 3.0)
 
 
@@ -194,9 +196,9 @@ def get_shape_observables(Z: int, thermo_fp: Tuple) -> ShapeObs:
         kurt_ws = float(radial_kurtosis_excess_from_rho3d(r_grid, rho_grid))
         p_grid = 4.0 * math.pi * (r_grid ** 2) * rho_grid
         # m0 and I_rho2 for effective volume
-        m0 = float(np.trapezoid(p_grid, r_grid))
+        m0 = float(_trapz(p_grid, r_grid))
         rho2_grid = 4.0 * math.pi * (r_grid ** 2) * (rho_grid ** 2)
-        I_rho2 = float(np.trapezoid(rho2_grid, r_grid))
+        I_rho2 = float(_trapz(rho2_grid, r_grid))
         if not np.isfinite(I_rho2) or I_rho2 <= 0.0:
             effective_volume_ws = float("nan")
         else:
@@ -206,11 +208,11 @@ def get_shape_observables(Z: int, thermo_fp: Tuple) -> ShapeObs:
         if not np.isfinite(m0) or m0 <= 0.0:
             softness_integral_ws = float("nan")
         else:
-            softness_integral_ws = float(np.trapezoid(soft_grid, r_grid) / m0)
+            softness_integral_ws = float(_trapz(soft_grid, r_grid) / m0)
         # overlap of WS and Gaussian densities in 3D
         rho_g_grid = _gaussian_rho3d(r_grid)
         overlap_grid = 4.0 * math.pi * (r_grid ** 2) * rho_grid * rho_g_grid
-        density_overlap_ws = float(np.trapezoid(overlap_grid, r_grid))
+        density_overlap_ws = float(_trapz(overlap_grid, r_grid))
     r_rms_g = _gaussian_r_rms(beta)
     kurt_g = float(KURTOSIS_EXCESS_GAUSS_RADIAL)
 

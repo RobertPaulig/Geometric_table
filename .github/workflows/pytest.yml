@@ -1,5 +1,8 @@
 name: pytest
 
+permissions:
+  statuses: write
+
 on:
   push:
     branches: [main]
@@ -28,6 +31,22 @@ jobs:
           hetero-pipeline --help
           hetero-report --help
           python -c "import hetero1a; from hetero1a.api import run_pipeline; print('ok')"
+      - name: Set Commit Status (test success)
+        if: success()
+        run: |
+          curl -s -X POST \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/${{ github.repository }}/statuses/${{ github.sha }} \
+            -d "{\"state\":\"success\",\"context\":\"ci/test\",\"description\":\"pytest passed\",\"target_url\":\"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}"
+      - name: Set Commit Status (test failure)
+        if: failure()
+        run: |
+          curl -s -X POST \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/${{ github.repository }}/statuses/${{ github.sha }} \
+            -d "{\"state\":\"failure\",\"context\":\"ci/test\",\"description\":\"pytest failed\",\"target_url\":\"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}"
   test-chem:
     runs-on: ubuntu-latest
     steps:
@@ -42,3 +61,19 @@ jobs:
           pip install -e ".[dev,chem]"
       - name: Run tests (chem)
         run: pytest -q
+      - name: Set Commit Status (test-chem success)
+        if: success()
+        run: |
+          curl -s -X POST \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/${{ github.repository }}/statuses/${{ github.sha }} \
+            -d "{\"state\":\"success\",\"context\":\"ci/test-chem\",\"description\":\"RDKit tests passed\",\"target_url\":\"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}"
+      - name: Set Commit Status (test-chem failure)
+        if: failure()
+        run: |
+          curl -s -X POST \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/${{ github.repository }}/statuses/${{ github.sha }} \
+            -d "{\"state\":\"failure\",\"context\":\"ci/test-chem\",\"description\":\"RDKit tests failed\",\"target_url\":\"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}"

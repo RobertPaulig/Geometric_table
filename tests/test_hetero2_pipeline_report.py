@@ -20,8 +20,9 @@ def test_hetero2_pipeline_and_report_are_deterministic(tmp_path: Path) -> None:
 
     md1 = tmp_path / "r1.md"
     md2 = tmp_path / "r2.md"
-    render_report_v2(p1, out_path=md1)
-    render_report_v2(p2, out_path=md2)
+    assets = tmp_path / "assets"
+    render_report_v2(p1, out_path=md1, assets_dir=assets)
+    render_report_v2(p2, out_path=md2, assets_dir=assets)
 
     assert md1.read_text(encoding="utf-8") == md2.read_text(encoding="utf-8")
     text = md1.read_text(encoding="utf-8")
