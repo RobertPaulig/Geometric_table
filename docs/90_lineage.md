@@ -179,5 +179,5 @@
 - **Результат:** экспериментальный скрипт и тесты, продукт не меняется.
 - **Добавлен тест:** `tests/experimental/test_ray_constant.py`, `tests/experimental/test_ray_phi_determinism.py`, `tests/experimental/test_ray_phi_runs_on_aspirin.py`
 - **Обновлены доки:** `docs/04_backlog.md`, `docs/05_decision_log.md`, `docs/90_lineage.md`
-- **Коммит(ы):** `<phi-commits>`
+- **Коммит(ы):** `b92b70f`, `228873f`
 - **Дальше:** собрать PHI по ≥3 молекулам с кольцами, проверить критерий принятия перед включением в отчет.
