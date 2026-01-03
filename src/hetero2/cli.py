@@ -45,6 +45,7 @@ def _parse_batch_args(argv: list[str] | None = None) -> argparse.Namespace:
     ap.add_argument("--seed", type=int, default=0, help="Seed.")
     ap.add_argument("--timestamp", default="", help="Timestamp override.")
     ap.add_argument("--scores_input", default="", help="Global scores_input path (optional).")
+    ap.add_argument("--score_mode", choices=["external_scores", "mock"], default="external_scores")
     return ap.parse_args(argv)
 
 
@@ -108,7 +109,7 @@ def main_batch(argv: list[str] | None = None) -> int:
         seed=int(args.seed),
         timestamp=str(args.timestamp),
         k_decoys=int(args.k_decoys),
-        score_mode="external_scores" if args.scores_input else "mock",
+        score_mode=str(args.score_mode),
         scores_input=str(args.scores_input) if args.scores_input else None,
     )
     return 0
