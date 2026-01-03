@@ -127,7 +127,7 @@
 - **Коммит(ы):** `8c2f5df`, `639cd7a`, `d16e4cf`
 - **Дальше:** добавить public demo command в README и закрепить schema_version policy.
 
-### 2026-01-03 в?" HETERO-2: Spectral Cycle Engine (заготовка)
+### 2026-01-03 — HETERO-2: Spectral Cycle Engine (заготовка)
 
 - **Гипотеза:** ...
 - **Метод:** ...
@@ -138,7 +138,7 @@
 - **Коммит(ы):** ...
 - **Дальше:** ...
 
-### 2026-01-03 в?" HETERO-2 Sprint-1: ChemGraph + Spectral FP
+### 2026-01-03 — HETERO-2 Sprint-1: ChemGraph + Spectral FP
 
 - **Гипотеза:** циклы в молекулах дают отличимый спектральный отпечаток, пригодный для hard negatives.
 - **Метод:** RDKit ChemGraph (adjacency/laplacian/physchem) + спектр Лапласиана и LDOS-вектор.
@@ -149,7 +149,7 @@
 - **Коммит(ы):** `7c6ee87`, `88870ae`
 - **Дальше:** decoys_rewire (double-edge-swap) + RDKit sanitize + pipeline v2.
 
-### 2026-01-03 в?" HETERO-2 Sprint-2: Cycle decoys + pipeline v2
+### 2026-01-03 — HETERO-2 Sprint-2: Cycle decoys + pipeline v2
 
 - **Гипотеза:** degree-preserving rewiring + RDKit sanitize даёт hard negatives с кольцами, пригодные для аудита.
 - **Метод:** double-edge swap на разрешённых связях (non-ring, non-aromatic), RDKit sanitize + канонизация SMILES; pipeline v2 на SMILES с внешними/мок-скорами; отчёт с Rings/PhysChem/Hardness.
@@ -160,7 +160,7 @@
 - **Коммит(ы):** `2679e83`, `e79c503`, `7b8f808`
 - **Дальше:** demo_aspirin_v2 (красная кнопка), cycle selection/hardness metrics, интеграция с decoys_v2 в pipeline/report.
 
-### 2026-01-03 в?" HETERO-2 Sprint-3: Productize WOW (CLI + images + contracts)
+### 2026-01-03 — HETERO-2 Sprint-3: Productize WOW (CLI + images + contracts)
 
 - **Гипотеза:** публичный CLI + визуальный отчет с картинками повышает доверие к HETERO-2 как продукту.
 - **Метод:** CLI entrypoints `hetero2-*`, отчёт v2 с RDKit-картинками и таблицами hard negatives, контрактные интеграционные тесты (demo+CLI).
@@ -171,7 +171,7 @@
 - **Коммит(ы):** `4f3af4a`, `0fcecdd`, `db1347f`
 - **Дальше:** selection/hardness метрики + публичный отчетный формат для клиента.
 
-### 2026-01-04 в?" HETERO-2 PHI experiment (Ray Harmony)
+### 2026-01-04 — HETERO-2 PHI experiment (Ray Harmony)
 
 - **Гипотеза:** спектральная сумма (PHI) может быть маркером hardness для decoys с кольцами.
 - **Метод:** RayAuditor (divisor_sum_profile), phi_from_eigs/phi_from_smiles на спектре Лапласиана, первые числа на аспирине + decoys.
@@ -182,7 +182,7 @@
 - **Коммит(ы):** `b92b70f`, `228873f`, `183bf42`, `228873f`
 - **Дальше:** собрать PHI по ≥3 молекулам с кольцами, проверить критерий принятия перед включением в отчет; улучшить генерацию decoys для сложных кольцевых молекул.
 
-### 2026-01-04 в?" HETERO-2 Sprint-4: Batch + Docker (industrial delivery)
+### 2026-01-04 — HETERO-2 Sprint-4: Batch + Docker (industrial delivery)
 
 - **Гипотеза:** корпоративному пользователю нужен batch/CLI/Docker контур с гарантированным RDKit и отчетами.
 - **Метод:** batch CLI (`hetero2-batch`), Dockerfile с rdkit, CI docker-smoke + commit statuses, отчеты/asset per molecule.
@@ -193,7 +193,7 @@
 - **Коммит(ы):** `183bf42`, `ebfa640` (добавить коммиты Sprint-4 после пуша)
 - **Дальше:** улучшить batch (параллелизм/пер-строковый seed), расширить docker smoke (external_scores), не включать PHI в продукт до принятия.
 
-### 2026-01-04 в?" Release v0.2.1 (batch+docker delivery)
+### 2026-01-04 — Release v0.2.1 (batch+docker delivery)
 
 - **Гипотеза:** релиз 0.2.1 фиксирует batch/Docker/CI гейты без смены схем.
 - **Метод:** bump версии, changelog, lineage с ссылками на CI fixes.
