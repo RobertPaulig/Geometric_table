@@ -103,12 +103,14 @@ def run_pipeline_v2(
 
     scores: Dict[str, Dict[str, float]] = {}
     scores_input_id = ""
+    effective_score_mode = "mock"
     if score_mode == "external_scores" and scores_input:
         data = json.loads(Path(scores_input).read_text(encoding="utf-8"))
         scores_input_id = Path(scores_input).name
         scores = {h: {"score": float(v.get("score", 0.0)), "weight": float(v.get("weight", 1.0))} for h, v in (data.get("decoys") or {}).items()}
         orig_score = float((data.get("original") or {}).get("score", 1.0))
         orig_weight = float((data.get("original") or {}).get("weight", 1.0))
+        effective_score_mode = "external_scores"
     else:
         for d in decoys:
             h = str(d["hash"])
@@ -132,7 +134,7 @@ def run_pipeline_v2(
     warnings = []
     warnings.extend(decoys_result.warnings)
     warnings.extend(audit_result.get("warnings", []))
-    if missing_scores > 0:
+    if missing_scores > 0 and effective_score_mode == "external_scores":
         warnings.append(f"missing_scores_for_some_decoys:{missing_scores}")
     warnings = sorted(set(warnings))
 
@@ -146,7 +148,7 @@ def run_pipeline_v2(
         "physchem": cg.physchem(),
         "decoys": decoys,
         "decoy_stats": decoys_result.stats,
-        "score_mode": score_mode,
+        "score_mode": effective_score_mode,
         "audit": audit_result,
         "warnings": warnings,
         "hardness": hardness,

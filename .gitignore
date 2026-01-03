@@ -40,6 +40,7 @@ results/**
 examples/out/
 aspirin_report.md
 aspirin.decoys.csv
+aspirin_assets/
 
 # ============================================================
 # HETERO QC runtime artifacts (never commit)
