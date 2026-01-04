@@ -193,7 +193,7 @@
 - **Коммит(ы):** `183bf42`, `ebfa640` (добавить коммиты Sprint-4 после пуша)
 - **Дальше:** улучшить batch (параллелизм/пер-строковый seed), расширить docker smoke (external_scores), не включать PHI в продукт до принятия.
 
-### 2026-01-04 — Release v0.2.1 (batch+docker delivery)
+### 2026-01-04 - Release v0.2.1 (batch+docker delivery)
 
 - **Гипотеза:** релиз 0.2.1 фиксирует batch/Docker/CI гейты без смены схем.
 - **Метод:** bump версии, changelog, lineage с ссылками на CI fixes.
@@ -203,3 +203,12 @@
 - **Обновлены доки:** `CHANGELOG.md`, `docs/90_lineage.md`
 - **Коммит(ы):** `1a257e3`, `fb5a39b`, `5df0a1e`, `c13cfff`, `c7cc918`
 - **Дальше:** guardrails/новые фичи отдельно от релиза.
+
+### 2026-01-05 - HETERO-2 Sprint-4b: Guardrails before Scale
+
+- **Идея:** не терять строки batch и блокировать тяжёлые расчёты для очевидно плохих входов.
+- **Эксперимент:** preflight guardrails (invalid/too_large/disconnected) вызываются в начале `run_pipeline_v2`; для SKIP возвращается валидный payload с neg-controls verdict `SKIP`.
+- **Тест:** `tests/test_hetero2_guardrails_contract.py` (invalid/too_large/disconnected), обновлён `tests/test_hetero2_batch_contract.py` (пустой SMILES -> SKIP/ERROR в summary).
+- **Док:** `README.md`, `docs/05_decision_log.md`, `docs/90_lineage.md`
+- **Коммит(ы):** (текущий PR)
+- **Дальше:** таймауты/воркеры для batch (следующий спринт), расширить policy на плотный граф, добавить CLI-флаги для порогов.

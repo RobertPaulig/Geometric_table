@@ -2133,3 +2133,8 @@ DoD:
 - salicylic_acid: decoys=0
 
 Р’С‹РІРѕРґ: СЃРёРіРЅР°Р»Р° РїРѕРєР° РЅРµС‚ (РјРµРґРёР°РЅС‹ С‡Р°СЃС‚Рѕ РЅРёР¶Рµ РёР»Рё РІС‹Р±РѕСЂРєР° РѕС‚СЃСѓС‚СЃС‚РІСѓРµС‚). PHI РѕСЃС‚Р°С‘С‚СЃСЏ СЌРєСЃРїРµСЂРёРјРµРЅС‚РѕРј; РїРµСЂРµРґ РІРєР»СЋС‡РµРЅРёРµРј РІ РїСЂРѕРґСѓРєС‚ С‚СЂРµР±СѓРµС‚СЃСЏ СЃС‚Р°Р±РёР»СЊРЅС‹Р№ СЃРґРІРёРі РЅР° в‰Ґ3 РјРѕР»РµРєСѓР»Р°С… Рё РїСЂРё РґСЂСѓРіРёС… seed.
+### 2026-01-05 - HETERO-2 Sprint-4b: Guardrails before Scale
+
+- **Решение:** введён лёгкий preflight `hetero2.guardrails.preflight_smiles` перед тяжёлыми шагами pipeline v2.
+- **Политика SKIP:** invalid SMILES, `n_heavy_atoms>200`, `n_components>1`; причины фиксируются как `skip.reason` и в `warnings` (`skip:invalid_smiles`, `skip:too_large:...`, `skip:disconnected:...`).
+- **Интеграция:** `run_pipeline_v2` возвращает валидный payload c neg-controls `verdict=SKIP` при блокировке; `hetero2-batch` всегда пишет `summary.csv` со строкой на каждый вход (`status=OK/SKIP/ERROR`, `reason` детерминирован, `report_path` пуст для SKIP/ERROR`).

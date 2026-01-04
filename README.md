@@ -44,11 +44,18 @@ Legacy install via requirements.txt is supported but will be deprecated.
 - Docker smoke: `docker build -t hetero2:latest .` then `docker run -v $PWD/out:/out hetero2:latest hetero2-demo-aspirin --out_dir /out/aspirin`
 - CI exposes commit statuses: `ci/test`, `ci/test-chem`, `ci/docker`
 
+## HETERO-2 guardrails (Sprint-4b)
+
+- Preflight checks run before heavy steps: invalid SMILES, too many heavy atoms (>200 by default), disconnected graphs -> SKIP.
+- Pipeline JSON остаётся валидным: `schema_version` неизменен, `warnings` машинно-читаемые (`skip:invalid_smiles`, `skip:too_large:...`, `skip:disconnected:...`), `skip.reason` заполнен.
+- В `summary.csv` каждая строка ввода отражена: `status=OK/SKIP/ERROR`, `reason` детерминирован, `report_path` пуст для SKIP/ERROR.
+- Чтобы увидеть причину, откройте `<id>.pipeline.json` или `summary.csv` после `hetero2-batch`.
+
 ## Key directories
 
-- `core/` – model (geom_atoms, grower, complexity, thermo, nuclear)
-- `analysis/` – scans, R&D experiments, CLI entrypoints
-- `data/` – geometric and nuclear indices, aggregated tables
+- `core/` - model (geom_atoms, grower, complexity, thermo, nuclear)
+- `analysis/` - scans, R&D experiments, CLI entrypoints
+- `data/` - geometric and nuclear indices, aggregated tables
 - `results/` – CSV/TXT/PNG artefacts from scans
 - `docs/` – documentation, backlog, decision log
 
