@@ -78,6 +78,7 @@ def _parse_batch_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     ap.add_argument("--no_index", action="store_true", help="Do not emit index.md (evidence pack).")
     ap.add_argument("--no_manifest", action="store_true", help="Do not emit manifest.json (provenance).")
+    ap.add_argument("--zip_pack", action="store_true", help="Create evidence_pack.zip with batch outputs.")
     return ap.parse_args(argv)
 
 
@@ -150,6 +151,7 @@ def main_batch(argv: list[str] | None = None) -> int:
         seed_strategy=str(args.seed_strategy),
         no_index=bool(args.no_index),
         no_manifest=bool(args.no_manifest),
+        zip_pack=bool(args.zip_pack),
     )
     return 0
 

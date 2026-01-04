@@ -6,6 +6,7 @@ import os
 import platform
 import subprocess
 import zlib
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Iterable, List, Sequence
@@ -79,6 +80,7 @@ def _write_manifest(
     score_mode: str,
     guardrails_max_atoms: int,
     guardrails_require_connected: bool,
+    files: List[Dict[str, object]],
 ) -> None:
     payload: Dict[str, object] = {
         "tool_version": getattr(hetero1a, "__version__", None),
@@ -93,9 +95,58 @@ def _write_manifest(
             "guardrails_max_atoms": int(guardrails_max_atoms),
             "guardrails_require_connected": bool(guardrails_require_connected),
         },
+        "files": files,
     }
     manifest_path = out_dir / "manifest.json"
     manifest_path.write_text(json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+
+
+def _compute_file_infos(out_dir: Path, *, skip_names: set[str] | None = None) -> List[Dict[str, object]]:
+    skip = skip_names or set()
+    infos: List[Dict[str, object]] = []
+    for path in sorted(out_dir.rglob("*")):
+        if path.is_dir():
+            continue
+        rel = path.relative_to(out_dir).as_posix()
+        if path.name in skip:
+            continue
+        digest = _sha256_of_file(path)
+        infos.append({"path": f"./{rel}", "size_bytes": path.stat().st_size, "sha256": digest})
+    return infos
+
+
+def _sha256_of_file(path: Path) -> str:
+    import hashlib
+
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(8192), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _write_checksums(out_dir: Path, file_infos: List[Dict[str, object]]) -> None:
+    lines: List[str] = []
+    for info in file_infos:
+        sha = str(info.get("sha256") or "")
+        rel = str(info.get("path") or "").lstrip("./")
+        if not sha or not rel:
+            continue
+        lines.append(f"{sha}  {rel}")
+    checksums_path = out_dir / "checksums.sha256"
+    checksums_path.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
+
+
+def _write_zip_pack(out_dir: Path, *, zip_name: str = "evidence_pack.zip") -> None:
+    zip_path = out_dir / zip_name
+    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for path in sorted(out_dir.rglob("*")):
+            if path.is_dir():
+                continue
+            if path.name == zip_name:
+                continue
+            rel = path.relative_to(out_dir)
+            zf.write(path, rel.as_posix())
 
 
 def run_batch(
@@ -112,6 +163,7 @@ def run_batch(
     seed_strategy: str = "global",
     no_index: bool = False,
     no_manifest: bool = False,
+    zip_pack: bool = False,
 ) -> Path:
     rows = _read_rows(input_csv)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -201,7 +253,10 @@ def run_batch(
 
     if not no_index:
         _write_index_md(out_dir, summary_rows)
+    file_infos = _compute_file_infos(out_dir, skip_names={"manifest.json", "checksums.sha256", "evidence_pack.zip"})
     if not no_manifest:
+        manifest_files = list(file_infos)
+        manifest_files.append({"path": "./manifest.json", "size_bytes": None, "sha256": None})
         _write_manifest(
             out_dir,
             seed=seed,
@@ -209,5 +264,11 @@ def run_batch(
             score_mode=score_mode,
             guardrails_max_atoms=guardrails_max_atoms,
             guardrails_require_connected=guardrails_require_connected,
+            files=manifest_files,
         )
+    # recompute after manifest to include it in checksums
+    file_infos_final = _compute_file_infos(out_dir, skip_names={"checksums.sha256", "evidence_pack.zip"})
+    _write_checksums(out_dir, file_infos_final)
+    if zip_pack:
+        _write_zip_pack(out_dir)
     return summary_path
