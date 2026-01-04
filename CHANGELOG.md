@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## 0.2.4
+
+- Evidence pack усилен: `manifest.json` включает `files` (path/size/sha256), пишется `checksums.sha256` на все артефакты; опциональный `--zip_pack` создаёт `evidence_pack.zip`.
+- Контрактный тест на checksums/zip (`tests/test_hetero2_evidence_pack_checksums_contract.py`).
+
 ## 0.2.3
 
 - Evidence Pack для `hetero2-batch`: `index.md` (кликабельные ссылки на отчёты/assets/pipeline) и `manifest.json` (provenance: tool/git/python/rdkit версии, seed_strategy, guardrails, score_mode).

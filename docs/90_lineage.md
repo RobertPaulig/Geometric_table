@@ -228,3 +228,11 @@
 - **Тест:** `tests/test_hetero2_batch_index_manifest_contract.py` (проверка наличия index/manifest и ключевых полей).
 - **Коммит(ы):** 0743dc1, c1b20eb, 0aafa62
 - **Дальше:** Stress harness (timeout/worker), html/pdf отчёты (опционально).
+
+### 2026-01-05 - HETERO-2 Sprint-7: Evidence Pack Hardening
+
+- **Идея:** сделать evidence pack самопроверяемым и переносимым (хэши + опциональный zip).
+- **Эксперимент:** `checksums.sha256` на все артефакты; `manifest.json["files"]` с path/size/sha256; флаг `--zip_pack` для `evidence_pack.zip`.
+- **Тест:** `tests/test_hetero2_evidence_pack_checksums_contract.py` (наличие checksums, manifest.files, zip содержит index/manifest).
+- **Коммит(ы):** 278da6d, c4c240e, 555af7d
+- **Дальше:** Stress harness (timeout/worker), pdf/html отчёты.

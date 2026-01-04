@@ -57,6 +57,8 @@ Legacy install via requirements.txt is supported but will be deprecated.
 - `hetero2-batch --input molecules.csv --out_dir out_batch` теперь пишет `summary.csv` + `index.md` (кликабельные ссылки на `<id>.report.md`, `<id>_assets/`, `<id>.pipeline.json`) и `manifest.json` (provenance: tool/git/python/rdkit версии, seed_strategy, guardrails, score_mode).
 - Отключить генерацию можно флагами `--no_index` / `--no_manifest`.
 - Пример структуры `out_batch/`: `summary.csv`, `index.md`, `manifest.json`, `aspirin.pipeline.json`, `aspirin.report.md`, `aspirin_assets/`.
+- Integrity: `checksums.sha256` (проверить: `cd out_batch && sha256sum -c checksums.sha256`), `manifest.json["files"]` содержит path/size/sha256.
+- Опционально: `--zip_pack` соберёт `evidence_pack.zip` со всеми артефактами (удобно передать клиенту одним файлом).
 
 ## Key directories
 
