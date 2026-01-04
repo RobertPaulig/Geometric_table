@@ -76,6 +76,8 @@ def _parse_batch_args(argv: list[str] | None = None) -> argparse.Namespace:
         default="global",
         help="Seed usage: global uses provided seed for all rows; per_row uses stable_hash(id) XOR seed.",
     )
+    ap.add_argument("--no_index", action="store_true", help="Do not emit index.md (evidence pack).")
+    ap.add_argument("--no_manifest", action="store_true", help="Do not emit manifest.json (provenance).")
     return ap.parse_args(argv)
 
 
@@ -146,6 +148,8 @@ def main_batch(argv: list[str] | None = None) -> int:
         guardrails_max_atoms=int(args.guardrails_max_atoms),
         guardrails_require_connected=bool(args.guardrails_require_connected),
         seed_strategy=str(args.seed_strategy),
+        no_index=bool(args.no_index),
+        no_manifest=bool(args.no_manifest),
     )
     return 0
 

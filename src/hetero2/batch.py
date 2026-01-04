@@ -2,10 +2,15 @@ from __future__ import annotations
 
 import csv
 import json
+import os
+import platform
+import subprocess
 import zlib
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Iterable, List, Sequence
 
+import hetero1a
 from hetero2.pipeline import run_pipeline_v2
 from hetero2.report import render_report_v2
 
@@ -24,6 +29,75 @@ def _stable_hash_id(text: str) -> int:
     return int(zlib.crc32(text.encode("utf-8")) & 0xFFFFFFFF)
 
 
+def _write_index_md(out_dir: Path, summary_rows: List[Dict[str, object]]) -> None:
+    lines = [
+        "# Evidence Index",
+        "",
+        "| id | status | verdict | gate | slack | warnings | seed_used | report | assets | pipeline |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    for row in summary_rows:
+        mol_id = str(row.get("id", ""))
+        report_path = Path(str(row.get("report_path", ""))) if row.get("report_path") else None
+        report_link = f"./{report_path.name}" if report_path and report_path.exists() else ""
+        assets_dir = out_dir / f"{mol_id}_assets"
+        assets_link = f"./{assets_dir.name}/" if assets_dir.exists() else ""
+        pipeline_path = out_dir / f"{mol_id}.pipeline.json"
+        pipeline_link = f"./{pipeline_path.name}" if pipeline_path.exists() else ""
+        lines.append(
+            f"| {mol_id} | {row.get('status','')} | {row.get('verdict','')} | {row.get('gate','')} | "
+            f"{row.get('slack','')} | {row.get('warnings_count','')} | {row.get('seed_used','')} | "
+            f"{report_link} | {assets_link} | {pipeline_link} |"
+        )
+    (out_dir / "index.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _git_sha_fallback() -> str | None:
+    if os.environ.get("GITHUB_SHA"):
+        return os.environ["GITHUB_SHA"]
+    try:
+        res = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, check=True, text=True)
+        return res.stdout.strip()
+    except Exception:
+        return None
+
+
+def _rdkit_version() -> str | None:
+    try:
+        import rdkit  # type: ignore
+
+        return getattr(rdkit, "__version__", None) or None
+    except Exception:
+        return None
+
+
+def _write_manifest(
+    out_dir: Path,
+    *,
+    seed: int,
+    seed_strategy: str,
+    score_mode: str,
+    guardrails_max_atoms: int,
+    guardrails_require_connected: bool,
+) -> None:
+    payload: Dict[str, object] = {
+        "tool_version": getattr(hetero1a, "__version__", None),
+        "git_sha": _git_sha_fallback(),
+        "python_version": platform.python_version(),
+        "rdkit_version": _rdkit_version(),
+        "timestamp_utc": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+        "config": {
+            "seed_strategy": seed_strategy,
+            "seed": int(seed),
+            "score_mode": score_mode,
+            "guardrails_max_atoms": int(guardrails_max_atoms),
+            "guardrails_require_connected": bool(guardrails_require_connected),
+        },
+    }
+    manifest_path = out_dir / "manifest.json"
+    manifest_path.write_text(json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+
+
 def run_batch(
     *,
     input_csv: Path,
@@ -36,6 +110,8 @@ def run_batch(
     guardrails_max_atoms: int = 200,
     guardrails_require_connected: bool = True,
     seed_strategy: str = "global",
+    no_index: bool = False,
+    no_manifest: bool = False,
 ) -> Path:
     rows = _read_rows(input_csv)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -122,4 +198,16 @@ def run_batch(
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(summary_rows)
+
+    if not no_index:
+        _write_index_md(out_dir, summary_rows)
+    if not no_manifest:
+        _write_manifest(
+            out_dir,
+            seed=seed,
+            seed_strategy=seed_strategy,
+            score_mode=score_mode,
+            guardrails_max_atoms=guardrails_max_atoms,
+            guardrails_require_connected=guardrails_require_connected,
+        )
     return summary_path
