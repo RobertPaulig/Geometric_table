@@ -106,7 +106,7 @@ def run_pipeline_v2(
     seed: int = 0,
     timestamp: str = "",
     max_attempts: int | None = None,
-    score_mode: str = "external_scores",
+    score_mode: str = "mock",
     scores_input: str | None = None,
     guardrails_max_atoms: int = MAX_ATOMS_DEFAULT,
     guardrails_require_connected: bool = True,

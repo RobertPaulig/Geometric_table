@@ -32,3 +32,16 @@ def test_pipeline_guardrails_disconnected_and_invalid(tmp_path) -> None:
     assert invalid.get("skip", {}).get("reason") == "invalid_smiles"
     assert invalid.get("decoys") == []
     assert invalid.get("audit", {}).get("neg_controls", {}).get("verdict") == "SKIP"
+
+
+def test_pipeline_default_mock_and_guardrail_limit() -> None:
+    pytest.importorskip("rdkit")
+    ts = "2026-01-02T00:00:00+00:00"
+
+    ok_payload = run_pipeline_v2("CC(=O)OC1=CC=CC=C1C(=O)O", k_decoys=2, seed=0, timestamp=ts)
+    assert "skip" not in ok_payload
+    assert ok_payload.get("score_mode") == "mock"
+
+    limited = run_pipeline_v2("CCO", k_decoys=1, seed=0, timestamp=ts, guardrails_max_atoms=1)
+    assert limited.get("skip", {}).get("reason") == "too_many_atoms"
+    assert any("too_large" in w for w in limited.get("warnings", []))

@@ -17,8 +17,20 @@ def _parse_pipeline_args(argv: list[str] | None = None) -> argparse.Namespace:
     ap.add_argument("--k_decoys", type=int, default=20, help="Number of decoys.")
     ap.add_argument("--seed", type=int, default=0, help="Seed.")
     ap.add_argument("--timestamp", default="", help="Timestamp override (ISO).")
-    ap.add_argument("--score_mode", choices=["external_scores", "mock"], default="external_scores")
+    ap.add_argument(
+        "--score_mode",
+        choices=["external_scores", "mock"],
+        default="mock",
+        help="Score mode: mock ignores any scores_input; external_scores requires scores_input to be set.",
+    )
     ap.add_argument("--scores_input", default="", help="Path to hetero_scores.v1 (for external_scores).")
+    ap.add_argument("--guardrails_max_atoms", type=int, default=200, help="Guardrail: max heavy atoms (skip if exceeded).")
+    ap.add_argument(
+        "--guardrails_require_connected",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Guardrail: require molecule to be connected (default: True).",
+    )
     return ap.parse_args(argv)
 
 
@@ -48,8 +60,15 @@ def _parse_batch_args(argv: list[str] | None = None) -> argparse.Namespace:
     ap.add_argument(
         "--score_mode",
         choices=["external_scores", "mock"],
-        default="external_scores",
+        default="mock",
         help="Score mode: mock ignores any scores_input; external_scores requires scores_input to be set.",
+    )
+    ap.add_argument("--guardrails_max_atoms", type=int, default=200, help="Guardrail: max heavy atoms (skip if exceeded).")
+    ap.add_argument(
+        "--guardrails_require_connected",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Guardrail: require molecule to be connected (default: True).",
     )
     return ap.parse_args(argv)
 
@@ -64,6 +83,8 @@ def main_pipeline(argv: list[str] | None = None) -> int:
         timestamp=str(args.timestamp),
         score_mode=score_mode,
         scores_input=str(args.scores_input) if args.scores_input else None,
+        guardrails_max_atoms=int(args.guardrails_max_atoms),
+        guardrails_require_connected=bool(args.guardrails_require_connected),
     )
     text = json.dumps(out, ensure_ascii=False, sort_keys=True, indent=2)
     if args.out:
@@ -116,6 +137,8 @@ def main_batch(argv: list[str] | None = None) -> int:
         k_decoys=int(args.k_decoys),
         score_mode=str(args.score_mode),
         scores_input=str(args.scores_input) if args.scores_input else None,
+        guardrails_max_atoms=int(args.guardrails_max_atoms),
+        guardrails_require_connected=bool(args.guardrails_require_connected),
     )
     return 0
 

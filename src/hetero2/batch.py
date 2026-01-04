@@ -25,8 +25,10 @@ def run_batch(
     seed: int = 0,
     timestamp: str = "",
     k_decoys: int = 20,
-    score_mode: str = "external_scores",
+    score_mode: str = "mock",
     scores_input: str | None = None,
+    guardrails_max_atoms: int = 200,
+    guardrails_require_connected: bool = True,
 ) -> Path:
     rows = _read_rows(input_csv)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -53,6 +55,8 @@ def run_batch(
                     timestamp=timestamp,
                     score_mode=effective_score_mode,
                     scores_input=scores_path or None,
+                    guardrails_max_atoms=int(guardrails_max_atoms),
+                    guardrails_require_connected=bool(guardrails_require_connected),
                 )
                 warnings = pipeline.get("warnings", []) if isinstance(pipeline, dict) else []
                 if score_mode == "mock" and scores_path:
