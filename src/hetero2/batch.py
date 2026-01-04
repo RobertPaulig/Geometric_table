@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+import zlib
 from pathlib import Path
 from typing import Dict, Iterable, List, Sequence
 
@@ -18,6 +19,11 @@ def _read_rows(path: Path) -> List[Dict[str, str]]:
     return rows
 
 
+def _stable_hash_id(text: str) -> int:
+    """Deterministic 32-bit hash for seeds (Python hash() is randomized)."""
+    return int(zlib.crc32(text.encode("utf-8")) & 0xFFFFFFFF)
+
+
 def run_batch(
     *,
     input_csv: Path,
@@ -29,6 +35,7 @@ def run_batch(
     scores_input: str | None = None,
     guardrails_max_atoms: int = 200,
     guardrails_require_connected: bool = True,
+    seed_strategy: str = "global",
 ) -> Path:
     rows = _read_rows(input_csv)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -37,6 +44,9 @@ def run_batch(
         mol_id = row.get("id") or f"mol_{idx}"
         smiles = row.get("smiles", "")
         scores_path = row.get("scores_input") or scores_input or ""
+        derived_seed = int(seed)
+        if seed_strategy == "per_row":
+            derived_seed = int(seed) ^ _stable_hash_id(str(mol_id))
         status = "OK"
         reason = ""
         warnings: List[str] = []
@@ -51,7 +61,7 @@ def run_batch(
                 pipeline = run_pipeline_v2(
                     smiles,
                     k_decoys=int(k_decoys),
-                    seed=int(seed),
+                    seed=derived_seed,
                     timestamp=timestamp,
                     score_mode=effective_score_mode,
                     scores_input=scores_path or None,
@@ -91,6 +101,7 @@ def run_batch(
                 "n_decoys": len(pipeline.get("decoys", [])) if isinstance(pipeline, dict) else "",
                 "warnings_count": len(warnings_unique),
                 "report_path": str(rep_path) if status == "OK" and rep_path is not None else "",
+                "seed_used": derived_seed if isinstance(derived_seed, int) else "",
             }
         )
     summary_path = out_dir / "summary.csv"
@@ -105,6 +116,7 @@ def run_batch(
         "n_decoys",
         "warnings_count",
         "report_path",
+        "seed_used",
     ]
     with summary_path.open("w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)

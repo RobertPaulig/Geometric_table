@@ -2138,3 +2138,8 @@ DoD:
 - **Решение:** введён лёгкий preflight `hetero2.guardrails.preflight_smiles` перед тяжёлыми шагами pipeline v2.
 - **Политика SKIP:** invalid SMILES, `n_heavy_atoms>200`, `n_components>1`; причины фиксируются как `skip.reason` и в `warnings` (`skip:invalid_smiles`, `skip:too_large:...`, `skip:disconnected:...`).
 - **Интеграция:** `run_pipeline_v2` возвращает валидный payload c neg-controls `verdict=SKIP` при блокировке; `hetero2-batch` всегда пишет `summary.csv` со строкой на каждый вход (`status=OK/SKIP/ERROR`, `reason` детерминирован, `report_path` пуст для SKIP/ERROR`).
+### 2026-01-05 - HETERO-2 Sprint-5: seed_strategy and stable hash
+
+- **Решение:** для per_row seed введён стабильный хеш id: `crc32(id.encode)` (Python `hash()` рандомизирован и не годится для детерминизма); `seed_used = seed XOR stable_hash(id)`.
+- **CLI:** `hetero2-batch --seed_strategy {global,per_row}` (default=global), `--guardrails_max_atoms`, `--guardrails_require_connected`.
+- **Политика:** без `scores_input` default `score_mode=mock`; `external_scores` без файла -> SKIP `missing_scores_input`.

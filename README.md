@@ -50,6 +50,7 @@ Legacy install via requirements.txt is supported but will be deprecated.
 - Pipeline JSON остаётся валидным: `schema_version` неизменен, `warnings` машинно-читаемые (`skip:invalid_smiles`, `skip:too_large:...`, `skip:disconnected:...`), `skip.reason` заполнен.
 - В `summary.csv` каждая строка ввода отражена: `status=OK/SKIP/ERROR`, `reason` детерминирован, `report_path` пуст для SKIP/ERROR.
 - Чтобы увидеть причину, откройте `<id>.pipeline.json` или `summary.csv` после `hetero2-batch`.
+- Batch knobs: `--score_mode {mock,external_scores}` (mock по умолчанию), `--seed_strategy {global,per_row}` (per_row = stable_hash(id) XOR seed), `--guardrails_max_atoms`, `--guardrails_require_connected`.
 
 ## Key directories
 

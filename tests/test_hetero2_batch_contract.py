@@ -99,3 +99,39 @@ def test_batch_respects_score_mode(tmp_path: Path) -> None:
     assert data2[0]["reason"] == "missing_scores_input"
     payload_missing = json.loads((out_dir2 / "external_missing.pipeline.json").read_text(encoding="utf-8"))
     assert payload_missing.get("skip", {}).get("reason") == "missing_scores_input"
+
+
+def test_batch_seed_strategy_per_row(tmp_path: Path) -> None:
+    pytest.importorskip("rdkit")
+    input_csv = tmp_path / "input.csv"
+    rows = [
+        {"id": "mol_a", "smiles": "CC(=O)OC1=CC=CC=C1C(=O)O"},
+        {"id": "mol_b", "smiles": "CC(=O)OC1=CC=CC=C1C(=O)O"},
+    ]
+    with input_csv.open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=["id", "smiles"])
+        writer.writeheader()
+        writer.writerows(rows)
+
+    out_dir = tmp_path / "out"
+    import subprocess
+
+    cmd = [
+        sys.executable,
+        "-c",
+        (
+            "from hetero2.cli import main_batch; import sys; "
+            f"sys.exit(main_batch(['--input','{input_csv.as_posix()}','--out_dir','{out_dir.as_posix()}',"
+            "'--score_mode','mock','--timestamp','2026-01-02T00:00:00+00:00','--seed','1','--seed_strategy','per_row']))"
+        ),
+    ]
+    subprocess.run(cmd, check=True)
+
+    data = list(csv.DictReader((out_dir / "summary.csv").read_text(encoding="utf-8").splitlines()))
+    seeds = {row["id"]: int(row["seed_used"]) for row in data}
+    assert seeds["mol_a"] != seeds["mol_b"]
+    # Stability: running again yields same seeds
+    subprocess.run(cmd, check=True)
+    data2 = list(csv.DictReader((out_dir / "summary.csv").read_text(encoding="utf-8").splitlines()))
+    seeds2 = {row["id"]: int(row["seed_used"]) for row in data2}
+    assert seeds == seeds2

@@ -70,6 +70,12 @@ def _parse_batch_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=True,
         help="Guardrail: require molecule to be connected (default: True).",
     )
+    ap.add_argument(
+        "--seed_strategy",
+        choices=["global", "per_row"],
+        default="global",
+        help="Seed usage: global uses provided seed for all rows; per_row uses stable_hash(id) XOR seed.",
+    )
     return ap.parse_args(argv)
 
 
@@ -139,6 +145,7 @@ def main_batch(argv: list[str] | None = None) -> int:
         scores_input=str(args.scores_input) if args.scores_input else None,
         guardrails_max_atoms=int(args.guardrails_max_atoms),
         guardrails_require_connected=bool(args.guardrails_require_connected),
+        seed_strategy=str(args.seed_strategy),
     )
     return 0
 

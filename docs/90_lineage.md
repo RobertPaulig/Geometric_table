@@ -212,3 +212,11 @@
 - **Док:** `README.md`, `docs/05_decision_log.md`, `docs/90_lineage.md`
 - **Коммит(ы):** (текущий PR)
 - **Дальше:** таймауты/воркеры для batch (следующий спринт), расширить policy на плотный граф, добавить CLI-флаги для порогов.
+
+### 2026-01-05 - HETERO-2 Sprint-5: Batch control knobs
+
+- **Идея:** управляемый batch перед масштабом: явные режимы seed и guardrails без скрытых fallback'ов.
+- **Эксперимент:** `--seed_strategy {global,per_row}` с детерминированным `stable_hash(id)=crc32`; per_row использует `seed XOR stable_hash(id)` и пишет `seed_used` в summary. Default `score_mode=mock` (external_scores без файла -> SKIP). Guardrails пороги доступны через CLI.
+- **Тест:** `tests/test_hetero2_batch_contract.py::test_batch_seed_strategy_per_row`, `tests/test_hetero2_guardrails_contract.py::test_pipeline_default_mock_and_guardrail_limit`.
+- **Коммит(ы):** ceac0b5, (текущий PR)
+- **Дальше:** таймауты/воркеры для batch, расширить доки по seed-replay.
