@@ -55,3 +55,16 @@ results/robustness/
 results/hetero_calibration_p07/
 results/hetero_suite_p07_holdout/
 
+# ============================================================
+# Batch / stress harness outputs (never commit)
+# ============================================================
+out*/
+*_assets/
+*.pipeline.json
+*.report.md
+metrics.json
+manifest.json
+checksums*.sha256
+evidence_pack*.zip
+stress_*.csv
+
