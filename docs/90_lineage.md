@@ -218,5 +218,5 @@
 - **Идея:** управляемый batch перед масштабом: явные режимы seed и guardrails без скрытых fallback'ов.
 - **Эксперимент:** `--seed_strategy {global,per_row}` с детерминированным `stable_hash(id)=crc32`; per_row использует `seed XOR stable_hash(id)` и пишет `seed_used` в summary. Default `score_mode=mock` (external_scores без файла -> SKIP). Guardrails пороги доступны через CLI.
 - **Тест:** `tests/test_hetero2_batch_contract.py::test_batch_seed_strategy_per_row`, `tests/test_hetero2_guardrails_contract.py::test_pipeline_default_mock_and_guardrail_limit`.
-- **Коммит(ы):** ceac0b5, (текущий PR)
+- **Коммит(ы):** ceac0b5, a219cc5
 - **Дальше:** таймауты/воркеры для batch, расширить доки по seed-replay.

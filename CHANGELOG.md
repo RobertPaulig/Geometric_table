@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## 0.2.2
+
+- Guardrails для HETERO-2 pipeline: SKIP с причинами (`invalid_smiles`, `too_large`, `disconnected`, `missing_scores_input`) при блокировке; schema_version сохранён.
+- Batch: честный summary (каждая строка = OK/SKIP/ERROR), `report_path` пуст для SKIP/ERROR, добавлен `seed_used`, предупреждения детерминированы.
+- CLI knobs: `score_mode` по умолчанию mock (external_scores требует scores_input), `--seed_strategy {global,per_row}` (per_row = stable_hash(id) XOR seed), `--guardrails_max_atoms`, `--guardrails_require_connected`.
+
 ## 0.2.1
 
 - HETERO-2: batch runner (`hetero2-batch`) для CSV (id,smiles[,scores_input])
