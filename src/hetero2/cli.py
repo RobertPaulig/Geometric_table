@@ -53,6 +53,12 @@ def _parse_batch_args(argv: list[str] | None = None) -> argparse.Namespace:
     ap = argparse.ArgumentParser(description="HETERO-2 batch runner from CSV (id,smiles[,scores_input]).")
     ap.add_argument("--input", required=True, help="Input CSV with columns: id, smiles [,scores_input].")
     ap.add_argument("--out_dir", default="out", help="Output directory for artifacts.")
+    ap.add_argument(
+        "--artifacts",
+        choices=["full", "light"],
+        default="full",
+        help="Artifacts mode: full emits reports/assets; light emits only summary/metrics/index/manifest/checksums/zip.",
+    )
     ap.add_argument("--k_decoys", type=int, default=20, help="Decoys per molecule.")
     ap.add_argument("--seed", type=int, default=0, help="Seed.")
     ap.add_argument("--timestamp", default="", help="Timestamp override.")
@@ -146,6 +152,7 @@ def main_batch(argv: list[str] | None = None) -> int:
     run_batch(
         input_csv=input_csv,
         out_dir=out_dir,
+        artifacts=str(args.artifacts),
         seed=int(args.seed),
         timestamp=str(args.timestamp),
         k_decoys=int(args.k_decoys),

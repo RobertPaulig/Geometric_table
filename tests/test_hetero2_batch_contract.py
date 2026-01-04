@@ -1,6 +1,7 @@
 import csv
 import json
 import sys
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -135,3 +136,50 @@ def test_batch_seed_strategy_per_row(tmp_path: Path) -> None:
     data2 = list(csv.DictReader((out_dir / "summary.csv").read_text(encoding="utf-8").splitlines()))
     seeds2 = {row["id"]: int(row["seed_used"]) for row in data2}
     assert seeds == seeds2
+
+
+def test_batch_light_mode_minimal_artifacts(tmp_path: Path) -> None:
+    pytest.importorskip("rdkit")
+    input_csv = tmp_path / "input.csv"
+    rows = [{"id": "aspirin", "smiles": "CC(=O)OC1=CC=CC=C1C(=O)O"}]
+    with input_csv.open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=["id", "smiles"])
+        writer.writeheader()
+        writer.writerows(rows)
+
+    out_dir = tmp_path / "out_light"
+    import subprocess
+
+    cmd = [
+        sys.executable,
+        "-c",
+        (
+            "from hetero2.cli import main_batch; import sys; "
+            f"sys.exit(main_batch(['--input','{input_csv.as_posix()}','--out_dir','{out_dir.as_posix()}',"
+            "'--score_mode','mock','--artifacts','light','--zip_pack']))"
+        ),
+    ]
+    subprocess.run(cmd, check=True)
+
+    summary = out_dir / "summary.csv"
+    assert summary.exists()
+    data = list(csv.DictReader(summary.read_text(encoding="utf-8").splitlines()))
+    assert data[0]["status"] == "OK"
+    assert data[0]["report_path"] == ""
+
+    assert (out_dir / "metrics.json").exists()
+    assert (out_dir / "index.md").exists()
+    assert (out_dir / "manifest.json").exists()
+    assert (out_dir / "checksums.sha256").exists()
+    zip_path = out_dir / "evidence_pack.zip"
+    assert zip_path.exists()
+
+    assert not (out_dir / "aspirin.pipeline.json").exists()
+    assert not (out_dir / "aspirin.report.md").exists()
+    assert not (out_dir / "aspirin_assets").exists()
+
+    with zipfile.ZipFile(zip_path) as zf:
+        names = set(zf.namelist())
+    assert "aspirin.pipeline.json" not in names
+    assert "aspirin.report.md" not in names
+    assert not any(name.startswith("aspirin_assets/") for name in names)

@@ -229,6 +229,7 @@ def run_batch(
     *,
     input_csv: Path,
     out_dir: Path,
+    artifacts: str = "full",
     seed: int = 0,
     timestamp: str = "",
     k_decoys: int = 20,
@@ -247,6 +248,8 @@ def run_batch(
     maxtasksperchild: int = 100,
 ) -> Path:
     t_start = time.time()
+    if artifacts not in {"full", "light"}:
+        artifacts = "full"
     rows = _read_rows(input_csv)
     out_dir.mkdir(parents=True, exist_ok=True)
     summary_path = out_dir / "summary.csv"
@@ -310,10 +313,13 @@ def run_batch(
         if isinstance(pipeline, dict):
             warnings = sorted(set(warnings))
             pipeline["warnings"] = warnings
-            pipe_path = out_dir / f"{mol_id}.pipeline.json"
-            pipe_path.write_text(json.dumps(pipeline, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
-            rep_path = out_dir / f"{mol_id}.report.md"
-            render_report_v2(pipeline, out_path=str(rep_path), assets_dir=out_dir / f"{mol_id}_assets")
+            if artifacts == "full":
+                pipe_path = out_dir / f"{mol_id}.pipeline.json"
+                pipe_path.write_text(
+                    json.dumps(pipeline, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8"
+                )
+                rep_path = out_dir / f"{mol_id}.report.md"
+                render_report_v2(pipeline, out_path=str(rep_path), assets_dir=out_dir / f"{mol_id}_assets")
         neg = res.get("neg", {}) if isinstance(res.get("neg"), dict) else {}
         summary_entry = {
             "id": mol_id,
