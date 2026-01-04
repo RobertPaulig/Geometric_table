@@ -220,3 +220,11 @@
 - **Тест:** `tests/test_hetero2_batch_contract.py::test_batch_seed_strategy_per_row`, `tests/test_hetero2_guardrails_contract.py::test_pipeline_default_mock_and_guardrail_limit`.
 - **Коммит(ы):** ceac0b5, a219cc5
 - **Дальше:** таймауты/воркеры для batch, расширить доки по seed-replay.
+
+### 2026-01-05 - HETERO-2 Sprint-6: Evidence Pack (index + manifest)
+
+- **Идея:** отдавать клиенту готовый evidence-pack (summary + кликабельный index + manifest с provenance).
+- **Эксперимент:** `hetero2-batch` всегда пишет `index.md` (таблица с ссылками на report/assets/pipeline) и `manifest.json` (tool/git/python/rdkit версии, seed_strategy, guardrails, score_mode); флаги `--no_index/--no_manifest` для отключения.
+- **Тест:** `tests/test_hetero2_batch_index_manifest_contract.py` (проверка наличия index/manifest и ключевых полей).
+- **Коммит(ы):** 0743dc1, c1b20eb, 0aafa62
+- **Дальше:** Stress harness (timeout/worker), html/pdf отчёты (опционально).

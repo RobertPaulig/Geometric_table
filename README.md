@@ -52,6 +52,12 @@ Legacy install via requirements.txt is supported but will be deprecated.
 - Чтобы увидеть причину, откройте `<id>.pipeline.json` или `summary.csv` после `hetero2-batch`.
 - Batch knobs: `--score_mode {mock,external_scores}` (mock по умолчанию), `--seed_strategy {global,per_row}` (per_row = stable_hash(id) XOR seed), `--guardrails_max_atoms`, `--guardrails_require_connected`.
 
+## Evidence Pack (Sprint-6)
+
+- `hetero2-batch --input molecules.csv --out_dir out_batch` теперь пишет `summary.csv` + `index.md` (кликабельные ссылки на `<id>.report.md`, `<id>_assets/`, `<id>.pipeline.json`) и `manifest.json` (provenance: tool/git/python/rdkit версии, seed_strategy, guardrails, score_mode).
+- Отключить генерацию можно флагами `--no_index` / `--no_manifest`.
+- Пример структуры `out_batch/`: `summary.csv`, `index.md`, `manifest.json`, `aspirin.pipeline.json`, `aspirin.report.md`, `aspirin_assets/`.
+
 ## Key directories
 
 - `core/` - model (geom_atoms, grower, complexity, thermo, nuclear)

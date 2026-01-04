@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## 0.2.3
+
+- Evidence Pack для `hetero2-batch`: `index.md` (кликабельные ссылки на отчёты/assets/pipeline) и `manifest.json` (provenance: tool/git/python/rdkit версии, seed_strategy, guardrails, score_mode).
+- Batch по умолчанию генерирует index+manifest; можно отключить флагами `--no_index/--no_manifest`.
+- Контрактный тест на evidence pack (`tests/test_hetero2_batch_index_manifest_contract.py`).
+
 ## 0.2.2
 
 - Guardrails для HETERO-2 pipeline: SKIP с причинами (`invalid_smiles`, `too_large`, `disconnected`, `missing_scores_input`) при блокировке; schema_version сохранён.
