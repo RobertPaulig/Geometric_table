@@ -60,6 +60,13 @@ Legacy install via requirements.txt is supported but will be deprecated.
 - Integrity: `checksums.sha256` (проверить: `cd out_batch && sha256sum -c checksums.sha256`), `manifest.json["files"]` содержит path/size/sha256.
 - Опционально: `--zip_pack` соберёт `evidence_pack.zip` со всеми артефактами (удобно передать клиенту одним файлом).
 
+## Stress Harness (Sprint-8)
+
+- Массовый запуск: `hetero2-batch --input big.csv --out_dir out --workers 8 --timeout_s 15 --resume --zip_pack`.
+- Защита от падений: потоковая запись `summary.csv` с `flush+fsync`, `resume/overwrite` для продолжения прогонов.
+- Стабильность RDKit: `maxtasksperchild=100` в пуле воркеров.
+- Диагностика: `metrics.json` (counts/top_reasons/runtime/config) включён в manifest/checksums; `index.md` сортируется по id.
+
 ## Key directories
 
 - `core/` - model (geom_atoms, grower, complexity, thermo, nuclear)

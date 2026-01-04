@@ -96,8 +96,17 @@ def _write_manifest(
             "guardrails_max_atoms": int(guardrails_max_atoms),
             "guardrails_require_connected": bool(guardrails_require_connected),
         },
-        "files": files,
+        "files": [],
     }
+    seen = set()
+    files_deduped: List[Dict[str, object]] = []
+    for item in files:
+        path = str(item.get("path", ""))
+        if not path or path in seen:
+            continue
+        seen.add(path)
+        files_deduped.append(item)
+    payload["files"] = sorted(files_deduped, key=lambda x: str(x.get("path", "")))
     manifest_path = out_dir / "manifest.json"
     manifest_path.write_text(json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
 

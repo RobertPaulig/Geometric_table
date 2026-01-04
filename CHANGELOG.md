@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## 0.2.5
+
+- Stress harness: `workers`, `timeout_s`, `resume`, `overwrite` + потоковая запись `summary.csv` с `flush+fsync`.
+- RDKit leak mitigation: `multiprocessing.Pool` с `maxtasksperchild=100`.
+- `metrics.json` (counts/top_reasons/runtime/config) интегрирован в manifest/checksums; evidence pack детерминирован.
+
 ## 0.2.4
 
 - Evidence pack усилен: `manifest.json` включает `files` (path/size/sha256), пишется `checksums.sha256` на все артефакты; опциональный `--zip_pack` создаёт `evidence_pack.zip`.

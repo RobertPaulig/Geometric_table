@@ -2143,3 +2143,8 @@ DoD:
 - **–ешение:** дл€ per_row seed введЄн стабильный хеш id: `crc32(id.encode)` (Python `hash()` рандомизирован и не годитс€ дл€ детерминизма); `seed_used = seed XOR stable_hash(id)`.
 - **CLI:** `hetero2-batch --seed_strategy {global,per_row}` (default=global), `--guardrails_max_atoms`, `--guardrails_require_connected`.
 - **ѕолитика:** без `scores_input` default `score_mode=mock`; `external_scores` без файла -> SKIP `missing_scores_input`.
+### 2026-01-05 - HETERO-2 Sprint-8: Stress Harness (resume/metrics)
+
+- Streaming summary: пишем строку после каждой молекулы (`flush+fsync`) чтобы resume был честным даже при падении.
+- Pool `maxtasksperchild=100`: ограничивает накопление пам€ти RDKit в воркерах на длинных прогонах.
+- Resume-policy: при `--resume` пропускаем любые id уже в summary (OK/SKIP/ERROR); `--overwrite` пересчитывает их заново.

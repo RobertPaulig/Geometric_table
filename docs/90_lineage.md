@@ -236,3 +236,11 @@
 - **Тест:** `tests/test_hetero2_evidence_pack_checksums_contract.py` (наличие checksums, manifest.files, zip содержит index/manifest).
 - **Коммит(ы):** 278da6d, c4c240e, 555af7d
 - **Дальше:** Stress harness (timeout/worker), pdf/html отчёты.
+
+### 2026-01-05 - HETERO-2 Sprint-8: Stress Harness (resume/metrics)
+
+- **Идея:** надёжный batch на 100k+: параллельность, resume, таймауты, метрики.
+- **Эксперимент:** streaming summary с `flush+fsync`, `multiprocessing.Pool(maxtasksperchild=100)`, `resume/overwrite`, `metrics.json` (counts/top_reasons/runtime/config) интегрирован в manifest/checksums, `index.md` сортируется по id.
+- **Тест:** `tests/test_hetero2_batch_resume_contract.py`, `tests/test_hetero2_metrics_contract.py`.
+- **Коммит(ы):** b2279f5, 6d4d93d, 39a23dc (релиз v0.2.5)
+- **Дальше:** Gate-Stress 10k–50k; Sprint-9 external scores.
