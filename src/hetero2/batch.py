@@ -45,23 +45,22 @@ def run_batch(
                 status = "SKIP"
                 reason = "missing_smiles"
             else:
+                effective_score_mode = "mock" if score_mode == "mock" else "external_scores"
                 pipeline = run_pipeline_v2(
                     smiles,
                     k_decoys=int(k_decoys),
                     seed=int(seed),
                     timestamp=timestamp,
-                    score_mode="external_scores" if scores_path else "mock",
+                    score_mode=effective_score_mode,
                     scores_input=scores_path or None,
                 )
                 warnings = pipeline.get("warnings", []) if isinstance(pipeline, dict) else []
+                if score_mode == "mock" and scores_path:
+                    warnings.append("scores_input_ignored_in_mock_mode")
                 skip = pipeline.get("skip") if isinstance(pipeline, dict) else None
                 if isinstance(skip, dict):
                     status = "SKIP"
                     reason = str(skip.get("reason", "skip"))
-                pipe_path = out_dir / f"{mol_id}.pipeline.json"
-                pipe_path.write_text(json.dumps(pipeline, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
-                rep_path = out_dir / f"{mol_id}.report.md"
-                render_report_v2(pipeline, out_path=str(rep_path), assets_dir=out_dir / f"{mol_id}_assets")
         except Exception as exc:
             status = "ERROR"
             reason = repr(exc)
@@ -69,6 +68,13 @@ def run_batch(
             warnings = warnings or []
 
         neg = pipeline.get("audit", {}).get("neg_controls", {}) if isinstance(pipeline, dict) else {}
+        warnings_unique = sorted(set(warnings))
+        if isinstance(pipeline, dict):
+            pipeline["warnings"] = warnings_unique
+            pipe_path = out_dir / f"{mol_id}.pipeline.json"
+            pipe_path.write_text(json.dumps(pipeline, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+            rep_path = out_dir / f"{mol_id}.report.md"
+            render_report_v2(pipeline, out_path=str(rep_path), assets_dir=out_dir / f"{mol_id}_assets")
         summary_rows.append(
             {
                 "id": mol_id,
@@ -79,7 +85,7 @@ def run_batch(
                 "slack": neg.get("slack", ""),
                 "margin": neg.get("margin", ""),
                 "n_decoys": len(pipeline.get("decoys", [])) if isinstance(pipeline, dict) else "",
-                "warnings_count": len(set(warnings)) if isinstance(warnings, list) else 0,
+                "warnings_count": len(warnings_unique),
                 "report_path": str(rep_path) if status == "OK" and rep_path is not None else "",
             }
         )

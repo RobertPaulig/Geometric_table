@@ -80,6 +80,25 @@ def _require_rdkit_ds():
     return DataStructs
 
 
+def _skip_payload(smiles: str, *, warnings: List[str], seed: int, timestamp: str, reason: str) -> Dict[str, object]:
+    ts = timestamp
+    return {
+        "schema_version": "hetero2_pipeline.v1",
+        "smiles": smiles,
+        "ring_info": {},
+        "physchem": {},
+        "decoys": [],
+        "decoy_stats": {},
+        "score_mode": "skip",
+        "audit": {"neg_controls": {"verdict": "SKIP", "gate": "", "slack": "", "margin": ""}},
+        "warnings": sorted(set(warnings)),
+        "hardness": {},
+        "physchem_delta_mean": {},
+        "run": {"seed": int(seed), "timestamp": ts, "cmd": ["hetero2.pipeline.v2"]},
+        "skip": {"reason": reason},
+    }
+
+
 def run_pipeline_v2(
     smiles: str,
     *,
@@ -95,22 +114,12 @@ def run_pipeline_v2(
     ts = timestamp.strip() or _utc_now_iso()
     preflight = preflight_smiles(smiles, max_atoms=guardrails_max_atoms, require_connected=guardrails_require_connected)
     if not preflight.ok:
-        warnings = sorted(set(preflight.warnings))
-        return {
-            "schema_version": "hetero2_pipeline.v1",
-            "smiles": preflight.canonical_smiles,
-            "ring_info": {},
-            "physchem": {},
-            "decoys": [],
-            "decoy_stats": {},
-            "score_mode": "skip",
-            "audit": {"neg_controls": {"verdict": "SKIP", "gate": "", "slack": "", "margin": ""}},
-            "warnings": warnings,
-            "hardness": {},
-            "physchem_delta_mean": {},
-            "run": {"seed": int(seed), "timestamp": ts, "cmd": ["hetero2.pipeline.v2"]},
-            "skip": {"reason": preflight.skip_reason or "guardrail"},
-        }
+        return _skip_payload(preflight.canonical_smiles, warnings=preflight.warnings, seed=seed, timestamp=ts, reason=preflight.skip_reason or "guardrail")
+
+    if score_mode == "external_scores" and not scores_input:
+        warnings = list(preflight.warnings)
+        warnings.append("skip:missing_scores_input")
+        return _skip_payload(preflight.canonical_smiles, warnings=warnings, seed=seed, timestamp=ts, reason="missing_scores_input")
 
     cg = ChemGraph(preflight.canonical_smiles)
     decoys_result = generate_rewire_decoys(

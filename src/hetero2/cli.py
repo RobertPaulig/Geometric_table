@@ -45,7 +45,12 @@ def _parse_batch_args(argv: list[str] | None = None) -> argparse.Namespace:
     ap.add_argument("--seed", type=int, default=0, help="Seed.")
     ap.add_argument("--timestamp", default="", help="Timestamp override.")
     ap.add_argument("--scores_input", default="", help="Global scores_input path (optional).")
-    ap.add_argument("--score_mode", choices=["external_scores", "mock"], default="external_scores")
+    ap.add_argument(
+        "--score_mode",
+        choices=["external_scores", "mock"],
+        default="external_scores",
+        help="Score mode: mock ignores any scores_input; external_scores requires scores_input to be set.",
+    )
     return ap.parse_args(argv)
 
 
