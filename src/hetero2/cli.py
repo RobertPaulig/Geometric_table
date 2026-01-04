@@ -79,6 +79,11 @@ def _parse_batch_args(argv: list[str] | None = None) -> argparse.Namespace:
     ap.add_argument("--no_index", action="store_true", help="Do not emit index.md (evidence pack).")
     ap.add_argument("--no_manifest", action="store_true", help="Do not emit manifest.json (provenance).")
     ap.add_argument("--zip_pack", action="store_true", help="Create evidence_pack.zip with batch outputs.")
+    ap.add_argument("--workers", type=int, default=1, help="Number of worker processes (default: 1).")
+    ap.add_argument("--timeout_s", type=float, default=None, help="Per-molecule timeout in seconds (ERROR on hit).")
+    ap.add_argument("--resume", action="store_true", help="Resume from existing summary.csv (skip processed ids).")
+    ap.add_argument("--overwrite", action="store_true", help="Recompute even if id already processed.")
+    ap.add_argument("--maxtasksperchild", type=int, default=100, help="Pool maxtasksperchild to mitigate RDKit leaks.")
     return ap.parse_args(argv)
 
 
@@ -152,6 +157,11 @@ def main_batch(argv: list[str] | None = None) -> int:
         no_index=bool(args.no_index),
         no_manifest=bool(args.no_manifest),
         zip_pack=bool(args.zip_pack),
+        workers=int(args.workers),
+        timeout_s=float(args.timeout_s) if args.timeout_s is not None else None,
+        resume=bool(args.resume),
+        overwrite=bool(args.overwrite),
+        maxtasksperchild=int(args.maxtasksperchild),
     )
     return 0
 

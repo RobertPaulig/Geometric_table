@@ -37,7 +37,7 @@ def _write_index_md(out_dir: Path, summary_rows: List[Dict[str, object]]) -> Non
         "| id | status | verdict | gate | slack | warnings | seed_used | report | assets | pipeline |",
         "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
-    for row in summary_rows:
+    for row in sorted(summary_rows, key=lambda r: str(r.get("id", ""))):
         mol_id = str(row.get("id", ""))
         report_path = Path(str(row.get("report_path", ""))) if row.get("report_path") else None
         report_link = f"./{report_path.name}" if report_path and report_path.exists() else ""
@@ -149,6 +149,72 @@ def _write_zip_pack(out_dir: Path, *, zip_name: str = "evidence_pack.zip") -> No
             zf.write(path, rel.as_posix())
 
 
+def _process_row(
+    mol_id: str,
+    smiles: str,
+    *,
+    scores_path: str,
+    k_decoys: int,
+    seed: int,
+    timestamp: str,
+    score_mode: str,
+    guardrails_max_atoms: int,
+    guardrails_require_connected: bool,
+) -> Dict[str, object]:
+    """Isolated worker to avoid RDKit leaks across tasks."""
+    if not smiles:
+        return {
+            "id": mol_id,
+            "status": "SKIP",
+            "reason": "missing_smiles",
+            "pipeline": None,
+            "warnings": [],
+            "n_decoys": "",
+            "neg": {},
+            "seed_used": seed,
+        }
+    try:
+        pipeline = run_pipeline_v2(
+            smiles,
+            k_decoys=int(k_decoys),
+            seed=int(seed),
+            timestamp=timestamp,
+            score_mode=score_mode if score_mode in {"mock", "external_scores"} else "mock",
+            scores_input=scores_path or None,
+            guardrails_max_atoms=int(guardrails_max_atoms),
+            guardrails_require_connected=bool(guardrails_require_connected),
+        )
+        warnings = pipeline.get("warnings", []) if isinstance(pipeline, dict) else []
+        if score_mode == "mock" and scores_path:
+            warnings = list(warnings) + ["scores_input_ignored_in_mock_mode"]
+        skip = pipeline.get("skip") if isinstance(pipeline, dict) else None
+        status = "SKIP" if isinstance(skip, dict) else "OK"
+        reason = str(skip.get("reason", "")) if isinstance(skip, dict) else ""
+        neg = pipeline.get("audit", {}).get("neg_controls", {}) if isinstance(pipeline, dict) else {}
+        n_decoys = len(pipeline.get("decoys", [])) if isinstance(pipeline, dict) else ""
+        return {
+            "id": mol_id,
+            "status": status,
+            "reason": reason,
+            "pipeline": pipeline,
+            "warnings": warnings,
+            "n_decoys": n_decoys,
+            "neg": neg,
+            "seed_used": seed,
+        }
+    except Exception as exc:
+        return {
+            "id": mol_id,
+            "status": "ERROR",
+            "reason": repr(exc),
+            "pipeline": None,
+            "warnings": [],
+            "n_decoys": "",
+            "neg": {},
+            "seed_used": seed,
+        }
+
+
 def run_batch(
     *,
     input_csv: Path,
@@ -164,74 +230,14 @@ def run_batch(
     no_index: bool = False,
     no_manifest: bool = False,
     zip_pack: bool = False,
+    workers: int = 1,
+    timeout_s: float | None = None,
+    resume: bool = False,
+    overwrite: bool = False,
+    maxtasksperchild: int = 100,
 ) -> Path:
     rows = _read_rows(input_csv)
     out_dir.mkdir(parents=True, exist_ok=True)
-    summary_rows: List[Dict[str, object]] = []
-    for idx, row in enumerate(rows):
-        mol_id = row.get("id") or f"mol_{idx}"
-        smiles = row.get("smiles", "")
-        scores_path = row.get("scores_input") or scores_input or ""
-        derived_seed = int(seed)
-        if seed_strategy == "per_row":
-            derived_seed = int(seed) ^ _stable_hash_id(str(mol_id))
-        status = "OK"
-        reason = ""
-        warnings: List[str] = []
-        pipeline: Dict[str, object] | None = None
-        rep_path: Path | None = None
-        try:
-            if not smiles:
-                status = "SKIP"
-                reason = "missing_smiles"
-            else:
-                effective_score_mode = "mock" if score_mode == "mock" else "external_scores"
-                pipeline = run_pipeline_v2(
-                    smiles,
-                    k_decoys=int(k_decoys),
-                    seed=derived_seed,
-                    timestamp=timestamp,
-                    score_mode=effective_score_mode,
-                    scores_input=scores_path or None,
-                    guardrails_max_atoms=int(guardrails_max_atoms),
-                    guardrails_require_connected=bool(guardrails_require_connected),
-                )
-                warnings = pipeline.get("warnings", []) if isinstance(pipeline, dict) else []
-                if score_mode == "mock" and scores_path:
-                    warnings.append("scores_input_ignored_in_mock_mode")
-                skip = pipeline.get("skip") if isinstance(pipeline, dict) else None
-                if isinstance(skip, dict):
-                    status = "SKIP"
-                    reason = str(skip.get("reason", "skip"))
-        except Exception as exc:
-            status = "ERROR"
-            reason = repr(exc)
-            pipeline = pipeline or {}
-            warnings = warnings or []
-
-        neg = pipeline.get("audit", {}).get("neg_controls", {}) if isinstance(pipeline, dict) else {}
-        warnings_unique = sorted(set(warnings))
-        if isinstance(pipeline, dict):
-            pipeline["warnings"] = warnings_unique
-            pipe_path = out_dir / f"{mol_id}.pipeline.json"
-            pipe_path.write_text(json.dumps(pipeline, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
-            rep_path = out_dir / f"{mol_id}.report.md"
-            render_report_v2(pipeline, out_path=str(rep_path), assets_dir=out_dir / f"{mol_id}_assets")
-        summary_rows.append(
-            {
-                "id": mol_id,
-                "status": status,
-                "reason": reason,
-                "verdict": neg.get("verdict", ""),
-                "gate": neg.get("gate", ""),
-                "slack": neg.get("slack", ""),
-                "margin": neg.get("margin", ""),
-                "n_decoys": len(pipeline.get("decoys", [])) if isinstance(pipeline, dict) else "",
-                "warnings_count": len(warnings_unique),
-                "report_path": str(rep_path) if status == "OK" and rep_path is not None else "",
-                "seed_used": derived_seed if isinstance(derived_seed, int) else "",
-            }
-        )
     summary_path = out_dir / "summary.csv"
     fieldnames: Sequence[str] = [
         "id",
@@ -246,10 +252,128 @@ def run_batch(
         "report_path",
         "seed_used",
     ]
-    with summary_path.open("w", encoding="utf-8", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
+    summary_rows: List[Dict[str, object]] = []
+    done_ids: set[str] = set()
+    if summary_path.exists() and resume:
+        existing = list(csv.DictReader(summary_path.read_text(encoding="utf-8").splitlines()))
+        summary_rows.extend(existing)
+        done_ids = {str(row.get("id", "")) for row in existing}
+    summary_file = summary_path.open("a", encoding="utf-8", newline="")
+    writer = csv.DictWriter(summary_file, fieldnames=fieldnames)
+    if summary_path.stat().st_size == 0:
         writer.writeheader()
-        writer.writerows(summary_rows)
+        summary_file.flush()
+        os.fsync(summary_file.fileno())
+
+    def _write_summary_row(row: Dict[str, object]) -> None:
+        writer.writerow(row)
+        summary_file.flush()
+        os.fsync(summary_file.fileno())
+
+    tasks: List[Dict[str, object]] = []
+    for idx, row in enumerate(rows):
+        mol_id = row.get("id") or f"mol_{idx}"
+        if resume and not overwrite and mol_id in done_ids:
+            continue
+        smiles = row.get("smiles", "")
+        scores_path = row.get("scores_input") or scores_input or ""
+        derived_seed = int(seed)
+        if seed_strategy == "per_row":
+            derived_seed = int(seed) ^ _stable_hash_id(str(mol_id))
+        tasks.append(
+            {
+                "mol_id": mol_id,
+                "smiles": smiles,
+                "scores_path": scores_path,
+                "seed": derived_seed,
+            }
+        )
+
+    def handle_result(res: Dict[str, object]) -> None:
+        pipeline = res.get("pipeline")
+        mol_id = str(res.get("id", ""))
+        status = str(res.get("status", ""))
+        reason = str(res.get("reason", ""))
+        warnings = res.get("warnings", []) if isinstance(res.get("warnings"), list) else []
+        rep_path: Path | None = None
+        if isinstance(pipeline, dict):
+            warnings = sorted(set(warnings))
+            pipeline["warnings"] = warnings
+            pipe_path = out_dir / f"{mol_id}.pipeline.json"
+            pipe_path.write_text(json.dumps(pipeline, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+            rep_path = out_dir / f"{mol_id}.report.md"
+            render_report_v2(pipeline, out_path=str(rep_path), assets_dir=out_dir / f"{mol_id}_assets")
+        neg = res.get("neg", {}) if isinstance(res.get("neg"), dict) else {}
+        summary_entry = {
+            "id": mol_id,
+            "status": status or "ERROR",
+            "reason": reason,
+            "verdict": neg.get("verdict", ""),
+            "gate": neg.get("gate", ""),
+            "slack": neg.get("slack", ""),
+            "margin": neg.get("margin", ""),
+            "n_decoys": res.get("n_decoys", ""),
+            "warnings_count": len(set(warnings)) if isinstance(warnings, list) else 0,
+            "report_path": str(rep_path) if status == "OK" and rep_path is not None else "",
+            "seed_used": res.get("seed_used", ""),
+        }
+        summary_rows.append(summary_entry)
+        _write_summary_row(summary_entry)
+
+    if workers <= 1:
+        for task in tasks:
+            res = _process_row(
+                task["mol_id"],
+                task["smiles"],
+                scores_path=task["scores_path"],
+                k_decoys=int(k_decoys),
+                seed=int(task["seed"]),
+                timestamp=timestamp,
+                score_mode="mock" if score_mode == "mock" else "external_scores",
+                guardrails_max_atoms=int(guardrails_max_atoms),
+                guardrails_require_connected=bool(guardrails_require_connected),
+            )
+            handle_result(res)
+    else:
+        import multiprocessing
+
+        with multiprocessing.Pool(processes=int(workers), maxtasksperchild=int(maxtasksperchild)) as pool:
+            async_results = []
+            for task in tasks:
+                async_res = pool.apply_async(
+                    _process_row,
+                    (
+                        task["mol_id"],
+                        task["smiles"],
+                    ),
+                    dict(
+                        scores_path=task["scores_path"],
+                        k_decoys=int(k_decoys),
+                        seed=int(task["seed"]),
+                        timestamp=timestamp,
+                        score_mode="mock" if score_mode == "mock" else "external_scores",
+                        guardrails_max_atoms=int(guardrails_max_atoms),
+                        guardrails_require_connected=bool(guardrails_require_connected),
+                    ),
+                )
+                async_results.append((task["mol_id"], async_res))
+            for mol_id, ar in async_results:
+                try:
+                    res = ar.get(timeout=timeout_s) if timeout_s else ar.get()
+                except Exception as exc:
+                    res = {
+                        "id": mol_id,
+                        "status": "ERROR",
+                        "reason": "timeout" if "Timeout" in exc.__class__.__name__ else repr(exc),
+                        "pipeline": None,
+                        "warnings": [],
+                        "n_decoys": "",
+                        "neg": {},
+                        "seed_used": seed,
+                    }
+                handle_result(res)
+
+    summary_file.close()
 
     if not no_index:
         _write_index_md(out_dir, summary_rows)
