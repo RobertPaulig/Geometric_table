@@ -34,44 +34,70 @@ def run_batch(
     for idx, row in enumerate(rows):
         mol_id = row.get("id") or f"mol_{idx}"
         smiles = row.get("smiles", "")
-        if not smiles:
-            continue
         scores_path = row.get("scores_input") or scores_input or ""
-        pipeline = run_pipeline_v2(
-            smiles,
-            k_decoys=int(k_decoys),
-            seed=int(seed),
-            timestamp=timestamp,
-            score_mode="external_scores" if scores_path else "mock",
-            scores_input=scores_path or None,
-        )
-        stem = mol_id
-        pipe_path = out_dir / f"{stem}.pipeline.json"
-        rep_path = out_dir / f"{stem}.report.md"
-        assets_dir = out_dir / f"{stem}_assets"
-        pipe_path.write_text(json.dumps(pipeline, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
-        render_report_v2(pipeline, out_path=str(rep_path), assets_dir=assets_dir)
+        status = "OK"
+        reason = ""
+        warnings: List[str] = []
+        pipeline: Dict[str, object] | None = None
+        rep_path: Path | None = None
+        try:
+            if not smiles:
+                status = "SKIP"
+                reason = "missing_smiles"
+            else:
+                pipeline = run_pipeline_v2(
+                    smiles,
+                    k_decoys=int(k_decoys),
+                    seed=int(seed),
+                    timestamp=timestamp,
+                    score_mode="external_scores" if scores_path else "mock",
+                    scores_input=scores_path or None,
+                )
+                warnings = pipeline.get("warnings", []) if isinstance(pipeline, dict) else []
+                skip = pipeline.get("skip") if isinstance(pipeline, dict) else None
+                if isinstance(skip, dict):
+                    status = "SKIP"
+                    reason = str(skip.get("reason", "skip"))
+                pipe_path = out_dir / f"{mol_id}.pipeline.json"
+                pipe_path.write_text(json.dumps(pipeline, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+                rep_path = out_dir / f"{mol_id}.report.md"
+                render_report_v2(pipeline, out_path=str(rep_path), assets_dir=out_dir / f"{mol_id}_assets")
+        except Exception as exc:
+            status = "ERROR"
+            reason = repr(exc)
+            pipeline = pipeline or {}
+            warnings = warnings or []
+
         neg = pipeline.get("audit", {}).get("neg_controls", {}) if isinstance(pipeline, dict) else {}
-        warnings = pipeline.get("warnings", []) if isinstance(pipeline, dict) else []
         summary_rows.append(
             {
                 "id": mol_id,
+                "status": status,
+                "reason": reason,
                 "verdict": neg.get("verdict", ""),
                 "gate": neg.get("gate", ""),
                 "slack": neg.get("slack", ""),
                 "margin": neg.get("margin", ""),
                 "n_decoys": len(pipeline.get("decoys", [])) if isinstance(pipeline, dict) else "",
                 "warnings_count": len(set(warnings)) if isinstance(warnings, list) else 0,
-                "report_path": str(rep_path),
+                "report_path": str(rep_path) if status == "OK" and rep_path is not None else "",
             }
         )
     summary_path = out_dir / "summary.csv"
-    if summary_rows:
-        with summary_path.open("w", encoding="utf-8", newline="") as f:
-            fieldnames: Sequence[str] = ["id", "verdict", "gate", "slack", "margin", "n_decoys", "warnings_count", "report_path"]
-            writer = csv.DictWriter(f, fieldnames=fieldnames)
-            writer.writeheader()
-            writer.writerows(summary_rows)
-    else:
-        summary_path.write_text("id,verdict,gate,slack,margin,n_decoys,warnings_count,report_path\n", encoding="utf-8")
+    fieldnames: Sequence[str] = [
+        "id",
+        "status",
+        "reason",
+        "verdict",
+        "gate",
+        "slack",
+        "margin",
+        "n_decoys",
+        "warnings_count",
+        "report_path",
+    ]
+    with summary_path.open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(summary_rows)
     return summary_path

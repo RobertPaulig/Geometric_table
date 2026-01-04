@@ -8,7 +8,10 @@ import pytest
 def test_hetero2_batch_creates_artifacts(tmp_path: Path) -> None:
     pytest.importorskip("rdkit")
     input_csv = tmp_path / "input.csv"
-    rows = [{"id": "aspirin", "smiles": "CC(=O)OC1=CC=CC=C1C(=O)O"}]
+    rows = [
+        {"id": "aspirin", "smiles": "CC(=O)OC1=CC=CC=C1C(=O)O"},
+        {"id": "empty", "smiles": ""},
+    ]
     with input_csv.open("w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=["id", "smiles"])
         writer.writeheader()
@@ -30,7 +33,12 @@ def test_hetero2_batch_creates_artifacts(tmp_path: Path) -> None:
     summary = out_dir / "summary.csv"
     assert summary.exists()
     data = list(csv.DictReader(summary.read_text(encoding="utf-8").splitlines()))
-    assert data and data[0]["id"] == "aspirin"
+    assert len(data) == 2
+    assert data[0]["id"] == "aspirin"
+    assert data[0]["status"] == "OK"
+    assert data[1]["id"] == "empty"
+    assert data[1]["status"] in {"SKIP", "ERROR"}
+    assert data[1]["reason"]
     assert (out_dir / "aspirin.pipeline.json").exists()
     assert (out_dir / "aspirin.report.md").exists()
     assets = out_dir / "aspirin_assets"
