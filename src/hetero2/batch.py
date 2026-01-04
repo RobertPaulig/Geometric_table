@@ -5,6 +5,7 @@ import json
 import os
 import platform
 import subprocess
+import time
 import zlib
 import zipfile
 from datetime import datetime, timezone
@@ -236,6 +237,7 @@ def run_batch(
     overwrite: bool = False,
     maxtasksperchild: int = 100,
 ) -> Path:
+    t_start = time.time()
     rows = _read_rows(input_csv)
     out_dir.mkdir(parents=True, exist_ok=True)
     summary_path = out_dir / "summary.csv"
@@ -375,12 +377,48 @@ def run_batch(
 
     summary_file.close()
 
+    runtime_s = max(time.time() - t_start, 1e-9)
+    metrics = {
+        "counts": {
+            "OK": sum(1 for r in summary_rows if r.get("status") == "OK"),
+            "SKIP": sum(1 for r in summary_rows if r.get("status") == "SKIP"),
+            "ERROR": sum(1 for r in summary_rows if r.get("status") == "ERROR"),
+        },
+        "top_reasons": sorted(
+            (
+                (reason, count)
+                for reason, count in (
+                    __import__("collections").Counter(r.get("reason", "") for r in summary_rows).items()
+                )
+                if reason
+            ),
+            key=lambda t: (-t[1], t[0]),
+        ),
+        "runtime_s_total": runtime_s,
+        "throughput_rows_per_s": len(summary_rows) / runtime_s if summary_rows else 0.0,
+        "config": {
+            "workers": workers,
+            "timeout_s": timeout_s,
+            "resume": resume,
+            "overwrite": overwrite,
+            "maxtasksperchild": maxtasksperchild,
+            "seed_strategy": seed_strategy,
+            "seed": seed,
+            "guardrails_max_atoms": guardrails_max_atoms,
+            "guardrails_require_connected": guardrails_require_connected,
+            "score_mode": score_mode,
+        },
+    }
+    metrics_path = out_dir / "metrics.json"
+    metrics_path.write_text(json.dumps(metrics, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+
     if not no_index:
         _write_index_md(out_dir, summary_rows)
     file_infos = _compute_file_infos(out_dir, skip_names={"manifest.json", "checksums.sha256", "evidence_pack.zip"})
     if not no_manifest:
         manifest_files = list(file_infos)
         manifest_files.append({"path": "./manifest.json", "size_bytes": None, "sha256": None})
+        manifest_files.append({"path": "./metrics.json", "size_bytes": metrics_path.stat().st_size, "sha256": _sha256_of_file(metrics_path)})
         _write_manifest(
             out_dir,
             seed=seed,
