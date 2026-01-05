@@ -131,6 +131,19 @@ def run_pipeline_v2(
         allow_ring_bonds=False,
     )
     decoys = decoys_result.decoys
+    if len(decoys) == 0:
+        warnings = []
+        warnings.extend(preflight.warnings)
+        warnings.extend(decoys_result.warnings)
+        warnings.append("skip:no_decoys_generated")
+        warnings = sorted(set(warnings))
+        return _skip_payload(
+            cg.canonical_smiles,
+            warnings=warnings,
+            seed=seed,
+            timestamp=ts,
+            reason="no_decoys_generated",
+        )
 
     scores: Dict[str, Dict[str, float]] = {}
     scores_input_id = ""
