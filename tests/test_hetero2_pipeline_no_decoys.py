@@ -1,5 +1,7 @@
 import pytest
 
+pytest.importorskip("rdkit")
+
 from hetero2.decoys_rewire import DecoyResult
 from hetero2.pipeline import run_pipeline_v2
 
