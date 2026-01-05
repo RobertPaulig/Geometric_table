@@ -37,7 +37,8 @@ on:
       prerelease:
         description: "Mark GitHub release as pre-release"
         required: true
-        default: "true"
+        type: boolean
+        default: true
 
 jobs:
   build-pack:
@@ -115,6 +116,16 @@ jobs:
           ASSET_URL="https://github.com/${{ github.repository }}/releases/download/${{ inputs.tag }}/evidence_pack.zip"
           echo "asset_url=$ASSET_URL" >> "$GITHUB_OUTPUT"
 
+      - name: Gate: ERROR must be 0
+        run: |
+          python - << 'PY'
+          import json
+          m = json.load(open("out_stress/metrics.json", "r", encoding="utf-8"))
+          err = int(m.get("counts", {}).get("ERROR", 0))
+          assert err == 0, f"Gate-Stress failed: ERROR={err}"
+          print("Gate OK: ERROR=0")
+          PY
+
       - name: Upload build artifact (zip)
         uses: actions/upload-artifact@v4
         with:
@@ -138,6 +149,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.tag }}
+          target_commitish: ${{ needs.build-pack.outputs.source_sha }}
           name: "stress_10k light evidence pack (ERROR=0)"
           body_path: release_notes.md
           prerelease: ${{ inputs.prerelease }}
