@@ -58,6 +58,7 @@ results/hetero_suite_p07_holdout/
 # ============================================================
 # Batch / stress harness outputs (never commit)
 # ============================================================
+/.venv/
 out*/
 *_assets/
 *.pipeline.json
