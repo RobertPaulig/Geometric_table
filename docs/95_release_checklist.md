@@ -41,6 +41,7 @@ Windows / PowerShell:
 На одном и том же SHA и одном и том же input:
 - [ ] Два запуска с одинаковым seed_strategy/seed дают одинаковые counts и top_reasons в metrics.json.
 - [ ] (желательно) summary.csv идентичен по counts/reasons (можно сравнить агрегаты).
+- [ ] Повторить determinism check на целевом числе workers (например 6), сравнить metrics.counts и top_reasons — должны совпасть.
 
 ## F. Publish (релиз)
 Правило: release = “точка истины”. После публикации мы обязаны уметь скачать и повторить проверку.

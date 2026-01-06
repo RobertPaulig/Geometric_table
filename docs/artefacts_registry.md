@@ -11,4 +11,9 @@
   summary.csv, metrics.json, index.md, manifest.json, checksums.sha256, evidence_pack.zip
 - Outcome:
   OK=7200, SKIP=2800 (no_decoys_generated=1800, too_many_atoms=500, disconnected=250, invalid_smiles=208, missing_smiles=42), ERROR=0
+- Determinism check: PASS
+- Input: determinism_1k.csv (generated locally)
+- Command: --seed_strategy per_row --seed 0 --workers 1 --k_decoys 2 --artifacts light --score_mode mock --zip_pack
+- counts: {'ERROR':0,'OK':70,'SKIP':930}
+- top_reasons: no_decoys_generated=630, too_many_atoms=150, disconnected=100, invalid_smiles=40, missing_smiles=10
 
