@@ -1,10 +1,10 @@
 # Artefacts Registry
 
-## stress_10k (light) — 2026-01-05
+## stress_10k (light) - 2026-01-05
 
 - Commit: https://github.com/RobertPaulig/Geometric_table/commit/9c54b043047010f165549e42399bf265a9395198
 - Release asset: https://github.com/RobertPaulig/Geometric_table/releases/download/stress-10k-2026-01-05/evidence_pack.zip
-- SHA256(evidence_pack.zip): 458EF5315D52B17B7797F67F3B89E2A091A12058406C9876DCC6D9925E95C76B
+- SHA256(evidence_pack.zip): 438EA7566773E115CE47665493630821FF66892455D0D20114AD0B7AB0DC9AD8
 - Command:
   hetero2-batch --input stress_10k.csv --out_dir out_stress_10k --artifacts light --score_mode mock --k_decoys 2 --workers 1 --timeout_s 60 --maxtasksperchild 100 --seed_strategy per_row --seed 0 --zip_pack
 - Pack contents (expected):
@@ -16,4 +16,3 @@
 - Command: --seed_strategy per_row --seed 0 --workers 1 --k_decoys 2 --artifacts light --score_mode mock --zip_pack
 - counts: {'ERROR':0,'OK':70,'SKIP':930}
 - top_reasons: no_decoys_generated=630, too_many_atoms=150, disconnected=100, invalid_smiles=40, missing_smiles=10
-
