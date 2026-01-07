@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+import hashlib
 import os
 import platform
 import subprocess
@@ -79,6 +80,7 @@ def _write_manifest(
     seed: int,
     seed_strategy: str,
     score_mode: str,
+    scores_provenance: Dict[str, str] | None,
     guardrails_max_atoms: int,
     guardrails_require_connected: bool,
     files: List[Dict[str, object]],
@@ -93,6 +95,7 @@ def _write_manifest(
             "seed_strategy": seed_strategy,
             "seed": int(seed),
             "score_mode": score_mode,
+            "scores_provenance": scores_provenance or {},
             "guardrails_max_atoms": int(guardrails_max_atoms),
             "guardrails_require_connected": bool(guardrails_require_connected),
         },
@@ -133,6 +136,25 @@ def _sha256_of_file(path: Path) -> str:
         for chunk in iter(lambda: f.read(8192), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
+def _scores_provenance(scores_input: str | None) -> Dict[str, str]:
+    if not scores_input:
+        return {}
+    path = Path(scores_input)
+    if not path.exists():
+        return {}
+    schema_version = ""
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        schema_version = str(payload.get("schema_version", ""))
+    except Exception:
+        schema_version = ""
+    return {
+        "scores_input_id": path.name,
+        "scores_input_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+        "scores_schema_version": schema_version,
+    }
 
 
 def _write_checksums(out_dir: Path, file_infos: List[Dict[str, object]]) -> None:
@@ -440,6 +462,7 @@ def run_batch(
         _write_index_md(out_dir, summary_rows)
     file_infos = _compute_file_infos(out_dir, skip_names={"manifest.json", "checksums.sha256", "evidence_pack.zip"})
     if not no_manifest:
+        scores_prov = _scores_provenance(scores_input) if score_mode == "external_scores" else {}
         manifest_files = list(file_infos)
         manifest_files.append({"path": "./manifest.json", "size_bytes": None, "sha256": None})
         manifest_files.append({"path": "./metrics.json", "size_bytes": metrics_path.stat().st_size, "sha256": _sha256_of_file(metrics_path)})
@@ -448,6 +471,7 @@ def run_batch(
             seed=seed,
             seed_strategy=seed_strategy,
             score_mode=score_mode,
+            scores_provenance=scores_prov,
             guardrails_max_atoms=guardrails_max_atoms,
             guardrails_require_connected=guardrails_require_connected,
             files=manifest_files,

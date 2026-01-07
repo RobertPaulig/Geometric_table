@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Dict, List, Sequence
 
 from hetero1a.api import run_audit
+from hetero1a.schemas import SCORES_SCHEMA
 from hetero2.chemgraph import ChemGraph
 from hetero2.decoys_rewire import generate_rewire_decoys
 from hetero2.guardrails import MAX_ATOMS_DEFAULT, preflight_smiles
@@ -96,6 +97,7 @@ def _skip_payload(smiles: str, *, warnings: List[str], seed: int, timestamp: str
         "hardness": {},
         "physchem_delta_mean": {},
         "spectral": {},
+        "scores_provenance": {},
         "run": {"seed": int(seed), "timestamp": ts, "cmd": ["hetero2.pipeline.v2"]},
         "skip": {"reason": reason},
     }
@@ -123,6 +125,24 @@ def run_pipeline_v2(
         warnings.append("skip:missing_scores_input")
         return _skip_payload(preflight.canonical_smiles, warnings=warnings, seed=seed, timestamp=ts, reason="missing_scores_input")
 
+    scores: Dict[str, Dict[str, float]] = {}
+    scores_input_id = ""
+    scores_schema_version = ""
+    scores_input_sha256 = ""
+    scores_payload: Dict[str, object] | None = None
+    effective_score_mode = "mock"
+    if score_mode == "external_scores" and scores_input:
+        scores_path = Path(scores_input)
+        scores_payload = json.loads(scores_path.read_text(encoding="utf-8"))
+        scores_schema_version = str(scores_payload.get("schema_version", ""))
+        if scores_schema_version != SCORES_SCHEMA:
+            raise ValueError(f"scores_input schema_version must be {SCORES_SCHEMA}")
+        import hashlib
+
+        scores_input_id = scores_path.name
+        scores_input_sha256 = hashlib.sha256(scores_path.read_bytes()).hexdigest()
+        effective_score_mode = "external_scores"
+
     cg = ChemGraph(preflight.canonical_smiles)
     eigvals = laplacian_eigvals(cg.laplacian())
     spectral_metrics = compute_stability_metrics(eigvals)
@@ -149,16 +169,13 @@ def run_pipeline_v2(
             reason="no_decoys_generated",
         )
 
-    scores: Dict[str, Dict[str, float]] = {}
-    scores_input_id = ""
-    effective_score_mode = "mock"
-    if score_mode == "external_scores" and scores_input:
-        data = json.loads(Path(scores_input).read_text(encoding="utf-8"))
-        scores_input_id = Path(scores_input).name
-        scores = {h: {"score": float(v.get("score", 0.0)), "weight": float(v.get("weight", 1.0))} for h, v in (data.get("decoys") or {}).items()}
-        orig_score = float((data.get("original") or {}).get("score", 1.0))
-        orig_weight = float((data.get("original") or {}).get("weight", 1.0))
-        effective_score_mode = "external_scores"
+    if effective_score_mode == "external_scores" and scores_payload is not None:
+        scores = {
+            h: {"score": float(v.get("score", 0.0)), "weight": float(v.get("weight", 1.0))}
+            for h, v in (scores_payload.get("decoys") or {}).items()
+        }
+        orig_score = float((scores_payload.get("original") or {}).get("score", 1.0))
+        orig_weight = float((scores_payload.get("original") or {}).get("weight", 1.0))
     else:
         for d in decoys:
             h = str(d["hash"])
@@ -190,6 +207,13 @@ def run_pipeline_v2(
     hardness = _tanimoto_stats(cg.canonical_smiles, decoys)
     physchem_delta = _physchem_delta_mean(cg.physchem(), decoys)
 
+    scores_provenance = {}
+    if effective_score_mode == "external_scores":
+        scores_provenance = {
+            "scores_input_id": scores_input_id,
+            "scores_input_sha256": scores_input_sha256,
+            "scores_schema_version": scores_schema_version,
+        }
     return {
         "schema_version": "hetero2_pipeline.v1",
         "smiles": cg.canonical_smiles,
@@ -203,5 +227,6 @@ def run_pipeline_v2(
         "hardness": hardness,
         "physchem_delta_mean": physchem_delta,
         "spectral": spectral_metrics,
+        "scores_provenance": scores_provenance,
         "run": {"seed": int(seed), "timestamp": ts, "cmd": ["hetero2.pipeline.v2"]},
     }

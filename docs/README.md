@@ -119,6 +119,14 @@ External scores:
 }
 ```
 
+### External scores contract (hetero2)
+
+- `schema_version` must be `hetero_scores.v1` or the run errors.
+- Provenance captured for reproducibility:
+  - `scores_input_id`
+  - `scores_input_sha256`
+  - `scores_schema_version`
+
 ## HETERO-1A report (pipeline -> md + csv)
 
 Публичный entrypoint: `python -m analysis.chem.report`.
