@@ -244,3 +244,8 @@
 - **Тест:** `tests/test_hetero2_batch_resume_contract.py`, `tests/test_hetero2_metrics_contract.py`.
 - **Коммит(ы):** b2279f5, 6d4d93d, 39a23dc (релиз v0.2.5)
 - **Дальше:** Gate-Stress 10k–50k; Sprint-9 external scores.
+
+### 2026-01-07 - CI permissions + publish asset path + stress-10k-2026-01-07 release
+
+- **Links:** workflow fix `d70394661474acd7c1b74d581471fa7fb10bb263`, release `https://github.com/RobertPaulig/Geometric_table/releases/tag/stress-10k-2026-01-07`, asset `https://github.com/RobertPaulig/Geometric_table/releases/download/stress-10k-2026-01-07/evidence_pack.zip`
+- **SHA256:** `DF8EF1412990461CD52FFE35019E8F8BA3A40A7BDEACBE3AB1EEF00191D3AC35`
