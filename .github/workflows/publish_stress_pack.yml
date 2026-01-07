@@ -153,7 +153,9 @@ jobs:
           body_path: release_notes.md
           prerelease: ${{ inputs.prerelease }}
           files: |
-            evidence_pack.zip
+            out_stress/evidence_pack.zip
+            out_stress/evidence_pack.zip.sha256
+          fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
