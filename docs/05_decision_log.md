@@ -2148,3 +2148,9 @@ DoD:
 - Streaming summary: пишем строку после каждой молекулы (`flush+fsync`) чтобы resume был честным даже при падении.
 - Pool `maxtasksperchild=100`: ограничивает накопление памяти RDKit в воркерах на длинных прогонах.
 - Resume-policy: при `--resume` пропускаем любые id уже в summary (OK/SKIP/ERROR); `--overwrite` пересчитывает их заново.
+
+### 2026-01-07 - Experimental spectral stability metrics (hetero2)
+
+- Decision: add spectral_gap, spectral_entropy, spectral_entropy_norm to hetero2 summary.csv as experimental metrics only.
+- Notes: metrics are derived from Laplacian eigenvalues with eps=1e-9; entropy normalization uses log(K) where K is count of positive modes; no gating/verdict.
+- Scope: diagnostics only (no filtering), used for later calibration/analysis.

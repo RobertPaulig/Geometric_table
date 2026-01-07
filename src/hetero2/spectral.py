@@ -1,8 +1,44 @@
 from __future__ import annotations
 
-from typing import Iterable, List
+from typing import Dict, Iterable, List
 
 import numpy as np
+
+
+def laplacian_eigvals(laplacian: np.ndarray) -> np.ndarray:
+    eigvals = np.linalg.eigvalsh(laplacian)
+    return np.sort(eigvals)
+
+
+def compute_stability_metrics(
+    eigvals: Iterable[float],
+    *,
+    eps: float = 1e-9,
+    round_decimals: int = 8,
+) -> Dict[str, float]:
+    vals = np.array(list(eigvals), dtype=float)
+    if vals.size == 0:
+        return {"spectral_gap": float("nan"), "spectral_entropy": float("nan"), "spectral_entropy_norm": float("nan")}
+    pos = vals[vals > eps]
+    if pos.size == 0:
+        return {"spectral_gap": float("nan"), "spectral_entropy": float("nan"), "spectral_entropy_norm": float("nan")}
+    spectral_gap = float(pos.min())
+    total = float(pos.sum())
+    if total <= 0.0:
+        entropy = float("nan")
+        entropy_norm = float("nan")
+    else:
+        p = pos / total
+        entropy = float(-np.sum(p * np.log(p)))
+        if p.size > 1:
+            entropy_norm = float(entropy / np.log(float(p.size)))
+        else:
+            entropy_norm = 0.0
+    return {
+        "spectral_gap": float(np.round(spectral_gap, round_decimals)),
+        "spectral_entropy": float(np.round(entropy, round_decimals)),
+        "spectral_entropy_norm": float(np.round(entropy_norm, round_decimals)),
+    }
 
 
 def spectral_fp_from_laplacian(
@@ -11,8 +47,7 @@ def spectral_fp_from_laplacian(
     k: int | None = None,
     round_decimals: int = 12,
 ) -> List[float]:
-    eigvals = np.linalg.eigvalsh(laplacian)
-    eigvals = np.sort(eigvals)
+    eigvals = laplacian_eigvals(laplacian)
     if k is not None:
         eigvals = eigvals[: int(k)]
     return [float(x) for x in np.round(eigvals, round_decimals)]

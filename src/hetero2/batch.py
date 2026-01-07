@@ -265,6 +265,9 @@ def run_batch(
         "warnings_count",
         "report_path",
         "seed_used",
+        "spectral_gap",
+        "spectral_entropy",
+        "spectral_entropy_norm",
     ]
     summary_rows: List[Dict[str, object]] = []
     done_ids: set[str] = set()
@@ -321,6 +324,9 @@ def run_batch(
                 rep_path = out_dir / f"{mol_id}.report.md"
                 render_report_v2(pipeline, out_path=str(rep_path), assets_dir=out_dir / f"{mol_id}_assets")
         neg = res.get("neg", {}) if isinstance(res.get("neg"), dict) else {}
+        spectral = {}
+        if isinstance(pipeline, dict):
+            spectral = pipeline.get("spectral", {}) if isinstance(pipeline.get("spectral"), dict) else {}
         summary_entry = {
             "id": mol_id,
             "status": status or "ERROR",
@@ -333,6 +339,9 @@ def run_batch(
             "warnings_count": len(set(warnings)) if isinstance(warnings, list) else 0,
             "report_path": str(rep_path) if status == "OK" and rep_path is not None else "",
             "seed_used": res.get("seed_used", ""),
+            "spectral_gap": spectral.get("spectral_gap", ""),
+            "spectral_entropy": spectral.get("spectral_entropy", ""),
+            "spectral_entropy_norm": spectral.get("spectral_entropy_norm", ""),
         }
         summary_rows.append(summary_entry)
         _write_summary_row(summary_entry)

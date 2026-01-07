@@ -249,3 +249,11 @@
 
 - **Links:** workflow fix `d70394661474acd7c1b74d581471fa7fb10bb263`, release `https://github.com/RobertPaulig/Geometric_table/releases/tag/stress-10k-2026-01-07`, asset `https://github.com/RobertPaulig/Geometric_table/releases/download/stress-10k-2026-01-07/evidence_pack.zip`
 - **SHA256:** `DF8EF1412990461CD52FFE35019E8F8BA3A40A7BDEACBE3AB1EEF00191D3AC35`
+
+### 2026-01-07 - Spectral stability metrics (experimental)
+
+- **Scope:** added spectral_gap, spectral_entropy, spectral_entropy_norm (no gating).
+- **Examples (SMILES -> gap, entropy, entropy_norm):**
+  - CC -> 2.0, -0.0, 0.0
+  - CCC -> 1.0, 0.56233514, 0.81127812
+  - c1ccccc1 -> 1.0, 1.47350239, 0.91553851

@@ -10,6 +10,7 @@ from hetero1a.api import run_audit
 from hetero2.chemgraph import ChemGraph
 from hetero2.decoys_rewire import generate_rewire_decoys
 from hetero2.guardrails import MAX_ATOMS_DEFAULT, preflight_smiles
+from hetero2.spectral import compute_stability_metrics, laplacian_eigvals
 
 
 def _utc_now_iso() -> str:
@@ -94,6 +95,7 @@ def _skip_payload(smiles: str, *, warnings: List[str], seed: int, timestamp: str
         "warnings": sorted(set(warnings)),
         "hardness": {},
         "physchem_delta_mean": {},
+        "spectral": {},
         "run": {"seed": int(seed), "timestamp": ts, "cmd": ["hetero2.pipeline.v2"]},
         "skip": {"reason": reason},
     }
@@ -122,6 +124,8 @@ def run_pipeline_v2(
         return _skip_payload(preflight.canonical_smiles, warnings=warnings, seed=seed, timestamp=ts, reason="missing_scores_input")
 
     cg = ChemGraph(preflight.canonical_smiles)
+    eigvals = laplacian_eigvals(cg.laplacian())
+    spectral_metrics = compute_stability_metrics(eigvals)
     decoys_result = generate_rewire_decoys(
         cg.canonical_smiles,
         k=k_decoys,
@@ -198,5 +202,6 @@ def run_pipeline_v2(
         "warnings": warnings,
         "hardness": hardness,
         "physchem_delta_mean": physchem_delta,
+        "spectral": spectral_metrics,
         "run": {"seed": int(seed), "timestamp": ts, "cmd": ["hetero2.pipeline.v2"]},
     }
