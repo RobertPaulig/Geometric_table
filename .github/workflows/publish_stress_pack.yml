@@ -37,8 +37,7 @@ on:
       prerelease:
         description: "Mark GitHub release as pre-release"
         required: true
-        type: boolean
-        default: true
+        default: "true"
 
 jobs:
   build-pack:
