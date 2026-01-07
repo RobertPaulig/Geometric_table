@@ -2154,3 +2154,8 @@ DoD:
 - Decision: add spectral_gap, spectral_entropy, spectral_entropy_norm to hetero2 summary.csv as experimental metrics only.
 - Notes: metrics are derived from Laplacian eigenvalues with eps=1e-9; entropy normalization uses log(K) where K is count of positive modes; no gating/verdict.
 - Scope: diagnostics only (no filtering), used for later calibration/analysis.
+
+### 2026-01-07 - External scores contract (hetero2)
+
+- Decision: external scores are supported only with `schema_version=hetero_scores.v1` (hard validation).
+- Provenance required: scores_input_id, scores_input_sha256, scores_schema_version recorded in manifest and pipeline output.
