@@ -1,6 +1,7 @@
 name: pytest
 
 permissions:
+  contents: read
   statuses: write
 
 on:
