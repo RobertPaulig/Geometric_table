@@ -115,7 +115,7 @@ jobs:
           ASSET_URL="https://github.com/${{ github.repository }}/releases/download/${{ inputs.tag }}/evidence_pack.zip"
           echo "asset_url=$ASSET_URL" >> "$GITHUB_OUTPUT"
 
-      - name: Gate: ERROR must be 0
+      - name: "Gate: ERROR must be 0"
         run: |
           python - << 'PY'
           import json
