@@ -193,8 +193,14 @@ def run_pipeline_v2(
         entry = scores[h]
         items.append({"label": 0, "score": float(entry["score"]), "weight": float(entry["weight"])})
 
-    audit_payload = {"dataset_id": f"hetero2:{cg.canonical_smiles}", "items": items}
-    audit_result = run_audit(audit_payload, seed=int(seed), timestamp=ts, cmd_argv=["hetero2.pipeline.v2"])
+    if effective_score_mode == "external_scores" and missing_scores == len(decoys):
+        audit_result = {
+            "neg_controls": {"verdict": "SKIP", "gate": "", "slack": "", "margin": ""},
+            "warnings": ["skip:missing_scores_for_all_decoys"],
+        }
+    else:
+        audit_payload = {"dataset_id": f"hetero2:{cg.canonical_smiles}", "items": items}
+        audit_result = run_audit(audit_payload, seed=int(seed), timestamp=ts, cmd_argv=["hetero2.pipeline.v2"])
 
     warnings = []
     warnings.extend(preflight.warnings)
