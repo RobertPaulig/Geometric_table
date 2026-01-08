@@ -22,10 +22,12 @@ SMILES_LIST: List[Tuple[str, str]] = [
 ]
 
 
-def _scores_for_smiles(smiles: str, *, k_decoys: int, seed: int) -> Dict[str, Dict[str, float]]:
+def _scores_for_smiles(smiles: str, *, k_decoys: int, seed: int, full_coverage: bool) -> Dict[str, Dict[str, float]]:
     decoys = generate_rewire_decoys(smiles, k=k_decoys, seed=seed, max_attempts=None, lock_aromatic=True, allow_ring_bonds=False)
     if not decoys.decoys:
         return {}
+    if full_coverage:
+        return {str(d["hash"]): {"score": 0.1, "weight": 1.0} for d in decoys.decoys}
     # Provide scores for only the first decoy to ensure partial coverage.
     first_hash = str(decoys.decoys[0]["hash"])
     return {first_hash: {"score": 0.1, "weight": 1.0}}
@@ -37,6 +39,12 @@ def main() -> None:
     ap.add_argument("--rows", type=int, default=500, help="Number of rows to generate.")
     ap.add_argument("--k_decoys", type=int, default=2, help="Decoys per molecule.")
     ap.add_argument("--seed", type=int, default=0, help="Seed for decoy generation.")
+    ap.add_argument(
+        "--full_cover_count",
+        type=int,
+        default=3,
+        help="Number of seed molecules to fully cover with decoy scores (ensures OK rows).",
+    )
     args = ap.parse_args()
 
     out_dir = Path(args.out_dir)
@@ -52,8 +60,16 @@ def main() -> None:
     input_csv.write_text("id,smiles\n" + "\n".join(rows) + "\n", encoding="utf-8")
 
     decoy_scores: Dict[str, Dict[str, float]] = {}
-    for _, smiles in SMILES_LIST:
-        decoy_scores.update(_scores_for_smiles(smiles, k_decoys=int(args.k_decoys), seed=int(args.seed)))
+    for idx, (_, smiles) in enumerate(SMILES_LIST):
+        full_coverage = idx < int(args.full_cover_count)
+        decoy_scores.update(
+            _scores_for_smiles(
+                smiles,
+                k_decoys=int(args.k_decoys),
+                seed=int(args.seed),
+                full_coverage=full_coverage,
+            )
+        )
 
     payload = {
         "schema_version": "hetero_scores.v1",
