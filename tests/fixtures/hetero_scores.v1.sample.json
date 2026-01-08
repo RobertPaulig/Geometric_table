@@ -1,0 +1,7 @@
+{
+  "schema_version": "hetero_scores.v1",
+  "original": {"score": 1.0, "weight": 1.0},
+  "decoys": {
+    "deadbeef": {"score": 0.1, "weight": 1.0}
+  }
+}

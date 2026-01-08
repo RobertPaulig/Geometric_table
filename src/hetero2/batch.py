@@ -32,13 +32,34 @@ def _stable_hash_id(text: str) -> int:
     return int(zlib.crc32(text.encode("utf-8")) & 0xFFFFFFFF)
 
 
-def _write_index_md(out_dir: Path, summary_rows: List[Dict[str, object]]) -> None:
-    lines = [
-        "# Evidence Index",
-        "",
-        "| id | status | verdict | gate | slack | warnings | seed_used | report | assets | pipeline |",
-        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
-    ]
+def _write_index_md(
+    out_dir: Path,
+    summary_rows: List[Dict[str, object]],
+    *,
+    scores_coverage: Dict[str, object] | None = None,
+) -> None:
+    lines = ["# Evidence Index", ""]
+    if scores_coverage:
+        lines.extend(
+            [
+                "## Scores Coverage",
+                "",
+                f"- rows_total: {scores_coverage.get('rows_total', 0)}",
+                f"- rows_with_scores_input: {scores_coverage.get('rows_with_scores_input', 0)}",
+                f"- rows_missing_scores_input: {scores_coverage.get('rows_missing_scores_input', 0)}",
+                f"- rows_with_missing_decoys: {scores_coverage.get('rows_with_missing_decoys', 0)}",
+                f"- decoys_total: {scores_coverage.get('decoys_total', 0)}",
+                f"- decoys_scored: {scores_coverage.get('decoys_scored', 0)}",
+                f"- decoys_missing: {scores_coverage.get('decoys_missing', 0)}",
+                "",
+            ]
+        )
+    lines.extend(
+        [
+            "| id | status | verdict | gate | slack | warnings | seed_used | report | assets | pipeline |",
+            "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+        ]
+    )
     for row in sorted(summary_rows, key=lambda r: str(r.get("id", ""))):
         mol_id = str(row.get("id", ""))
         report_path = Path(str(row.get("report_path", ""))) if row.get("report_path") else None
@@ -197,6 +218,7 @@ def _process_row(
     if not smiles:
         return {
             "id": mol_id,
+            "scores_input": scores_path,
             "status": "SKIP",
             "reason": "missing_smiles",
             "pipeline": None,
@@ -226,6 +248,7 @@ def _process_row(
         n_decoys = len(pipeline.get("decoys", [])) if isinstance(pipeline, dict) else ""
         return {
             "id": mol_id,
+            "scores_input": scores_path,
             "status": status,
             "reason": reason,
             "pipeline": pipeline,
@@ -237,6 +260,7 @@ def _process_row(
     except Exception as exc:
         return {
             "id": mol_id,
+            "scores_input": scores_path,
             "status": "ERROR",
             "reason": repr(exc),
             "pipeline": None,
@@ -292,6 +316,15 @@ def run_batch(
         "spectral_entropy_norm",
     ]
     summary_rows: List[Dict[str, object]] = []
+    scores_coverage = {
+        "rows_total": 0,
+        "rows_with_scores_input": 0,
+        "rows_missing_scores_input": 0,
+        "rows_with_missing_decoys": 0,
+        "decoys_total": 0,
+        "decoys_scored": 0,
+        "decoys_missing": 0,
+    }
     done_ids: set[str] = set()
     if summary_path.exists() and resume:
         existing = list(csv.DictReader(summary_path.read_text(encoding="utf-8").splitlines()))
@@ -345,6 +378,23 @@ def run_batch(
                 )
                 rep_path = out_dir / f"{mol_id}.report.md"
                 render_report_v2(pipeline, out_path=str(rep_path), assets_dir=out_dir / f"{mol_id}_assets")
+        if score_mode == "external_scores":
+            scores_input = str(res.get("scores_input", ""))
+            scores_coverage["rows_total"] += 1
+            if scores_input:
+                scores_coverage["rows_with_scores_input"] += 1
+            else:
+                scores_coverage["rows_missing_scores_input"] += 1
+            if isinstance(pipeline, dict):
+                scov = pipeline.get("scores_coverage", {}) if isinstance(pipeline.get("scores_coverage"), dict) else {}
+                decoys_total = int(scov.get("decoys_total", 0) or 0)
+                decoys_scored = int(scov.get("decoys_scored", 0) or 0)
+                decoys_missing = int(scov.get("decoys_missing", 0) or 0)
+                scores_coverage["decoys_total"] += decoys_total
+                scores_coverage["decoys_scored"] += decoys_scored
+                scores_coverage["decoys_missing"] += decoys_missing
+                if decoys_missing > 0:
+                    scores_coverage["rows_with_missing_decoys"] += 1
         neg = res.get("neg", {}) if isinstance(res.get("neg"), dict) else {}
         spectral = {}
         if isinstance(pipeline, dict):
@@ -455,11 +505,13 @@ def run_batch(
             "score_mode": score_mode,
         },
     }
+    if score_mode == "external_scores":
+        metrics["scores_coverage"] = dict(scores_coverage)
     metrics_path = out_dir / "metrics.json"
     metrics_path.write_text(json.dumps(metrics, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
 
     if not no_index:
-        _write_index_md(out_dir, summary_rows)
+        _write_index_md(out_dir, summary_rows, scores_coverage=scores_coverage if score_mode == "external_scores" else None)
     file_infos = _compute_file_infos(out_dir, skip_names={"manifest.json", "checksums.sha256", "evidence_pack.zip"})
     if not no_manifest:
         scores_prov = _scores_provenance(scores_input) if score_mode == "external_scores" else {}
