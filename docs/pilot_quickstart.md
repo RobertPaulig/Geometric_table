@@ -30,6 +30,11 @@ After the run:
 - Manifest: `out_pilot/out/manifest.json` (includes `scores_provenance`)
 - Metrics: `out_pilot/out/metrics.json` (includes `scores_coverage`)
 
+## Expected Output
+
+- Some rows should be `OK` (scores cover decoys), some `SKIP` (no decoys), and `ERROR` should be 0.
+- `scores_coverage` should show nonzero `rows_with_scores_input` and `decoys_scored`.
+
 ## Verify SHA256
 
 ```powershell
