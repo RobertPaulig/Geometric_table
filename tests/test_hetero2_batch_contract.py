@@ -183,3 +183,44 @@ def test_batch_light_mode_minimal_artifacts(tmp_path: Path) -> None:
     assert "aspirin.pipeline.json" not in names
     assert "aspirin.report.md" not in names
     assert not any(name.startswith("aspirin_assets/") for name in names)
+
+
+def test_batch_external_scores_coverage_metrics(tmp_path: Path) -> None:
+    pytest.importorskip("rdkit")
+    scores_path = tmp_path / "scores.json"
+    scores_payload = {
+        "schema_version": "hetero_scores.v1",
+        "original": {"score": 1.0, "weight": 1.0},
+        "decoys": {},
+    }
+    scores_path.write_text(json.dumps(scores_payload), encoding="utf-8")
+
+    input_csv = tmp_path / "input.csv"
+    rows = [{"id": "aspirin", "smiles": "CC(=O)OC1=CC=CC=C1C(=O)O"}]
+    with input_csv.open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=["id", "smiles"])
+        writer.writeheader()
+        writer.writerows(rows)
+
+    out_dir = tmp_path / "out_scores"
+    import subprocess
+
+    cmd = [
+        sys.executable,
+        "-c",
+        (
+            "from hetero2.cli import main_batch; import sys; "
+            f"sys.exit(main_batch(['--input','{input_csv.as_posix()}','--out_dir','{out_dir.as_posix()}',"
+            f"'--score_mode','external_scores','--scores_input','{scores_path.as_posix()}',"
+            "'--timestamp','2026-01-02T00:00:00+00:00','--seed','0']))"
+        ),
+    ]
+    subprocess.run(cmd, check=True)
+
+    metrics = json.loads((out_dir / "metrics.json").read_text(encoding="utf-8"))
+    cov = metrics.get("scores_coverage", {})
+    assert cov.get("rows_total") == 1
+    assert cov.get("rows_with_scores_input") == 1
+    assert "decoys_total" in cov
+    assert "decoys_scored" in cov
+    assert "decoys_missing" in cov

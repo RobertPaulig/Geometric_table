@@ -214,6 +214,13 @@ def run_pipeline_v2(
             "scores_input_sha256": scores_input_sha256,
             "scores_schema_version": scores_schema_version,
         }
+    scores_coverage = {}
+    if effective_score_mode == "external_scores":
+        scores_coverage = {
+            "decoys_total": len(decoys),
+            "decoys_scored": len(decoys) - missing_scores,
+            "decoys_missing": missing_scores,
+        }
     return {
         "schema_version": "hetero2_pipeline.v1",
         "smiles": cg.canonical_smiles,
@@ -228,5 +235,6 @@ def run_pipeline_v2(
         "physchem_delta_mean": physchem_delta,
         "spectral": spectral_metrics,
         "scores_provenance": scores_provenance,
+        "scores_coverage": scores_coverage,
         "run": {"seed": int(seed), "timestamp": ts, "cmd": ["hetero2.pipeline.v2"]},
     }

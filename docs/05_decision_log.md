@@ -2159,3 +2159,7 @@ DoD:
 
 - Decision: external scores are supported only with `schema_version=hetero_scores.v1` (hard validation).
 - Provenance required: scores_input_id, scores_input_sha256, scores_schema_version recorded in manifest and pipeline output.
+
+### 2026-01-08 - External scores coverage (hetero2)
+
+- Decision: evidence packs must include aggregated scores coverage (rows with scores, missing scores, decoys missing) in metrics.json and index.md.

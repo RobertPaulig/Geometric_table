@@ -262,3 +262,8 @@
 
 - **What:** enforce `hetero_scores.v1` schema for external scores; record provenance (scores_input_id, scores_input_sha256, scores_schema_version).
 - **Refs:** PR #3, merge `1cc33ffa7c2dc36a64df195e452fd579bf055328`.
+
+### 2026-01-08 - Sprint-10: pilot quickstart + scores coverage
+
+- **What:** pilot quickstart (Docker + minimal inputs), scores coverage in metrics/index.
+- **Refs:** PR (TBD), merge (TBD).
