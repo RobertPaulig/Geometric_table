@@ -1,0 +1,192 @@
+name: publish-pilot-evidence-pack
+
+permissions:
+  contents: write
+  pull-requests: write
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref to run on (branch, tag, or SHA). Example: main or 9c54b043..."
+        required: true
+        default: "main"
+      tag:
+        description: "Release tag to create/update. Example: pilot-2026-01-08"
+        required: true
+      prerelease:
+        description: "Mark GitHub release as pre-release"
+        required: true
+        default: "true"
+
+jobs:
+  build-pack:
+    runs-on: ubuntu-latest
+    outputs:
+      sha256: ${{ steps.hash.outputs.sha256 }}
+      source_sha: ${{ steps.meta.outputs.source_sha }}
+      asset_url: ${{ steps.meta.outputs.asset_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install (dev,chem)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,chem]"
+
+      - name: Generate pilot inputs
+        run: |
+          python scripts/pilot_generate_input.py \
+            --out_dir out_pilot \
+            --rows 1000 \
+            --k_decoys 2 \
+            --seed 0
+
+      - name: Run hetero2-batch (light + zip_pack)
+        run: |
+          hetero2-batch \
+            --input out_pilot/input.csv \
+            --out_dir out_pilot \
+            --artifacts light \
+            --score_mode external_scores \
+            --scores_input out_pilot/scores.json \
+            --k_decoys 2 \
+            --workers 2 \
+            --timeout_s 60 \
+            --maxtasksperchild 100 \
+            --seed_strategy per_row \
+            --seed 0 \
+            --zip_pack
+
+      - name: Validate zip (no unpack)
+        run: |
+          python -m zipfile -t out_pilot/evidence_pack.zip
+          python -m zipfile -l out_pilot/evidence_pack.zip | grep -E "manifest.json|checksums.sha256|metrics.json|index.md|summary.csv"
+
+      - name: Prepare pilot asset
+        run: |
+          cp out_pilot/evidence_pack.zip out_pilot/pilot_evidence_pack.zip
+
+      - name: Compute SHA256
+        id: hash
+        run: |
+          SHA256=$(sha256sum out_pilot/pilot_evidence_pack.zip | awk '{print toupper($1)}')
+          echo "sha256=$SHA256" >> "$GITHUB_OUTPUT"
+          echo "$SHA256  pilot_evidence_pack.zip" > out_pilot/pilot_evidence_pack.zip.sha256
+
+      - name: Write release notes
+        run: |
+          cat > release_notes.md << 'EOF'
+          pilot evidence pack (light artifacts, external scores)
+
+          - Source ref: ${{ inputs.ref }}
+          - Input generation:
+            python scripts/pilot_generate_input.py --out_dir out_pilot --rows 1000 --k_decoys 2 --seed 0
+          - Batch (repro):
+            hetero2-batch --input out_pilot/input.csv --out_dir out_pilot --artifacts light --score_mode external_scores --scores_input out_pilot/scores.json --k_decoys 2 --workers 2 --timeout_s 60 --maxtasksperchild 100 --seed_strategy per_row --seed 0 --zip_pack
+          - Pack: summary.csv, metrics.json, index.md, manifest.json, checksums.sha256, pilot_evidence_pack.zip
+          - SHA256(pilot_evidence_pack.zip): ${{ steps.hash.outputs.sha256 }}
+          EOF
+
+      - name: Prepare meta (asset URL, source SHA)
+        id: meta
+        run: |
+          SOURCE_SHA=$(git rev-parse HEAD)
+          echo "source_sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
+          ASSET_URL="https://github.com/${{ github.repository }}/releases/download/${{ inputs.tag }}/pilot_evidence_pack.zip"
+          echo "asset_url=$ASSET_URL" >> "$GITHUB_OUTPUT"
+
+      - name: "Gate: ERROR must be 0"
+        run: |
+          python - << 'PY'
+          import json
+          m = json.load(open("out_pilot/metrics.json", "r", encoding="utf-8"))
+          err = int(m.get("counts", {}).get("ERROR", 0))
+          assert err == 0, f"Gate-Pilot failed: ERROR={err}"
+          print("Gate OK: ERROR=0")
+          PY
+
+      - name: Upload build artifact (zip)
+        uses: actions/upload-artifact@v4
+        with:
+          name: pilot-evidence-pack
+          path: |
+            out_pilot/pilot_evidence_pack.zip
+            out_pilot/pilot_evidence_pack.zip.sha256
+            release_notes.md
+
+  publish-release:
+    needs: build-pack
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: pilot-evidence-pack
+          path: .
+
+      - name: Create/Update GitHub Release + upload asset
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag }}
+          target_commitish: ${{ needs.build-pack.outputs.source_sha }}
+          name: "pilot evidence pack (ERROR=0)"
+          body_path: release_notes.md
+          prerelease: ${{ inputs.prerelease }}
+          files: |
+            out_pilot/pilot_evidence_pack.zip
+            out_pilot/pilot_evidence_pack.zip.sha256
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  registry-pr:
+    needs: [build-pack, publish-release]
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: "main"
+
+      - name: Update artefacts registry (append)
+        run: |
+          mkdir -p docs
+          FILE="docs/artefacts_registry.md"
+          if [ ! -f "$FILE" ]; then
+            echo "# Artefacts Registry" > "$FILE"
+            echo "" >> "$FILE"
+          fi
+
+          cat >> "$FILE" << EOF
+
+          ## ${{ inputs.tag }}
+
+          - Source commit: ${{ needs.build-pack.outputs.source_sha }}
+          - Release asset: ${{ needs.build-pack.outputs.asset_url }}
+          - SHA256(pilot_evidence_pack.zip): ${{ needs.build-pack.outputs.sha256 }}
+          - Command:
+            python scripts/pilot_generate_input.py --out_dir out_pilot --rows 1000 --k_decoys 2 --seed 0
+            hetero2-batch --input out_pilot/input.csv --out_dir out_pilot --artifacts light --score_mode external_scores --scores_input out_pilot/scores.json --k_decoys 2 --workers 2 --timeout_s 60 --maxtasksperchild 100 --seed_strategy per_row --seed 0 --zip_pack
+          EOF
+
+      - name: Create PR with registry update
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: "automation/artefact-${{ inputs.tag }}"
+          title: "Add artefact registry entry for ${{ inputs.tag }}"
+          commit-message: "docs: add artefact registry entry for ${{ inputs.tag }}"
+          body: |
+            Automated update: appended artefact entry after publishing release asset.
+          base: "main"
+          add-paths: |
+            docs/artefacts_registry.md
