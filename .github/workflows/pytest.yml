@@ -96,9 +96,9 @@ jobs:
       - name: Run pilot E2E inside container (zip pack)
         run: |
           mkdir -p /tmp/hetero2_out/pilot
-          docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v /tmp/hetero2_out:/out hetero2:smoke /bin/bash -lc "\
-            python scripts/pilot_generate_input.py --out_dir /out/pilot --rows 200 --k_decoys 2 --seed 0 --full_cover_count 3 && \
-            hetero2-batch --input /out/pilot/input.csv --out_dir /out/pilot --artifacts light --score_mode external_scores --scores_input /out/pilot/scores.json --k_decoys 2 --workers 2 --timeout_s 60 --maxtasksperchild 100 --seed_strategy per_row --seed 0 --zip_pack"
+          docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v /tmp/hetero2_out:/out --entrypoint /bin/bash hetero2:smoke -lc "\
+            micromamba run -n base python scripts/pilot_generate_input.py --out_dir /out/pilot --rows 200 --k_decoys 2 --seed 0 --full_cover_count 3 && \
+            micromamba run -n base hetero2-batch --input /out/pilot/input.csv --out_dir /out/pilot --artifacts light --score_mode external_scores --scores_input /out/pilot/scores.json --k_decoys 2 --workers 2 --timeout_s 60 --maxtasksperchild 100 --seed_strategy per_row --seed 0 --zip_pack"
           test -f /tmp/hetero2_out/pilot/evidence_pack.zip
           python -m zipfile -t /tmp/hetero2_out/pilot/evidence_pack.zip
           python -m zipfile -l /tmp/hetero2_out/pilot/evidence_pack.zip | grep -E "summary.csv|metrics.json|manifest.json|checksums.sha256"
