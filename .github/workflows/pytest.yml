@@ -94,6 +94,29 @@ jobs:
           docker run --rm -v /tmp/hetero2_out:/out hetero2:smoke hetero2-demo-aspirin --out_dir /out/aspirin
           test -f /tmp/hetero2_out/aspirin/aspirin_report.md
           test -d /tmp/hetero2_out/aspirin/aspirin_assets
+      - name: Run pilot E2E inside container (zip pack)
+        run: |
+          mkdir -p /tmp/hetero2_out/pilot
+          chmod -R a+rwx /tmp/hetero2_out
+          docker run --rm -v /tmp/hetero2_out:/out hetero2:smoke /bin/bash -lc "\
+            python scripts/pilot_generate_input.py --out_dir /out/pilot --rows 200 --k_decoys 2 --seed 0 --full_cover_count 3 && \
+            hetero2-batch --input /out/pilot/input.csv --out_dir /out/pilot --artifacts light --score_mode external_scores --scores_input /out/pilot/scores.json --k_decoys 2 --workers 2 --timeout_s 60 --maxtasksperchild 100 --seed_strategy per_row --seed 0 --zip_pack"
+          test -f /tmp/hetero2_out/pilot/evidence_pack.zip
+          python -m zipfile -t /tmp/hetero2_out/pilot/evidence_pack.zip
+          python -m zipfile -l /tmp/hetero2_out/pilot/evidence_pack.zip | grep -E "summary.csv|metrics.json|manifest.json|checksums.sha256"
+          python - << 'PY'
+          import json
+          m = json.load(open("/tmp/hetero2_out/pilot/metrics.json", "r", encoding="utf-8"))
+          err = int(m.get("counts", {}).get("ERROR", 0))
+          assert err == 0, f"docker pilot ERROR={err}"
+          PY
+      - name: Upload pilot evidence pack (artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-pilot-evidence-pack
+          path: |
+            /tmp/hetero2_out/pilot/evidence_pack.zip
+            /tmp/hetero2_out/pilot/metrics.json
       - name: Set Commit Status (docker success)
         if: success()
         run: |
