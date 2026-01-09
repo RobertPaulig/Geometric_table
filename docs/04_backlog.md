@@ -111,3 +111,9 @@ DoD:
 Задачи:
 - Реализовать RayAuditor (divisor_sum_profile) + phi_from_eigs/phi_from_smiles (эксперимент)
 - Собрать первые числа по 3+ молекулам с кольцами; критерий принятия: устойчивый сдвиг phi_decoys vs phi_original
+
+## HETERO-2: v1.0.0 candidate checklist
+
+- [V1-CHECKLIST-1] CONTEXT.md entrypoint: include links to pilot r2 release, registry entry, and the checklist itself.
+- [V1-CHECKLIST-2] End-to-end Docker scenario: one command -> local evidence_pack.zip (2-minute run).
+- [V1-CHECKLIST-3] Freeze hetero_scores.v1 contract: minimal backward-compat tests + doc pointer in CONTEXT.md.
