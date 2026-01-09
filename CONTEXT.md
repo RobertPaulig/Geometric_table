@@ -74,3 +74,24 @@
 3. Добавить/обновить тесты в `tests/`.
 4. Зафиксировать решение/гейты/метрики в `docs/05_decision_log.md`.
 5. Добавить запись по шаблону в `docs/90_lineage.md`.
+
+## Pilot canonical artifact (r2)
+
+- Release: https://github.com/RobertPaulig/Geometric_table/releases/tag/pilot-2026-01-08-r2
+- Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/pilot-2026-01-08-r2/pilot_evidence_pack.zip
+- SHA256: BB564070C2B02087B589A511FB12AD4DEDC13C1EE06A58BC793DD5CF51D3B2A8
+
+## How to verify truth
+
+1) Download asset from the release.
+2) Compute SHA256 and compare to docs/artefacts_registry.md and the release .sha256.
+3) Registry entry must match the asset URL + SHA256 (see docs/artefacts_registry.md).
+
+## How to run the pilot
+
+- Pilot quickstart: docs/pilot_quickstart.md (demo scenario + commands).
+
+## Gates (STOP/GO)
+
+- Required contexts: ci/test, ci/test-chem, ci/docker on the exact SHA.
+- If any are missing or red: STOP (no merge).
