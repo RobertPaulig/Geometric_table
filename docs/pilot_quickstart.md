@@ -45,6 +45,7 @@ Get-FileHash out_pilot\out\evidence_pack.zip -Algorithm SHA256
 
 - The pilot scores fixture only covers a subset of decoy hashes to exercise warnings and coverage counts.
 - This is diagnostics-only; no gating based on spectral metrics.
+- Docker E2E: see docs/docker_e2e_quickstart.md.
 
 ## Pilot Demo сценарий (1-страница)
 
