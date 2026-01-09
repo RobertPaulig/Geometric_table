@@ -45,3 +45,39 @@ Get-FileHash out_pilot\out\evidence_pack.zip -Algorithm SHA256
 
 - The pilot scores fixture only covers a subset of decoy hashes to exercise warnings and coverage counts.
 - This is diagnostics-only; no gating based on spectral metrics.
+
+## Pilot Demo сценарий (1-страница)
+
+### 1) Сгенерировать input + scores
+
+```bash
+python scripts/pilot_generate_input.py --out_dir out_pilot --rows 1000 --k_decoys 2 --seed 0
+```
+
+### 2) Запустить batch
+
+```bash
+hetero2-batch \
+  --input out_pilot/input.csv \
+  --out_dir out_pilot \
+  --artifacts light \
+  --score_mode external_scores \
+  --scores_input out_pilot/scores.json \
+  --k_decoys 2 \
+  --workers 2 \
+  --timeout_s 60 \
+  --maxtasksperchild 100 \
+  --seed_strategy per_row \
+  --seed 0 \
+  --zip_pack
+```
+
+### 3) Ожидаемый результат
+
+- В `metrics.json`: `ERROR=0`, `OK>0`, `scores_coverage.decoys_scored > 0`.
+- В `summary.csv` есть `spectral_gap`, `spectral_entropy`, `spectral_entropy_norm`.
+
+### 4) Эталонный артефакт
+
+- Release: https://github.com/RobertPaulig/Geometric_table/releases/tag/pilot-2026-01-08-r2
+- Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/pilot-2026-01-08-r2/pilot_evidence_pack.zip
