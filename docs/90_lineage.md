@@ -267,3 +267,10 @@
 
 - **What:** pilot quickstart (Docker + minimal inputs), scores coverage in metrics/index.
 - **Refs:** PR (TBD), merge (TBD).
+
+### 2026-01-09 - Pilot release r2 (recommended demo)
+
+- **Release:** https://github.com/RobertPaulig/Geometric_table/releases/tag/pilot-2026-01-08-r2
+- **Asset:** https://github.com/RobertPaulig/Geometric_table/releases/download/pilot-2026-01-08-r2/pilot_evidence_pack.zip
+- **SHA256:** BB564070C2B02087B589A511FB12AD4DEDC13C1EE06A58BC793DD5CF51D3B2A8
+- **Merge SHA:** 84aa13aa352eb4dbd63c4c3f36f00ba81b307470
