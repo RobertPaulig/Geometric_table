@@ -87,6 +87,10 @@
 2) Compute SHA256 and compare to docs/artefacts_registry.md and the release .sha256.
 3) Registry entry must match the asset URL + SHA256 (see docs/artefacts_registry.md).
 
+## Contracts (frozen)
+
+- `hetero_scores.v1`: `docs/contracts/hetero_scores.v1.md` (see also `docs/10_contracts_policy.md`).
+
 ## How to run the pilot
 
 - Pilot quickstart: docs/pilot_quickstart.md (demo scenario + commands).
