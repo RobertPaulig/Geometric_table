@@ -27,7 +27,7 @@ Top-level (object):
 - Если для части декоев нет score в `decoys`:
   - строка не пропадает,
   - это отражается warning’ом + счетчиком missing coverage.
-- Если нет score **для всех** декоев — итог должен быть `SKIP` с причиной/предупреждением `skip:missing_scores_for_all_decoys` (без “тишины”).
+- Если нет score **для всех** декоев — пайплайн не падает и не “молчит”: выставляет `audit.neg_controls.verdict=SKIP` + warning `skip:missing_scores_for_all_decoys` и пишет coverage (decoys_scored=0).
 
 ## Minimal example
 
@@ -40,4 +40,3 @@ Top-level (object):
   }
 }
 ```
-

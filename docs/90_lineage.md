@@ -279,3 +279,8 @@
 - Added `docs/ROADMAP.md` with VALUE-TRACK (VALUE>SAAS: доказательство пользы через релизные артефакты + SHA256 + registry).
 - Linked ROADMAP from `docs/99_index.md` (REF-ROADMAP).
 - Note: PR CI contexts (ci/test, ci/test-chem, ci/docker) are posted on GitHub merge-ref SHA for pull_request runs; merge policy follows the tested SHA for PR gating.
+
+### 2026-01-10 — Freeze `hetero_scores.v1` (contract + compat tests + pointers)
+- PR: https://github.com/RobertPaulig/Geometric_table/pull/20
+- Head SHA: 7aa0d8f40d0991e2a78d5cf67b20b012ba974fcc
+- Added contract doc `docs/contracts/hetero_scores.v1.md` + backward-compat tests + pointers in `CONTEXT.md` and `docs/99_index.md`.
