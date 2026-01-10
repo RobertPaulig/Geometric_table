@@ -1,3 +1,121 @@
+# VALUE-TRACK (P0): Pfizer-ready FACTS — доказываем пользу, не “маркетинг”
+Принцип: SaaS имеет смысл только если VALUE доказан артефактами.
+
+## Общие правила (обязательные)
+- Любая VALUE-веха считается DONE только если:
+  1) есть GitHub Release asset (zip),
+  2) есть SHA256 на asset,
+  3) есть запись в [Artefacts registry](artefacts_registry.md) (URL + SHA256 + команда + outcome),
+  4) выполнены CI gates на целевом SHA: ci/test + ci/test-chem + ci/docker.
+  См. [CONTEXT](../CONTEXT.md), [Release checklist](95_release_checklist.md), [Artefacts registry](artefacts_registry.md), [Backlog](04_backlog.md).
+- "Тихих провалов" быть не должно: каждая строка входа отражена как OK/SKIP/ERROR.
+- Полезность измеряем не "ощущениями", а полями verdict/gate/slack/margin в summary.csv (они уже пишутся).
+
+---
+
+## VALUE-M0 — Pipeline Truth (уже есть, держим как baseline)
+Цель: доказать, что evidence pack стабильно строится, ERROR=0, determinism проверяем, SHA256 фиксируем.
+
+DoD:
+- Выполняется release checklist: pack содержит summary.csv/metrics.json/index.md/manifest.json/checksums.sha256/evidence_pack.zip
+- metrics.json: counts.ERROR == 0
+- Registry entry добавлен (URL + SHA256 + команда + outcome)
+
+---
+
+## VALUE-M1 — Chem Coverage Suite (“кольца/ароматика/гетероциклы”) как факт
+Цель: доказать, что на химическом подмножестве с кольцами пайплайн не имеет слепых зон и даёт предсказуемые SKIP-reasons.
+
+Scope (v1 минимально):
+- Используем “seed” список из pilot_generate_input.py (есть benzene=c1ccccc1 + aromatics)
+- Генерация decoys идёт в режиме lock_aromatic=True, allow_ring_bonds=False (фиксируем как часть контракта suite)
+
+DoD (жёсткий):
+- Release tag: value-ring-suite-YYYY-MM-DD
+- Pack собран с --zip_pack и валидирован “без распаковки” (zipfile -t и grep обязательных файлов)
+- Quality: ERROR=0
+- Метрики/факты, которые фиксируем в release notes + registry:
+  - OK/SKIP/ERROR
+  - top_reasons SKIP (invalid_smiles/too_many_atoms/disconnected/no_decoys_generated/…)
+  - доля строк с n_decoys>0 (из summary.csv)
+- Registry entry обязателен
+
+---
+
+## VALUE-M2 — Known Bad / Known Good (доказать, что мы “ловим плохую модель”)
+Цель: показать, что verdict/gate/slack реально реагируют на деградацию скоринга, а не являются шумом.
+
+Как меряем “пользу”:
+- Берём один и тот же suite input (из M1).
+- Прогоняем несколько scores-режимов, и сравниваем распределения:
+  - доля gate=PASS/FAIL,
+  - медиана slack/margin,
+  - доля “verdict=FAIL” и т.п.
+  Эти поля уже в summary.csv.
+
+Набор режимов (v1):
+1) BAD-constant: все scores одинаковые
+2) BAD-random: случайные scores (фикс seed)
+3) GOOD-synthetic: “оригинал выше, decoys ниже” (синтетический эталон)
+4) (опц.) REAL: внешний scores.json от клиента (позже)
+
+DoD (жёсткий, измеримый):
+- Выпущены минимум 3 релиза-ассета (или один релиз с 3 ассетами) с тегом:
+  value-known-bad-good-YYYY-MM-DD
+- Для BAD vs GOOD есть разделение:
+  - медиана slack(GOOD) > медиана slack(BAD) минимум на Δ (старт: Δ=0.05, подстраиваем по факту),
+  - и/или PASS-rate(GOOD) - PASS-rate(BAD) ≥ 20 п.п.
+- ERROR=0 во всех пакетах
+- Registry entry на каждый asset (или явное перечисление asset_url+sha256 по каждому)
+
+---
+
+## VALUE-M3 — Customer Truth (Pfizer / proxy) + acceptance criteria
+Цель: перейти от синтетики к реальной проверке пользы на данных/скорах клиента.
+
+DoD:
+- Согласованные acceptance criteria (в терминах gate/slack/FAIL-rate на их наборах)
+- Выпуск evidence pack (возможно private) с тем же форматом истины: manifest/checksums/zip + SHA256
+- Политика хранения/доступа (если private) описана в docs, но формат и верификация такие же
+
+---
+
+## VALUE-M4 — “Мы претендуем на стандарт”
+Цель: формализовать стандарт не как “мы молодцы”, а как:
+- контракт формата (manifest/checksums/registry),
+- контракт метрик/полей (summary.csv schema),
+- и минимальные acceptance tests.
+
+DoD:
+- Документ “Standard claims” в docs (что именно гарантируем)
+- Backward-compat тесты на summary.csv и hetero_scores.v1
+- Процедура изменения (breaking change policy)
+
+---
+
+## Как это превращается в реальные “вехи-факты” через ваши workflows (без нового велосипеда)
+
+Вы уже умеете делать “истину” через publish workflow:
+
+* `publish_stress_pack.yml` генерит вход, гонит `hetero2-batch --zip_pack`, валидирует zip, гейтит ERROR=0, считает SHA256, публикует release asset и делает PR в registry.
+* `publish_pilot_pack.yml` делает то же самое, но в режиме external_scores и с `scripts/pilot_generate_input.py`.
+
+**Следствие:** VALUE-M1/M2 делаем либо:
+
+1. расширением/клоном этих workflow (лучше: отдельные `publish_value_*`), либо
+2. параметризацией (suite + scores_variant), но всё равно с тем же DoD: zip validate + ERROR=0 + SHA256 + registry.
+
+---
+
+## P0 порядок работ (без SaaS, пока не доказали пользу)
+
+1. **Закрыть V1-CHECKLIST-3 (freeze hetero_scores.v1)** — это prerequisite, иначе внешние scores нельзя называть контрактом.
+2. **VALUE-M1** (ring-suite pack)
+3. **VALUE-M2** (known bad/good separation packs)
+4. Только потом обсуждаем “SaaS масштабирование”, как упаковку уже доказанного ядра.
+
+---
+
 # ROADMAP — HETERO-2 как SaaS (Pfizer-ready evidence pipeline)
 
 Назначение: зафиксировать целевую картину SaaS и вести разработку через обязательные вехи (milestones).
