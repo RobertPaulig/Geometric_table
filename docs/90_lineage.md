@@ -284,3 +284,11 @@
 - PR: https://github.com/RobertPaulig/Geometric_table/pull/20
 - Head SHA: 7aa0d8f40d0991e2a78d5cf67b20b012ba974fcc
 - Added contract doc `docs/contracts/hetero_scores.v1.md` + backward-compat tests + pointers in `CONTEXT.md` and `docs/99_index.md`.
+
+### 2026-01-10 - VALUE-M1 ring-suite evidence pack (release asset + SHA256 + registry)
+- Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/value-ring-suite-2026-01-10
+- Source commit: ba63273ea6f9b3f8c87cf0791b372fb7fc5d2871
+- Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/value-ring-suite-2026-01-10/value_ring_suite_evidence_pack.zip
+- SHA256(value_ring_suite_evidence_pack.zip): 912071F3927D733FF4F5EDA1AB5A3158F83D18EBA4E99B1C2CC174FD6EE08274
+- Outcome: OK=60, SKIP=140, ERROR=0; top_skip_reasons: no_decoys_generated: 140; share_rows_with_n_decoys_gt_0: 30.0%
+- PRs: https://github.com/RobertPaulig/Geometric_table/pull/21, https://github.com/RobertPaulig/Geometric_table/pull/22
