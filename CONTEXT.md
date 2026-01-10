@@ -94,4 +94,5 @@
 ## Gates (STOP/GO)
 
 - Required contexts: ci/test, ci/test-chem, ci/docker on the exact SHA.
+- PR gating note: for `pull_request` runs, these commit statuses are posted on GitHub’s merge-ref SHA (the tested SHA), not the PR head SHA.
 - If any are missing or red: STOP (no merge).
