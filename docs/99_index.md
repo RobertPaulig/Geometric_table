@@ -23,7 +23,7 @@
   Где используется: постановка R&D-экспериментов и планирование работ.
 
 - **REF-ROADMAP** — `docs/ROADMAP.md`  
-  Зачем: целевая картина продукта + обязательные вехи (milestones) + порядок ведения разработки.  
+  Зачем: целевая картина продукта + обязательные вехи (milestones) + порядок ведения разработки (VALUE>SAAS).  
   Где используется: планирование, приоритезация, привязка PR к Roadmap-ID, контроль готовности.
 
 - **REF-DECISION-LOG** — `docs/05_decision_log.md`  
@@ -33,6 +33,16 @@
 - **REF-LINEAGE** — `docs/90_lineage.md`  
   Зачем: хронология (append-only) релизов/правок и артефактов.  
   Где используется: восстановление истории и ссылки на “истинные” релизы/ассеты.
+
+## Контракты (обязательное)
+
+- **REF-CONTRACTS-POLICY** — `docs/10_contracts_policy.md`  
+  Зачем: правила `schema_version`, совместимости и breaking change policy.  
+  Где используется: при изменениях JSON-контрактов.
+
+- **REF-CONTRACT-HETERO-SCORES-V1** — `docs/contracts/hetero_scores.v1.md`  
+  Зачем: замороженный контракт `hetero_scores.v1` для `score_mode=external_scores`.  
+  Где используется: генерация/валидация внешних scores + backward-compat тесты.
 
 ## Отчёты / артефакты
 
