@@ -274,3 +274,8 @@
 - **Asset:** https://github.com/RobertPaulig/Geometric_table/releases/download/pilot-2026-01-08-r2/pilot_evidence_pack.zip
 - **SHA256:** BB564070C2B02087B589A511FB12AD4DEDC13C1EE06A58BC793DD5CF51D3B2A8
 - **Merge SHA:** 84aa13aa352eb4dbd63c4c3f36f00ba81b307470
+
+### 2026-01-10 — Roadmap: VALUE-TRACK (Pfizer-ready facts) + SaaS milestones
+- Added `docs/ROADMAP.md` with VALUE-TRACK (VALUE>SAAS: доказательство пользы через релизные артефакты + SHA256 + registry).
+- Linked ROADMAP from `docs/99_index.md` (REF-ROADMAP).
+- Note: PR CI contexts (ci/test, ci/test-chem, ci/docker) are posted on GitHub merge-ref SHA for pull_request runs; merge policy follows the tested SHA for PR gating.
