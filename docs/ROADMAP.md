@@ -1,374 +1,325 @@
-# VALUE-TRACK (P0): Pfizer-ready FACTS — доказываем пользу, не “маркетинг”
-Принцип: SaaS имеет смысл только если VALUE доказан артефактами.
+# ROADMAP — HETERO-2 (Pfizer-ready evidence pipeline → затем SaaS)
 
-## Общие правила (обязательные)
-- Любая VALUE-веха считается DONE только если:
-  1) есть GitHub Release asset (zip),
-  2) есть SHA256 на asset,
-  3) есть запись в [Artefacts registry](artefacts_registry.md) (URL + SHA256 + команда + outcome),
-  4) выполнены CI gates на целевом SHA: ci/test + ci/test-chem + ci/docker.
-  См. [CONTEXT](../CONTEXT.md), [Release checklist](95_release_checklist.md), [Artefacts registry](artefacts_registry.md), [Backlog](04_backlog.md).
-- "Тихих провалов" быть не должно: каждая строка входа отражена как OK/SKIP/ERROR.
-- Полезность измеряем не "ощущениями", а полями verdict/gate/slack/margin в summary.csv (они уже пишутся).
+Этот документ — **истина по развитию продукта**: что делаем, в каком порядке, и **какими артефактами доказываем** “пользу/качество/готовность”.
+
+**Принцип:** SaaS имеет смысл только если **VALUE доказан фактами** (evidence packs + registry + воспроизводимость + гейты).
 
 ---
 
-## VALUE-M0 — Pipeline Truth (уже есть, держим как baseline)
-Цель: доказать, что evidence pack стабильно строится, ERROR=0, determinism проверяем, SHA256 фиксируем.
+## 0) Правила разработки (обязательные)
 
-DoD:
-- Выполняется release checklist: pack содержит summary.csv/metrics.json/index.md/manifest.json/checksums.sha256/evidence_pack.zip
-- metrics.json: counts.ERROR == 0
-- Registry entry добавлен (URL + SHA256 + команда + outcome)
+### 0.1. Веха = контракт
+
+Каждая веха (Milestone) обязана иметь:
+
+* **Goal** (зачем),
+* **Scope** (что входит),
+* **DoD** (Definition of Done — проверяемо),
+* **Proof** (артефакты/ссылки/хэши),
+* **Risks** (что может сломаться/обмануть нас).
+
+Запрещено объявлять “DONE”, если DoD и Proof не выполнены.
+
+### 0.2. Истина = Release asset + SHA256 + Registry
+
+Любая “факт-веха” считается DONE **только если**:
+
+1. есть **GitHub Release asset** (zip),
+2. есть **SHA256** на asset,
+3. есть запись в `docs/artefacts_registry.md` (**URL + SHA256 + команда + outcome**),
+4. CI-гейты зелёные на целевом SHA (см. 0.3).
+
+**Никаких zip/out_* в git.** В git — только реестр и документы.
+
+### 0.3. STOP/GO и “какой SHA считается истинным”
+
+**Железное правило:** пока нет **3 зелёных контекстов** → **STOP**.
+
+Контексты: `ci/test`, `ci/test-chem`, `ci/docker`.
+
+**Чтобы не зависать на GitHub merge-ref:**
+
+* На PR-этапе “SHA, который реально тестировался”, может быть **merge-ref SHA**, если workflow ставит статусы туда.
+  → В отчёте всегда указываем **оба**: `head SHA` и `tested SHA (merge-ref)` и даём ссылки на run.
+* Финальная истина после мержа — **merge SHA в `main`**, и **там обязаны быть 3 зелёных**.
+
+Если это неудобно — отдельная тех-веха: “починить постинг статусов на head SHA”.
+
+### 0.4. Никаких “тихих провалов”
+
+Каждая строка входа должна иметь итог: **OK / SKIP / ERROR** + reason.
+Тишина = баг.
+
+### 0.5. Обязательное ведение `docs/90_lineage.md`
+
+Каждый merge, релиз, и VALUE-pack:
+
+* добавляет запись в `docs/90_lineage.md` (дата, SHA, что изменилось, ссылки на релизы/ассеты, SHA256).
+
+Это не бюрократия — это аудит-дорожка.
+
+### 0.6. Каждый PR привязан к Roadmap-ID
+
+Каждый PR обязан:
+
+* ссылаться на Roadmap-ID (пример: `VALUE-M2`, `CORE-FREEZE-1`, `SAAS-M1`),
+* обновлять статус в ROADMAP (checkbox / short note),
+* проходить CI-гейты проекта.
+
+---
+
+## 1) Что продукт делает “в реальности” (без маркетинга)
+
+**Вход (Pfizer/team):** файл(ы) с данными и/или `scores.json` (scores-only режим — приоритет).
+**Выход:** `evidence_pack.zip` с manifest + checksums + отчётами.
+
+Мы **не “удаляем молекулы” молча**. Мы:
+
+* помечаем проблемные случаи как **SKIP/ERROR** (с причиной),
+* даём агрегированные метрики качества и “failure modes”,
+* и (ключевое) показываем, что **плохой скоринг/модель ловится** измеримыми сигналами (gate/slack/verdict).
+
+---
+
+# TRACK A — VALUE-TRACK (P0): Pfizer-ready FACTS
+
+## VALUE-M0 — Pipeline Truth (baseline)
+
+**Goal:** доказать, что pack строится стабильно: ERROR=0, детерминизм, целостность.
+
+**DoD:**
+
+* pack содержит минимум: `summary.csv`, `metrics.json`, `index.md`, `manifest.json`, `checksums.sha256`, `evidence_pack.zip`
+* `metrics.json`: `counts.ERROR == 0`
+* Release asset + SHA256 + registry entry
+
+**Proof (baseline):**
+* Registry: `docs/artefacts_registry.md` → `stress_10k (light) - 2026-01-05`
+* Release asset: https://github.com/RobertPaulig/Geometric_table/releases/download/stress-10k-2026-01-05/evidence_pack.zip
+* SHA256(evidence_pack.zip): `458EF5315D52B17B7797F67F3B89E2A091A12058406C9876DCC6D9925E95C76B`
+
+**Status:** [ ] planned  [ ] in-progress  [x] done
 
 ---
 
 ## VALUE-M1 — Chem Coverage Suite (“кольца/ароматика/гетероциклы”) как факт
-Цель: доказать, что на химическом подмножестве с кольцами пайплайн не имеет слепых зон и даёт предсказуемые SKIP-reasons.
 
-Scope (v1 минимально):
-- Используем “seed” список из pilot_generate_input.py (есть benzene=c1ccccc1 + aromatics)
-- Генерация decoys идёт в режиме lock_aromatic=True, allow_ring_bonds=False (фиксируем как часть контракта suite)
+**Goal:** доказать, что на химически “опасном” подмножестве (кольца) нет слепых зон, а SKIP-reasons предсказуемы.
 
-DoD (жёсткий):
-- Release tag: value-ring-suite-YYYY-MM-DD
-- Pack собран с --zip_pack и валидирован “без распаковки” (zipfile -t и grep обязательных файлов)
-- Quality: ERROR=0
-- Метрики/факты, которые фиксируем в release notes + registry:
-  - OK/SKIP/ERROR
-  - top_reasons SKIP (invalid_smiles/too_many_atoms/disconnected/no_decoys_generated/…)
-  - доля строк с n_decoys>0 (из summary.csv)
-- Registry entry обязателен
+**Scope v1:**
 
----
+* фиксируем suite (seed-список) и режим генерации (например: `lock_aromatic`, запреты/разрешения на ring-bonds) **как контракт**
+* suite должен быть воспроизводим из `manifest`
 
-## VALUE-M2 — Known Bad / Known Good (доказать, что мы “ловим плохую модель”)
-Цель: показать, что verdict/gate/slack реально реагируют на деградацию скоринга, а не являются шумом.
+**DoD (жёсткий):**
 
-Как меряем “пользу”:
-- Берём один и тот же suite input (из M1).
-- Прогоняем несколько scores-режимов, и сравниваем распределения:
-  - доля gate=PASS/FAIL,
-  - медиана slack/margin,
-  - доля “verdict=FAIL” и т.п.
-  Эти поля уже в summary.csv.
+* Release tag: `value-ring-suite-YYYY-MM-DD`
+* pack собран с `--zip_pack`
+* zip-валидация: `zipfile -t` + проверка наличия обязательных файлов
+* `ERROR=0`
+* в Release notes + registry фиксируем факты:
 
-Набор режимов (v1):
-1) BAD-constant: все scores одинаковые
-2) BAD-random: случайные scores (фикс seed)
-3) GOOD-synthetic: “оригинал выше, decoys ниже” (синтетический эталон)
-4) (опц.) REAL: внешний scores.json от клиента (позже)
+  * `OK/SKIP/ERROR`
+  * `top_reasons` для SKIP
+  * доля строк с `n_decoys > 0` (из `summary.csv`)
 
-DoD (жёсткий, измеримый):
-- Выпущены минимум 3 релиза-ассета (или один релиз с 3 ассетами) с тегом:
-  value-known-bad-good-YYYY-MM-DD
-- Для BAD vs GOOD есть разделение:
-  - медиана slack(GOOD) > медиана slack(BAD) минимум на Δ (старт: Δ=0.05, подстраиваем по факту),
-  - и/или PASS-rate(GOOD) - PASS-rate(BAD) ≥ 20 п.п.
-- ERROR=0 во всех пакетах
-- Registry entry на каждый asset (или явное перечисление asset_url+sha256 по каждому)
+**Proof (DONE):**
+* Registry: `docs/artefacts_registry.md` → `value-ring-suite-2026-01-10`
+* Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/value-ring-suite-2026-01-10
+* Release asset: https://github.com/RobertPaulig/Geometric_table/releases/download/value-ring-suite-2026-01-10/value_ring_suite_evidence_pack.zip
+* SHA256(value_ring_suite_evidence_pack.zip): `912071F3927D733FF4F5EDA1AB5A3158F83D18EBA4E99B1C2CC174FD6EE08274`
+* Outcome (facts): `OK=60, SKIP=140, ERROR=0; top_skip_reasons: no_decoys_generated=140; share_rows_with_n_decoys_gt_0=30.0%`
+
+**Status:** [ ] planned  [ ] in-progress  [x] done
 
 ---
 
-## VALUE-M3 — Customer Truth (Pfizer / proxy) + acceptance criteria
-Цель: перейти от синтетики к реальной проверке пользы на данных/скорах клиента.
+## VALUE-M2 — Known Bad / Known Good (ловим “плохую модель”)
 
-DoD:
-- Согласованные acceptance criteria (в терминах gate/slack/FAIL-rate на их наборах)
-- Выпуск evidence pack (возможно private) с тем же форматом истины: manifest/checksums/zip + SHA256
-- Политика хранения/доступа (если private) описана в docs, но формат и верификация такие же
+**Goal:** доказать, что наши поля `verdict/gate/slack/margin` **реагируют на деградацию скоринга** (а не шум).
+
+**Метод:**
+
+* один и тот же input suite (из M1)
+* разные variants `scores.json`:
+
+  1. `BAD-constant` (все scores одинаковые)
+  2. `BAD-random` (случайные, seed фиксирован)
+  3. `GOOD-synthetic` (оригинал выше, decoys ниже)
+  4. (позже) `REAL-client` (внешний)
+
+**DoD (измеримый):**
+
+* минимум 3 ассета (или 1 релиз с 3 ассетами) tag: `value-known-bad-good-YYYY-MM-DD`
+* есть разделение BAD vs GOOD по метрике (фиксируем пороги как “starting point”, потом калибруем фактами):
+
+  * `median(slack_GOOD) - median(slack_BAD) >= Δ` (старт: `Δ=0.05`)
+  * и/или `PASS_rate(GOOD) - PASS_rate(BAD) >= 20 pp`
+* `ERROR=0` во всех пакетах
+* registry entry для каждого asset
+
+**Status:** [x] planned  [ ] in-progress  [ ] done
+
+---
+
+## VALUE-M3 — Customer Truth (Pfizer/proxy) + acceptance criteria
+
+**Goal:** перейти от синтетики к реальным данным/скорам клиента с заранее согласованными критериями.
+
+**DoD:**
+
+* зафиксированы acceptance criteria в терминах `FAIL-rate`, `slack`, `gate`, coverage
+* выпущен evidence pack (может быть private), но с тем же форматом истины:
+
+  * manifest + checksums + zip + SHA256
+* описана политика доступа/retention (если private)
+
+**Status:** [x] planned  [ ] in-progress  [ ] done
 
 ---
 
 ## VALUE-M4 — “Мы претендуем на стандарт”
-Цель: формализовать стандарт не как “мы молодцы”, а как:
-- контракт формата (manifest/checksums/registry),
-- контракт метрик/полей (summary.csv schema),
-- и минимальные acceptance tests.
 
-DoD:
-- Документ “Standard claims” в docs (что именно гарантируем)
-- Backward-compat тесты на summary.csv и hetero_scores.v1
-- Процедура изменения (breaking change policy)
+**Goal:** оформить стандарт как **контракты и тесты**, а не лозунги.
 
----
+**DoD:**
 
-## Как это превращается в реальные “вехи-факты” через ваши workflows (без нового велосипеда)
+* документ `docs/standard_claims.md`:
 
-Вы уже умеете делать “истину” через publish workflow:
+  * что гарантируем (формат, воспроизводимость, честная маркировка, минимальные проверки)
+  * что **не** гарантируем (границы применимости)
+* backward-compat тесты:
 
-* `publish_stress_pack.yml` генерит вход, гонит `hetero2-batch --zip_pack`, валидирует zip, гейтит ERROR=0, считает SHA256, публикует release asset и делает PR в registry.
-* `publish_pilot_pack.yml` делает то же самое, но в режиме external_scores и с `scripts/pilot_generate_input.py`.
+  * `summary.csv` schema
+  * `hetero_scores.v1` schema/version
+* политика изменений (breaking change policy)
 
-**Следствие:** VALUE-M1/M2 делаем либо:
-
-1. расширением/клоном этих workflow (лучше: отдельные `publish_value_*`), либо
-2. параметризацией (suite + scores_variant), но всё равно с тем же DoD: zip validate + ERROR=0 + SHA256 + registry.
+**Status:** [x] planned  [ ] in-progress  [ ] done
 
 ---
 
-## P0 порядок работ (без SaaS, пока не доказали пользу)
+# TRACK B — CORE (ядро пайплайна и контракты)
 
-1. **Закрыть V1-CHECKLIST-3 (freeze hetero_scores.v1)** — это prerequisite, иначе внешние scores нельзя называть контрактом.
-2. **VALUE-M1** (ring-suite pack)
-3. **VALUE-M2** (known bad/good separation packs)
-4. Только потом обсуждаем “SaaS масштабирование”, как упаковку уже доказанного ядра.
+## CORE-FREEZE-1 — Freeze `hetero_scores.v1` (prereq для VALUE-M2/M3)
 
----
+**Goal:** внешние scores нельзя называть контрактом, пока не зафиксировано.
 
-# ROADMAP — HETERO-2 как SaaS (Pfizer-ready evidence pipeline)
+**DoD:**
 
-Назначение: зафиксировать целевую картину SaaS и вести разработку через обязательные вехи (milestones).
-Этот документ — “истина по развитию продукта” (в отличие от сырого склада идей в backlog).
+* документ контракта (schema + semantics)
+* тест backward-compat
+* ссылка/указатель в `CONTEXT.md`
+* зелёные CI-гейты
 
----
+**Proof (DONE):**
+* PR: https://github.com/RobertPaulig/Geometric_table/pull/20
+* Merge SHA (main): `ba9752e2145ba77f8afad5902ea0b2454e91a545`
+* Contract doc: `docs/contracts/hetero_scores.v1.md` (policy: `docs/10_contracts_policy.md`)
 
-## 0) Правила ведения разработки (обязательные)
-
-### 0.1. “Веха = контракт”
-Каждая веха (Milestone) имеет:
-- цель,
-- список обязательных эпиков/работ,
-- Definition of Done (DoD),
-- артефакты/доказательства (Artifacts/Proof).
-
-**Запрещено** объявлять веху “готовой”, если не выполнен её DoD и не приложены артефакты.
-
-### 0.2. “Каждый PR привязан к Roadmap-ID”
-Каждый PR обязан:
-- ссылаться на конкретный Roadmap-ID (например: `SAAS-M1`, `SAAS-E2`),
-- обновлять прогресс в ROADMAP (галочки / status),
-- проходить CI-гейты проекта.
-
-### 0.3. “Никаких тихих провалов”
-В SaaS-пайплайне любая ошибка/пропуск обязан быть:
-- явным (ERROR / SKIP),
-- объяснённым (reason),
-- агрегированным в метриках/отчёте.
-
-### 0.4. Evidence pack — единица ценности
-Единица результата: **evidence pack** (zip/dir), содержащий manifest и checksums.
-Система должна уметь:
-- повторить run по manifest,
-- доказать целостность (sha256),
-- объяснить SKIP/ERROR.
+**Status:** [ ] planned  [ ] in-progress  [x] done
 
 ---
 
-## 1) North Star: что продаём
+## CORE-SUITES-1 — Suite framework (воспроизводимые наборы)
 
-HETERO-2 = “CI/CD для молекулярных ML-моделей”:
-загрузил данные/предсказания → Run → получил воспроизводимый evidence pack + понятные failure modes →
-можно шарить внутри организации и прикладывать к аудиту.
+**Goal:** suites должны быть “включаемыми” и воспроизводимыми через manifest.
 
----
+**DoD:**
 
-## 2) Референс-архитектура (минимальные компоненты)
+* suite_id → фиксированный генератор входа
+* manifest хранит suite_id + параметры + seed
+* локальный и CI-workflow умеют собрать pack по suite_id
 
-### 2.1. Domain-модель SaaS
-- Org (tenant)
-- Project
-- User
-- Role (RBAC)
-- Job / Run
-- Artifact (versioned)
-- AuditEvent (append-only)
-
-### 2.2. Компоненты платформы (минимум)
-1) **Auth + Org/Project/RBAC**
-2) **API Gateway** (всё через API; UI — клиент)
-3) **Job Orchestrator** (submit/status/cancel/retry)
-4) **Queue** (приоритеты; idempotency keys)
-5) **Worker Pool** (CPU/GPU; autoscale; лимиты времени/памяти)
-6) **Artifact Store** (versioned; signed URLs)
-7) **Metadata DB** (jobs, params, manifests, billing usage)
-8) **Audit Log Service** (append-only события)
-9) **Observability** (logs/metrics/traces/alerts)
-10) **Billing + Metering** (после пилотов, но заложить модель)
-
-### 2.3. Поток данных (обязательный)
-Upload (или scores-only) → Job → Workers → Artifacts (evidence pack) → Viewer/Download → Share/Export.
+**Status:** [x] planned  [ ] in-progress  [ ] done
 
 ---
 
-## 3) Definition of Done “SaaS-ready” (обязательные свойства)
+# TRACK C — SaaS (включается только после VALUE-M2)
 
-### A) Безопасность и доверие (must-have для фармы)
-- TLS in transit + шифрование at rest
-- tenant isolation (логика + storage paths + ключи)
-- secrets management
-- data lifecycle (retention + delete)
-- rate limiting / базовые защитные меры
-- “scores-only” режим как опция снижения барьеров
+**Правило запуска SaaS-работ:**
+Если `VALUE-M2` не DONE — SaaS считается преждевременным.
 
-### B) Воспроизводимость (killer-feature)
-- manifest: версии/контейнеры, параметры, seeds, hashes входов, job_id/run_id
-- checksums на артефакты
-- versioning артефактов и возможность восстановить отчёт
-- явные SKIP reasons
+## SAAS-M0 — Evidence pipeline v1 стабилен (база)
 
-### C) Надёжность/масштабирование
-- очередь + воркеры + retries + idempotency
-- quotas/лимиты (по планам)
-- cost controls: max time/mem, cancel/pause, приоритеты
+**Goal:** “одна команда → evidence_pack.zip” (E2E), честные SKIP/ERROR, воспроизводимость.
 
-### D) Наблюдаемость
-- метрики: latency, error rate, queue depth, worker utilization, cost
-- логи: структурированные, с tenant_id/job_id
-- алерты: рост ошибок, деградация времени, падение воркеров/очереди
+**DoD:**
 
-### E) Продаваемость
-- API-first + UI
-- free tier + paywall (квоты)
-- report sharing внутри org
-- admin: пользователи/роли/квоты/аудит
-- metering/billing (после пилотов — но проектировать заранее)
+* Docker E2E (one command → local `evidence_pack.zip`)
+* `CORE-FREEZE-1` DONE
+* 3 CI-гейта зелёные на merge SHA в main
+
+**Status:** [x] planned  [ ] in-progress  [ ] done
 
 ---
 
-## 4) Вехи (Milestones) — обязательные
+## SAAS-M1 — Pilot SaaS MVP (пилоты)
 
-### SAAS-M0 — Evidence pipeline v1 стабилен (база)
-Статус: [ ] planned  [x] in-progress  [ ] done
+(и далее SAAS-M2/M3/M4 — как упаковка и масштабирование)
 
-Цель: “одна команда → evidence_pack.zip”, честные SKIP/ERROR, детерминизм, manifest+checksums.
-(Это соответствует текущей линии evidence pack hardening.)
+> Здесь оставляем SaaS-часть короче и “по делу”, чтобы не раздувать документ до платформенной фантазии до доказанной пользы.
 
-DoD:
-- docker e2e “one command → local evidence_pack.zip”
-- freeze `hetero_scores.v1` (compat tests + doc pointer)
-- CI гейты проекта зелёные
-
-Артефакты:
-- команды запуска + пример pack
-- тесты совместимости
-- ссылки на релизные ассеты + registry (если используется)
+**Status:** [x] planned  [ ] in-progress  [ ] done
 
 ---
 
-### SAAS-M1 — Pilot SaaS MVP (чтобы начать пилоты)
-Статус: [ ] planned  [ ] in-progress  [ ] done
+# TRACK D — “Научная честность” и контроль физичности (guardrails)
 
-Цель: любой пользователь в организации может запустить аудит и получить evidence pack без ручной магии.
+Это ключ к требованию: **использовать новаторов можно**, но **в продукте живёт только то, что прошло проверку**.
 
-Обязательные эпики:
-- SAAS-E1 Multi-tenant core (Org/Project/RBAC)
-- SAAS-E2 Jobs + Queue + Workers (минимально)
-- SAAS-E3 Artifact store + Metadata DB
-- SAAS-E4 Reproducibility manifest/checksums как default
-- SAAS-E5 Scores-only режим
-- SAAS-E6 Observability baseline (logs+metrics)
+## SCI-RULES-1 — Любая “новая идея” = гипотеза под A/B
 
-DoD (проверяемо):
-- 1 кнопка / 1 API вызов “Run audit” → результат (pack + manifest + checksums)
-- RBAC реально запрещает доступ чужим org/project
-- любой run воспроизводим по manifest (в пределах обещаний)
-- 95% типовых джоб завершаются успешно на стандартных размерах
+Любая эвристика/идея допускается только если:
 
-Артефакты:
-- OpenAPI/Swagger или эквивалент (минимум endpoints: submit/status/results/download)
-- пример job/run_id + скачанный pack
-- документированные поля manifest + пример
+* она включается флагом (или отдельным suite/variant),
+* даёт **измеримый выигрыш** на VALUE-наборах,
+* не ухудшает стабильность/воспроизводимость,
+* и не меняет “смысл” результата скрытно.
+
+## SCI-PHYS-1 — Инвариантность и “не ломаем физику”
+
+Если мы меняем численные/дискретизационные детали, то DoD включает:
+
+* сравнение на фиксированных наборах: baseline vs new
+* критерии: **сходимость/стабильность** и отсутствие регрессий в ключевых физических/химических инвариантах, которые мы обещаем
+* отчёт в evidence pack (добавляется секция “Sensitivity/Robustness”)
 
 ---
 
-### SAAS-M2 — Public Beta (self-serve + cost control)
-Статус: [ ] planned  [ ] in-progress  [ ] done
+## Приложение: соглашения об именовании релизов (обязательное)
 
-Цель: внешняя команда сама проходит путь до отчёта; free tier не сжигает инфраструктуру.
-
-Обязательные эпики:
-- SAAS-E7 API-first + стабильные ответы ошибок
-- SAAS-E8 Quotas + priorities (free vs paid)
-- SAAS-E9 UI dashboard (status/ETA/cancel/retry)
-- SAAS-E10 Share report внутри org
-- SAAS-E11 Data retention (auto-delete policy)
-- SAAS-E12 Metering counters (usage)
-
-DoD:
-- квоты enforce на API и в оркестраторе
-- cancel/retry работает, idempotency гарантирована
-- retention реально удаляет данные/артефакты по политике
-- есть понятные метрики использования per org/project
+* `value-ring-suite-YYYY-MM-DD`
+* `value-known-bad-good-YYYY-MM-DD`
+* `value-customer-YYYY-MM-DD`
+* `standard-claims-YYYY-MM-DD` (если релизим pack-проверку стандарта)
 
 ---
 
-### SAAS-M3 — Sales v1 (для сделок)
-Статус: [ ] planned  [ ] in-progress  [ ] done
+## Статусная таблица (коротко)
 
-Цель: закрыть блокеры продаж и аудита.
-
-Обязательные эпики:
-- SAAS-E13 Audit log (append-only)
-- SAAS-E14 Расширенный RBAC (project-level: view/run/admin)
-- SAAS-E15 SLO + алерты + трассировка (request→job→worker)
-- SAAS-E16 Billing минимальный (планы/инвойсы/ограничения)
-
-DoD:
-- audit log: кто/что/когда для submit/run/download/share/delete
-- экспорт evidence packs стандартизирован (zip) + проверка целостности
-- определён SLO (например: 99% jobs < N часов) и наблюдаемость подтверждена
+* [x] CORE-FREEZE-1
+* [x] VALUE-M0
+* [x] VALUE-M1
+* [ ] VALUE-M2
+* [ ] VALUE-M3
+* [ ] VALUE-M4
+* [ ] SAAS-M0
+* [ ] SAAS-M1
 
 ---
 
-### SAAS-M4 — Enterprise readiness (фарма)
-Статус: [ ] planned  [ ] in-progress  [ ] done
+## Важно про “не потеряем честность?”
 
-Цель: проходить vendor security review и procurement.
+Как правило: **мы не продаём “новую физику”**. Мы продаём:
 
-Эпики:
-- SAAS-E17 SSO (SAML/OIDC) + (желательно) SCIM
-- SAAS-E18 Single-tenant / VPC deployment опция
-- SAAS-E19 Data residency (EU/US)
-- SAAS-E20 Export audit logs в SIEM
-- SAAS-E21 SOC2-ready процесс/контроли (trajectory)
+* воспроизводимый аудит,
+* честный отчёт,
+* и измеримую способность отличать “плохой скоринг” от “хорошего”.
 
-DoD:
-- типовой security questionnaire без “красных”
-- документированы процессы incident/access/log retention
-- есть путь к private deployment
+Любая “спектральная” идея допустима **только как математическое/численное улучшение**, пока она:
 
----
+1. проходит VALUE-вехи,
+2. не ухудшает инвариантность/контракты,
+3. фиксируется артефактами (release+sha256+registry),
+4. и не требует веры.
 
-## 5) Эпики (детализация, чтобы вести задачами)
-
-### SAAS-E1 — Multi-tenant core (Org/Project/RBAC)
-- [ ] org/project сущности в metadata DB
-- [ ] RBAC роли (минимум Admin/Member)
-- [ ] tenant_id/project_id в каждом job/log/artifact path
-
-### SAAS-E2 — Jobs/Queue/Workers
-- [ ] submit job → queued → running → done/failed/canceled
-- [ ] retries + idempotency key
-- [ ] лимиты времени/памяти на job
-
-### SAAS-E3 — Artifact store + metadata
-- [ ] versioned storage: `{org}/{project}/{job}/{run}/...`
-- [ ] signed URLs / доступ по RBAC
-- [ ] индексация артефактов и связи с runs
-
-### SAAS-E4 — Reproducibility default
-- [ ] manifest обязателен
-- [ ] checksums обязательны
-- [ ] “rerun by manifest” сценарий (внутренний)
-
-### SAAS-E5 — Scores-only
-- [ ] режим: вход = scores.json (+ минимальные идентификаторы)
-- [ ] пайплайн не требует “исходников модели/структур” если выбран режим
-
-### SAAS-E6 — Observability baseline
-- [ ] structured logs: tenant_id, project_id, job_id
-- [ ] метрики очереди/воркеров/ошибок/времени
-- [ ] минимальные алерты на error-rate и queue backlog
-
----
-
-## 6) Метрики успеха (чтобы управлять продуктом)
-- % успешных jobs (по типовым размерам)
-- медиана/95p runtime
-- error-rate по причинам
-- доля “scores-only” у клиентов
-- cost per run (CPU/GPU)
-- time-to-first-value (от регистрации до первого pack)
-
----

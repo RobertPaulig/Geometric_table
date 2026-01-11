@@ -292,3 +292,8 @@
 - SHA256(value_ring_suite_evidence_pack.zip): 912071F3927D733FF4F5EDA1AB5A3158F83D18EBA4E99B1C2CC174FD6EE08274
 - Outcome: OK=60, SKIP=140, ERROR=0; top_skip_reasons: no_decoys_generated: 140; share_rows_with_n_decoys_gt_0: 30.0%
 - PRs: https://github.com/RobertPaulig/Geometric_table/pull/21, https://github.com/RobertPaulig/Geometric_table/pull/22
+
+### 2026-01-11 - ROADMAP v2 (VALUE-first управляющий контракт)
+- What: rewrote `docs/ROADMAP.md` to make VALUE-TRACK the P0 driver, with explicit “truth by artefacts” rules and DONE/Proof for already-closed milestones.
+- PR: (TBD)
+- Merge SHA: (TBD)
