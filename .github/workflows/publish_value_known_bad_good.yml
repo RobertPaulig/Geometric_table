@@ -356,13 +356,13 @@ jobs:
               pr = fmt_rate(d.get("pass_rate"))
               share = float(d.get("share_rows_with_n_decoys_gt_0") or 0.0) * 100.0
               top = d.get("top_skip_reasons") or []
-              top_s = ", ".join([f\"{t['reason']}:{t['count']}\" for t in top]) if top else "(none)"
-              lines.append(f\"| {label} | {ok} | {sk} | {er} | {med_s} | {pr} | {share:.1f}% | {top_s} |\")
+              top_s = ", ".join([f"{t['reason']}:{t['count']}" for t in top]) if top else "(none)"
+              lines.append(f"| {label} | {ok} | {sk} | {er} | {med_s} | {pr} | {share:.1f}% | {top_s} |")
           lines.append("")
           lines.append("## Assets")
-          lines.append(f\"- value_m2_bad_constant_evidence_pack.zip SHA256: {sha256['bad_constant']}\")
-          lines.append(f\"- value_m2_bad_random_evidence_pack.zip SHA256: {sha256['bad_random']}\")
-          lines.append(f\"- value_m2_good_synthetic_evidence_pack.zip SHA256: {sha256['good_synthetic']}\")
+          lines.append(f"- value_m2_bad_constant_evidence_pack.zip SHA256: {sha256['bad_constant']}")
+          lines.append(f"- value_m2_bad_random_evidence_pack.zip SHA256: {sha256['bad_random']}")
+          lines.append(f"- value_m2_good_synthetic_evidence_pack.zip SHA256: {sha256['good_synthetic']}")
           
           Path("release_notes.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
           PY
