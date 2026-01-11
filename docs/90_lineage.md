@@ -310,3 +310,17 @@
 - Run: https://github.com/RobertPaulig/Geometric_table/actions/runs/20895097355
 - Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/30 (merge: d477d56db5facd9aab2ba8853c8d4d8c1f096a93)
 - Separation facts (computed on status==OK rows only; no auto-threshold gating): Delta_median_slack(GOOD - BAD-constant)=0.000000; Delta_PASS_rate(GOOD - BAD-constant)=0.000000; Delta_median_slack(GOOD - BAD-random)=0.000000; Delta_PASS_rate(GOOD - BAD-random)=0.000000
+
+### 2026-01-11 - VALUE-M2 known bad/good evidence packs (r2; separation restored via hetero_audit.v2)
+- Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/value-known-bad-good-2026-01-11-r2
+- Source commit: 8110a1b78f2a67d684d64343c996e64d218f99e4
+- Assets:
+  - BAD-constant: https://github.com/RobertPaulig/Geometric_table/releases/download/value-known-bad-good-2026-01-11-r2/value_known_bad_good_BAD-constant_evidence_pack.zip
+    - SHA256: 5B117E204E9E98128EE4C6BEBC609D4282862DBF3BEB935FF432076809F0046A
+  - BAD-random: https://github.com/RobertPaulig/Geometric_table/releases/download/value-known-bad-good-2026-01-11-r2/value_known_bad_good_BAD-random_evidence_pack.zip
+    - SHA256: E4255428FC9EEE082D54B04D6A01E7EE98F5F59717CBA259590D6457F1064916
+  - GOOD-synthetic: https://github.com/RobertPaulig/Geometric_table/releases/download/value-known-bad-good-2026-01-11-r2/value_known_bad_good_GOOD-synthetic_evidence_pack.zip
+    - SHA256: 228E5B0515316831DE5D208BEE624240973215BDAC85236C1583DEC1B7EA6B5C
+- Run: https://github.com/RobertPaulig/Geometric_table/actions/runs/20897298904
+- Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/34 (merge: 1e8079ad7ca1a71f00b186574865ecac853d68c0)
+- Separation facts (computed on status==OK rows only; no auto-threshold gating): Delta_median_slack(GOOD - BAD-constant)=0.500000; Delta_PASS_rate(GOOD - BAD-constant)=1.000000; Delta_median_slack(GOOD - BAD-random)=0.000000; Delta_PASS_rate(GOOD - BAD-random)=0.333333
