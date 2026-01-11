@@ -13,7 +13,7 @@ on:
         required: true
         default: "main"
       tag:
-        description: "Release tag to create/update. Must match: value-known-bad-good-YYYY-MM-DD"
+        description: "Release tag to create/update. Must match: value-known-bad-good-YYYY-MM-DD(-rN)"
         required: true
       prerelease:
         description: "Mark GitHub release as pre-release"
@@ -43,7 +43,7 @@ jobs:
 
       - name: Validate tag format
         run: |
-          echo "${{ inputs.tag }}" | grep -E '^value-known-bad-good-[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+          echo "${{ inputs.tag }}" | grep -E '^value-known-bad-good-[0-9]{4}-[0-9]{2}-[0-9]{2}(-r[0-9]+)?$'
 
       - uses: actions/setup-python@v5
         with:
