@@ -296,4 +296,3 @@
 ### 2026-01-11 - DOCS-STRICT-1: индекс как обязательный + comms protocol + guardrail
 - What: added `docs/20_comms_protocol.md`; made `docs/99_index.md` cover обязательные документы; aligned `CONTEXT.md` load order to real источники; restored Tom I truth as `docs/name3.md`; added docs-index integrity test.
 - PR: https://github.com/RobertPaulig/Geometric_table/pull/28
-- Merge SHA: (TBD)

@@ -12,7 +12,7 @@
 
 Вторая строка: **контекст/файлы**, например:
 
-`docs\\99_index.md / CONTEXT.md / docs\\name3.md / tests\\test_docs_index_integrity.py`
+`docs/99_index.md / CONTEXT.md / docs/name3.md / tests/test_docs_index_integrity.py`
 
 ## 2) Отчёт Исполнителя (строго 4 блока)
 

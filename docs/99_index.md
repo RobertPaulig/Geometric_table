@@ -15,7 +15,7 @@
 
 ## Repo-управление (обязательное)
 
-- **REF-ENTRYPOINT** — `CONTEXT.md`, `ENTRYPOINT.md`, `docs/README.md`  
+- **REF-ENTRYPOINT** — `CONTEXT.md`, `docs/README.md`  
   Зачем: единая точка входа и порядок загрузки контекста.  
   Где используется: всегда (онбординг / дисциплина документации / протокол).
 
