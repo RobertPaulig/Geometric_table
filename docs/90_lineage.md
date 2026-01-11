@@ -295,5 +295,5 @@
 
 ### 2026-01-11 - ROADMAP v2 (VALUE-first управляющий контракт)
 - What: rewrote `docs/ROADMAP.md` to make VALUE-TRACK the P0 driver, with explicit “truth by artefacts” rules and DONE/Proof for already-closed milestones.
-- PR: (TBD)
+- PR: https://github.com/RobertPaulig/Geometric_table/pull/27
 - Merge SHA: (TBD)
