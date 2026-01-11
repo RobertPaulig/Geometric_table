@@ -184,13 +184,13 @@ def run_audit(
     rand_q = null_q
     neg_auc_max = max(perm_q, rand_q)
     margin = float(neg_auc_margin)
-    gate = float(null_q + margin)
-    slack = float(gate - neg_auc_max)
+    gate = float(min(1.0, null_q + margin))
+    slack = float(auc - gate)
     verdict = "PASS" if slack >= 0.0 else "FAIL"
     null_q_method = "m1_exact" if n_pos == 1 or n_neg == 1 else "unweighted_counts"
 
     out: Dict[str, Any] = {
-        "schema_version": "hetero_audit.v1",
+        "schema_version": "hetero_audit.v2",
         "version": _read_version(),
         "dataset_id": dataset_id,
         "n_pos": int(n_pos),

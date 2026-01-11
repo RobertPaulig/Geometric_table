@@ -1,4 +1,4 @@
-AUDIT_SCHEMA = "hetero_audit.v1"
+AUDIT_SCHEMA = "hetero_audit.v2"
 DECOYS_SCHEMA = "hetero_decoys.v1"
 PIPELINE_SCHEMA = "hetero_pipeline.v1"
 SCORES_SCHEMA = "hetero_scores.v1"
