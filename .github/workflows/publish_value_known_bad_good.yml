@@ -714,7 +714,7 @@ jobs:
               python scripts/pilot_generate_input.py --out_dir out_value_m2/suite --rows 200 --k_decoys 20 --seed 0 --full_cover_count 3
               (scores variant) GOOD-synthetic: original=1.0, decoys=0.0
               hetero2-batch --input out_value_m2/suite/input.csv --out_dir out_value_m2/GOOD-synthetic --artifacts light --score_mode external_scores --scores_input out_value_m2/score_variants/scores_GOOD-synthetic.json --k_decoys 20 --workers 2 --timeout_s 60 --maxtasksperchild 100 --seed_strategy per_row --seed 0 --zip_pack
-          - Outcome (facts from summary.csv):
+            - Outcome (facts from summary.csv):
           ${{ needs.build-packs.outputs.good_synthetic_facts_md }}
 
           - Separation facts (OK-only; no auto-threshold gating):
