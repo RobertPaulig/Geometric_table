@@ -324,3 +324,8 @@
 - Run: https://github.com/RobertPaulig/Geometric_table/actions/runs/20897298904
 - Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/34 (merge: 1e8079ad7ca1a71f00b186574865ecac853d68c0)
 - Separation facts (computed on status==OK rows only; no auto-threshold gating): Delta_median_slack(GOOD - BAD-constant)=0.500000; Delta_PASS_rate(GOOD - BAD-constant)=1.000000; Delta_median_slack(GOOD - BAD-random)=0.000000; Delta_PASS_rate(GOOD - BAD-random)=0.333333
+
+### 2026-01-11 - VALUE-M4: standard claims (doc + guardrail tests)
+- What: added `docs/standard_claims.md` (что гарантируем/не гарантируем); added guardrail tests for frozen `schema_version` and evidence-pack required files; added `REF-STANDARD-CLAIMS` in `docs/99_index.md`; updated `docs/10_contracts_policy.md`.
+- PR: https://github.com/RobertPaulig/Geometric_table/pull/37
+- Head SHA: 4b41e6ae7ff9fcb7cfdba511b8f20169f80b0c01

@@ -65,6 +65,10 @@
   Зачем: правила версионирования контрактов (`schema_version`) и breaking change policy.  
   Где используется: все frozen contracts.
 
+- **REF-STANDARD-CLAIMS** — `docs/standard_claims.md`  
+  Зачем: канонический список “что гарантируем / что не гарантируем”, привязанный к frozen contracts и guardrail-тестам.  
+  Где используется: VALUE-M4, аудит и внешняя коммуникация.
+
 - **REF-CONTRACT-HETERO-SCORES-V1** — `docs/contracts/hetero_scores.v1.md`  
   Зачем: frozen контракт `hetero_scores.v1` для `score_mode=external_scores`.  
   Где используется: external scores + backward-compat тесты.
