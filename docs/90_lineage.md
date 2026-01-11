@@ -296,3 +296,17 @@
 ### 2026-01-11 - DOCS-STRICT-1: индекс как обязательный + comms protocol + guardrail
 - What: added `docs/20_comms_protocol.md`; made `docs/99_index.md` cover обязательные документы; aligned `CONTEXT.md` load order to real источники; restored Tom I truth as `docs/name3.md`; added docs-index integrity test.
 - PR: https://github.com/RobertPaulig/Geometric_table/pull/28
+
+### 2026-01-11 - VALUE-M2 known bad/good evidence packs (release assets + SHA256 + registry)
+- Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/value-known-bad-good-2026-01-11
+- Source commit: 706aaaf32c52e2df9b79bc611421d57af3cbecb4
+- Assets:
+  - BAD-constant: https://github.com/RobertPaulig/Geometric_table/releases/download/value-known-bad-good-2026-01-11/value_known_bad_good_BAD-constant_evidence_pack.zip
+    - SHA256: 043940CC6FE275D7393BD9F1AAB8A6CB8033890430F5B495782D226FB97CD5DF
+  - BAD-random: https://github.com/RobertPaulig/Geometric_table/releases/download/value-known-bad-good-2026-01-11/value_known_bad_good_BAD-random_evidence_pack.zip
+    - SHA256: 38393053ABDF710D3AB4BAE68C7EA1A55547A8F984B0600E17411953B65294C1
+  - GOOD-synthetic: https://github.com/RobertPaulig/Geometric_table/releases/download/value-known-bad-good-2026-01-11/value_known_bad_good_GOOD-synthetic_evidence_pack.zip
+    - SHA256: DF27F9CA9CA4A74089EF1966D9591FEDDE7F9C452CD62BDE94F4D384F09F27B3
+- Run: https://github.com/RobertPaulig/Geometric_table/actions/runs/20895097355
+- Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/30 (merge: d477d56db5facd9aab2ba8853c8d4d8c1f096a93)
+- Separation facts (computed on status==OK rows only; no auto-threshold gating): Delta_median_slack(GOOD - BAD-constant)=0.000000; Delta_PASS_rate(GOOD - BAD-constant)=0.000000; Delta_median_slack(GOOD - BAD-random)=0.000000; Delta_PASS_rate(GOOD - BAD-random)=0.000000
