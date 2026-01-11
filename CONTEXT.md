@@ -1,91 +1,49 @@
 # Geometric_table — CONTEXT (единая точка входа)
 
-Этот файл — **канонический entrypoint**: его можно давать ИИ как единственную ссылку. Дальше ИИ обязан следовать порядку загрузки.
+Этот файл — **операционный entrypoint**: что читать, как проверять “истину”, как мерджить по STOP/GO.
 
-## ПРОВЕРКА, что ты реально загрузил контекст (для ИИ/нового архитектора)
+## Быстрый старт контекста (STOP если не сделано)
 
-В первом ответе ты ОБЯЗАН (иначе STOP):
-1) Вставить 3 короткие прямые цитаты (copy-paste) из разных разделов `CONTEXT.md`.
-2) Вставить 1 прямую цитату из `README.md`.
-3) Вставить 1 прямую цитату из `docs/04_backlog.md` — строго из блока **"HETERO-2 (P0)"** (чтобы зафиксировать текущий приоритет).
-4) Вставить 1 прямую цитату из `docs/90_lineage.md` — из **последних HETERO-2 спринтов** (evidence pack / stress harness / gate-stress), чтобы подтвердить актуальную линию работ.
-5) Вставить 1 цитату (3–8 строк) из `docs/95_release_checklist.md` из раздела D или F.
-6) Только ПОСЛЕ всех цитат: 1–2 предложения "что сейчас P0 и почему" (ссылаться на смысл процитированных фрагментов; без воды).
-7) Перечислить 4 команды quickstart: `git clone ...`, `pip install -e ".[dev]"`, `pytest -q`, `make smoke`.
+1) Прочитать `CONTEXT.md` (этот файл) и `docs/99_index.md` (обязательные REF-ы).  
+2) Прочитать `docs/ROADMAP.md` (VALUE-first приоритеты и DoD).  
+3) Открыть `docs/90_lineage.md` (последние управленческие изменения и релизы).  
+4) Вставить 1 цитату (3–8 строк) из `docs/95_release_checklist.md` из раздела D или F (для контроля “что считаем релизом”).  
+5) Прочитать `docs/pilot_quickstart.md` (demo сценарий + команды).  
 
-Если не можешь открыть ЛЮБОЙ из файлов — честно напиши "нет доступа" и остановись.
-Запрещено писать общие рекомендации/планы без выполнения пунктов 1–6 и без прямых цитат.
+## Порядок загрузки контекста (строгий)
 
-## Порядок загрузки (строго)
+1. `README.md` — общий обзор.
+2. `docs/README.md` — документация и карта.
+3. Том I (Конституция/ТЗ, **source of truth**): `docs/name3.md`  
+   Производные артефакты (если присутствуют): `docs/name3.tex`, `docs/name3.pdf`.
+4. Том II (devline/R&D, **source of truth**): `docs/name4.tex`  
+   Производный артефакт (если присутствует): `docs/name4.pdf`.
+5. `docs/04_backlog.md` и `docs/05_decision_log.md`.
+6. `docs/90_lineage.md` — append-only история.
+7. `docs/99_index.md` — обязательный индекс документов/REF-ов.
+8. `docs/95_release_checklist.md` — checklist релиза.
+9. `VERSION` — baseline версии.
 
-1. `README.md` — краткий обзор и быстрый старт.
-2. `docs/README.md` — полная документация и навигация.
-3. Том I (Конституция/ТЗ, source of truth): `docs/name3.tex` (доп.: `docs/name3.md`; `docs/name3.pdf` — производный артефакт, если присутствует).
-4. Том II (линия развития, source of truth): `docs/name4.tex` (`docs/name4.pdf` — производный артефакт, если присутствует).
-5. `docs/04_backlog.md` и `docs/05_decision_log.md` — гипотезы/эксперименты и принятые решения.
-6. `docs/90_lineage.md` — lineage: решения → эксперименты → тесты → выводы.
-7. `docs/99_index.md` — индекс литературы/источников (ID, назначение, где используется).
-8. `docs/95_release_checklist.md` — release checklist (field).
-9. `VERSION` — текущий baseline версии.
-10. Запустить `pytest -q` — задача не считается завершённой, пока тесты не зелёные.
+## Репо-структура (коротко)
 
-## Карта репозитория
-
-- `core/` — ядро модели (`geom_atoms`, `grower`, `complexity`, nuclear modules).
-- `analysis/` — сканы/эксперименты/визуализации и CLI entrypoints.
-- `data/` — индексы и агрегированные таблицы (форматы не менять без явной команды Архитектора).
-- `results/` — артефакты запусков (CSV/TXT/PNG отчёты).
-- `docs/` — документация, backlog, decision log, исходники томов.
-- `run_pipeline.py` — основной пайплайн (когда актуально).
-
-## Definition of Done (DoD)
-
-Задача DONE, только если:
-
-1. `pytest -q` зелёный.
-2. Есть минимальная команда воспроизведения (скрипт/CLI).
-3. Результаты сохраняются в `results/` (или явно объяснено, почему артефактов нет).
-4. GitHub Actions workflow `pytest` зелёный (для PR/merge в `main`).
-5. Политика `results/`: папка git-ignored, артефакты прогонов НЕ коммитим; если нужен фиксируемый итог — краткая сводка в `docs/05_decision_log.md` и запись в `docs/90_lineage.md`; baseline — только `results/baselines/`.
-6. Обновлена документация:
-   - workflow/эксплуатация → `docs/README.md`
-   - допущения/метрики/гейты → `docs/05_decision_log.md`
-   - новые задачи/эксперименты → `docs/04_backlog.md`
-   - завершённая история работы → `docs/90_lineage.md`
-
-## Сквозной сценарий за 2 минуты
-
-Команды:
-1) `pip install -e ".[dev]"`
-2) `pytest -q`
-3) `make smoke`
-
-Выходные файлы smoke:
-- `smoke_pipeline.json`
-- `smoke.report.md`
-- `smoke.decoys.csv`
-
-Проверка детерминизма: запусти `make smoke` два раза и сравни выходные файлы побайтно.
-
-## Протокол: как добавлять идеи без хаоса
-
-1. Записать гипотезу в `docs/04_backlog.md` (коротко, проверяемо).
-2. Сделать минимальный эксперимент в `analysis/`, который производит артефакт в `results/`.
-3. Добавить/обновить тесты в `tests/`.
-4. Зафиксировать решение/гейты/метрики в `docs/05_decision_log.md`.
-5. Добавить запись по шаблону в `docs/90_lineage.md`.
+- `core/` — модель / ядро.
+- `analysis/` — сканы, тесты, визуализации.
+- `data/` — индексы и агрегированные таблицы.
+- `results/` — отчёты.
+- `docs/` — документация (entrypoint, roadmap, lineage, registry, contracts).
+- `run_pipeline.py` — основной пайплайн.
 
 ## Pilot canonical artifact (r2)
 
 - Release: https://github.com/RobertPaulig/Geometric_table/releases/tag/pilot-2026-01-08-r2
 - Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/pilot-2026-01-08-r2/pilot_evidence_pack.zip
-- SHA256: BB564070C2B02087B589A511FB12AD4DEDC13C1EE06A58BC793DD5CF51D3B2A8
+- SHA256: `BB564070C2B02087B589A511FB12AD4DEDC13C1EE06A58BC793DD5CF51D3B2A8`
 
 ## How to verify truth
 
 1) Download asset from the release.
-2) Compute SHA256 and compare to docs/artefacts_registry.md and the release .sha256.
-3) Registry entry must match the asset URL + SHA256 (see docs/artefacts_registry.md).
+2) Compute SHA256 and compare to `docs/artefacts_registry.md` and the release `.sha256`.
+3) Registry entry must match the asset URL + SHA256 (see `docs/artefacts_registry.md`).
 
 ## Contracts (frozen)
 
@@ -93,10 +51,13 @@
 
 ## How to run the pilot
 
-- Pilot quickstart: docs/pilot_quickstart.md (demo scenario + commands).
+- Pilot quickstart: `docs/pilot_quickstart.md` (demo scenario + commands).
 
 ## Gates (STOP/GO)
 
-- Required contexts: ci/test, ci/test-chem, ci/docker on the exact SHA.
-- PR gating note: for `pull_request` runs, these commit statuses are posted on GitHub’s merge-ref SHA (the tested SHA), not the PR head SHA.
-- If any are missing or red: STOP (no merge).
+- Required contexts: `ci/test`, `ci/test-chem`, `ci/docker` on the exact SHA.
+- PR gating note: for `pull_request` runs, these commit statuses are posted on GitHub’s **merge-ref SHA** (the tested SHA), not the PR head SHA.
+- Reporting rule: in Gate-status always show **both** `head SHA` and `tested SHA (merge-ref)` for PRs, plus run links.
+- If any are missing or red: **STOP** (no merge).
+
+См. также `docs/20_comms_protocol.md` (форма обращений/отчётов).
