@@ -69,6 +69,10 @@
   Зачем: frozen контракт `hetero_scores.v1` для `score_mode=external_scores`.  
   Где используется: external scores + backward-compat тесты.
 
+- **REF-CONTRACT-HETERO-AUDIT-V2** — `docs/contracts/hetero_audit.v2.md`  
+  Зачем: семантика `audit.neg_controls.gate/slack/verdict` (VALUE-M2).  
+  Где используется: оценка качества скоринга и separation facts.
+
 ## Отчёты / релиз-заметки
 
 - **REF-REPORTS** — `REPORT.md`, `REPORT_baseline.md`, `REPORT_wsZ1.md`  
