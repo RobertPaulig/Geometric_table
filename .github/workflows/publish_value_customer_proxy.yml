@@ -144,7 +144,7 @@ jobs:
               try:
                   slack = float(slack_raw)
               except ValueError as exc:
-                  raise AssertionError(f\"OK row has non-numeric slack: {slack_raw!r}\") from exc
+                  raise AssertionError(f"OK row has non-numeric slack: {slack_raw!r}") from exc
               verdict_values.append(verdict)
               slack_values.append(slack)
           
