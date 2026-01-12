@@ -335,6 +335,12 @@
 - PR: https://github.com/RobertPaulig/Geometric_table/pull/38
 - Head SHA: 568c1dc3e7f4d54a08aa5ec2b7a4f0b0f7b2f6c6
 
+### 2026-01-12 - VALUE-M3: fix publish-value-customer-proxy workflow facts step quoting
+- What: fix SyntaxError in facts step to unblock publish run for VALUE-M3.
+- PR: https://github.com/RobertPaulig/Geometric_table/pull/40
+- Merge commit: 2554cfe4d0d342656a080d6a0e0209ffd6cd757d
+- CI run (main): https://github.com/RobertPaulig/Geometric_table/actions/runs/20913938972
+
 ### 2026-01-12 - VALUE-M3: customer proxy evidence pack (release asset + SHA256 + registry)
 - Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/value-customer-proxy-2026-01-12
 - Source commit: 6951804e7892b208a38b877e102df643a7d8e30d
