@@ -1,6 +1,7 @@
 name: publish-stress-evidence-pack
 
 permissions:
+  actions: write
   contents: write
   pull-requests: write
 
@@ -189,6 +190,7 @@ jobs:
           EOF
 
       - name: Create PR with registry update
+        id: registry_cpr
         uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -200,3 +202,39 @@ jobs:
           base: "main"
           add-paths: |
             docs/artefacts_registry.md
+
+      - name: Trigger CI (pytest workflow_dispatch) for automation PR branch
+        if: steps.registry_cpr.outputs.pull-request-url != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          BRANCH: "automation/artefact-${{ inputs.tag }}"
+          PR_URL: ${{ steps.registry_cpr.outputs.pull-request-url }}
+        run: |
+          set -euo pipefail
+          echo "Automation PR: $PR_URL"
+          echo "Triggering pytest workflow on branch: $BRANCH"
+
+          gh workflow run pytest.yml --ref "$BRANCH" --repo "$REPO"
+
+          RUN_ID=""
+          for i in $(seq 1 30); do
+            RUN_ID=$(gh run list --workflow pytest.yml --branch "$BRANCH" --event workflow_dispatch --limit 1 --json databaseId --jq '.[0].databaseId' --repo "$REPO" 2>/dev/null || true)
+            if [ -n "$RUN_ID" ] && [ "$RUN_ID" != "null" ]; then
+              break
+            fi
+            sleep 2
+          done
+
+          if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
+            echo "ERROR: failed to locate dispatched pytest run"
+            gh run list --workflow pytest.yml --branch "$BRANCH" --limit 5 --repo "$REPO" || true
+            exit 1
+          fi
+
+          RUN_URL=$(gh run view "$RUN_ID" --json htmlUrl --jq '.htmlUrl' --repo "$REPO")
+          TESTED_SHA=$(gh run view "$RUN_ID" --json headSha --jq '.headSha' --repo "$REPO")
+          echo "pytest run url: $RUN_URL"
+          echo "tested_sha: $TESTED_SHA"
+
+          gh run watch "$RUN_ID" --exit-status --repo "$REPO"
