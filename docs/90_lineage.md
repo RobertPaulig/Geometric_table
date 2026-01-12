@@ -357,3 +357,21 @@
   - share_rows_with_n_decoys_gt_0: 0.300 (30.0%)
   - median_slack: 0.000000
   - pass_rate: 0.666667
+
+### 2026-01-12 - VALUE-M3: customer proxy evidence pack (r2; rows_missing_scores_input gate)
+- Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/value-customer-proxy-2026-01-12-r2
+- Source commit: 2bd92404e139804cc3cc088766ede94106962ead
+- Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/value-customer-proxy-2026-01-12-r2/value_customer_proxy_evidence_pack.zip
+- SHA256(value_customer_proxy_evidence_pack.zip): C2A8350EFA0D8BEB957E65DE42C0591080085F614B10E255430774B463F67029
+- Acceptance criteria (contract): docs/value_m3_acceptance_criteria.md
+- Run: https://github.com/RobertPaulig/Geometric_table/actions/runs/20922529046
+- Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/46 (merge: 5064d50cddc88622872a3faf67655dd395701342)
+- Facts (from summary.csv; computed on status==OK rows only):
+  - rows_total: 200
+  - rows_ok: 60
+  - scores_coverage.rows_missing_scores_input: 0
+  - status_counts: OK=60, SKIP=140, ERROR=0
+  - top_skip_reasons: no_decoys_generated: 140
+  - share_rows_with_n_decoys_gt_0: 0.300 (30.0%)
+  - median_slack: 0.000000
+  - pass_rate: 0.666667
