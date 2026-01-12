@@ -90,6 +90,9 @@ DoD (жёсткий, измеримый):
 ---
 
 ## VALUE-M3 — Customer Truth (Pfizer / proxy) + acceptance criteria
+Статус: [ ] planned  [x] in-progress  [ ] done
+
+Acceptance criteria (контракт): [`docs/value_m3_acceptance_criteria.md`](value_m3_acceptance_criteria.md)
 Цель: перейти от синтетики к реальной проверке пользы на данных/скорах клиента.
 
 DoD:

@@ -23,11 +23,15 @@
   Зачем: склад гипотез/задач (сырьё, не “истина”).  
   Где используется: постановка R&D-экспериментов и планирование работ.
 
-- **REF-ROADMAP** — `docs/ROADMAP.md`  
+- **REF-ROADMAP** - `docs/ROADMAP.md`  
   Зачем: управляющий документ (VALUE-first) + обязательные вехи (milestones).  
   Где используется: приоритезация, привязка PR к Roadmap-ID, контроль готовности.
 
-- **REF-DECISION-LOG** — `docs/05_decision_log.md`  
+- **REF-VALUE-M3-ACCEPT** - `docs/value_m3_acceptance_criteria.md`  
+  Зачем: acceptance criteria для VALUE-M3 (customer/proxy pack) как проверяемый контракт.  
+  Где используется: выпуск и приёмка VALUE-M3, критерии GO/STOP для клиента.
+
+- **REF-DECISION-LOG** - `docs/05_decision_log.md`  
   Зачем: фиксируем принятые решения, инварианты, гейты, изменения метрик и интерпретаций.  
   Где используется: аудит изменений и восстановление причинно-следственной линии.
 
