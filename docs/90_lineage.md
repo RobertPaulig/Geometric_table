@@ -334,3 +334,20 @@
 - What: added `docs/value_m3_acceptance_criteria.md`; added `REF-VALUE-M3-ACCEPT` in `docs/99_index.md`; marked VALUE-M3 as in-progress in `docs/ROADMAP.md`.
 - PR: https://github.com/RobertPaulig/Geometric_table/pull/38
 - Head SHA: 568c1dc3e7f4d54a08aa5ec2b7a4f0b0f7b2f6c6
+
+### 2026-01-12 - VALUE-M3: customer proxy evidence pack (release asset + SHA256 + registry)
+- Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/value-customer-proxy-2026-01-12
+- Source commit: 6951804e7892b208a38b877e102df643a7d8e30d
+- Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/value-customer-proxy-2026-01-12/value_customer_proxy_evidence_pack.zip
+- SHA256(value_customer_proxy_evidence_pack.zip): FE7AA762DCC6D512771DA40E90EB58557B32D6A3641033C65546D0553C16B225
+- Acceptance criteria (contract): docs/value_m3_acceptance_criteria.md
+- Run: https://github.com/RobertPaulig/Geometric_table/actions/runs/20914040368
+- Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/41 (merge: b3e2602bc08a1e9164ce6cad9fb322f65585db2c)
+- Facts (from summary.csv; computed on status==OK rows only):
+  - rows_total: 200
+  - rows_ok: 60
+  - status_counts: OK=60, SKIP=140, ERROR=0
+  - top_skip_reasons: no_decoys_generated: 140
+  - share_rows_with_n_decoys_gt_0: 0.300 (30.0%)
+  - median_slack: 0.000000
+  - pass_rate: 0.666667
