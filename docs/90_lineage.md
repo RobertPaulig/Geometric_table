@@ -358,6 +358,11 @@
   - median_slack: 0.000000
   - pass_rate: 0.666667
 
+### 2026-01-12 - CI-AUTO-PR-1: auto CI for automation PRs (no allow-empty commits)
+- What: `pytest.yml` supports `workflow_dispatch`; publish workflows that create automation PRs now dispatch `pytest.yml` on the automation branch and wait for completion, so `ci/test|ci/test-chem|ci/docker` appear without manual empty commits.
+- PRs: https://github.com/RobertPaulig/Geometric_table/pull/49 (initial), https://github.com/RobertPaulig/Geometric_table/pull/51 (fix run-url logging).
+- Live proof: publish run https://github.com/RobertPaulig/Geometric_table/actions/runs/20937794112 created automation PR https://github.com/RobertPaulig/Geometric_table/pull/52 and triggered pytest https://github.com/RobertPaulig/Geometric_table/actions/runs/20937822351 on tested SHA 6f8f505ef04de0b41172a95f2fc475ba3638072e.
+
 ### 2026-01-12 - VALUE-M3: customer proxy evidence pack (r2; rows_missing_scores_input gate)
 - Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/value-customer-proxy-2026-01-12-r2
 - Source commit: 2bd92404e139804cc3cc088766ede94106962ead
