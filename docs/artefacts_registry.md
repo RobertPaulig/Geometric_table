@@ -248,3 +248,12 @@ separation facts (computed on status==OK rows only):
 - Command:
   python scripts/pilot_generate_input.py --out_dir out_pilot --rows 1000 --k_decoys 2 --seed 0
   hetero2-batch --input out_pilot/input.csv --out_dir out_pilot --artifacts light --score_mode external_scores --scores_input out_pilot/scores.json --k_decoys 2 --workers 2 --timeout_s 60 --maxtasksperchild 100 --seed_strategy per_row --seed 0 --zip_pack
+
+## ci-auto-pr-verify-2026-01-13-r3
+
+- Source commit: 2be5db15056a5149732a1f96a57a9937c6f0fc3d
+- Release asset: https://github.com/RobertPaulig/Geometric_table/releases/download/ci-auto-pr-verify-2026-01-13-r3/pilot_evidence_pack.zip
+- SHA256(pilot_evidence_pack.zip): 5C5CCAD4C1A4CCEC46BB87244D33152689124C15E13ECCF39725F592832B99D5
+- Command:
+  python scripts/pilot_generate_input.py --out_dir out_pilot --rows 1000 --k_decoys 2 --seed 0
+  hetero2-batch --input out_pilot/input.csv --out_dir out_pilot --artifacts light --score_mode external_scores --scores_input out_pilot/scores.json --k_decoys 2 --workers 2 --timeout_s 60 --maxtasksperchild 100 --seed_strategy per_row --seed 0 --zip_pack
