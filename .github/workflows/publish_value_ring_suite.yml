@@ -341,7 +341,7 @@ jobs:
             exit 1
           fi
 
-          RUN_URL=$(gh run view "$RUN_ID" --json htmlUrl --jq '.htmlUrl' --repo "$REPO")
+          RUN_URL=$(gh run view "$RUN_ID" --json url --jq '.url' --repo "$REPO")
           TESTED_SHA=$(gh run view "$RUN_ID" --json headSha --jq '.headSha' --repo "$REPO")
           echo "pytest run url: $RUN_URL"
           echo "tested_sha: $TESTED_SHA"
