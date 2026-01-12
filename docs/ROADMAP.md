@@ -101,12 +101,20 @@ DoD:
 - Политика хранения/доступа (если private) описана в docs, но формат и верификация такие же
 
 Proof:
-- Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/value-customer-proxy-2026-01-12
-- Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/value-customer-proxy-2026-01-12/value_customer_proxy_evidence_pack.zip
-- SHA256(value_customer_proxy_evidence_pack.zip): FE7AA762DCC6D512771DA40E90EB58557B32D6A3641033C65546D0553C16B225
-- Publish run: https://github.com/RobertPaulig/Geometric_table/actions/runs/20914040368
-- Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/41 (merge: b3e2602bc08a1e9164ce6cad9fb322f65585db2c)
-- Lineage PR: https://github.com/RobertPaulig/Geometric_table/pull/42 (merge: acfb13224f7727e8b89a638708f17ddf44b5e7e5)
+- r1 (без явного гейта `scores_coverage.rows_missing_scores_input` в артефакте):
+  - Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/value-customer-proxy-2026-01-12
+  - Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/value-customer-proxy-2026-01-12/value_customer_proxy_evidence_pack.zip
+  - SHA256(value_customer_proxy_evidence_pack.zip): FE7AA762DCC6D512771DA40E90EB58557B32D6A3641033C65546D0553C16B225
+  - Publish run: https://github.com/RobertPaulig/Geometric_table/actions/runs/20914040368
+  - Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/41 (merge: b3e2602bc08a1e9164ce6cad9fb322f65585db2c)
+  - Lineage PR: https://github.com/RobertPaulig/Geometric_table/pull/42 (merge: acfb13224f7727e8b89a638708f17ddf44b5e7e5)
+- r2 (с гейтом `scores_coverage.rows_missing_scores_input==0` и фиксацией в фактах):
+  - Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/value-customer-proxy-2026-01-12-r2
+  - Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/value-customer-proxy-2026-01-12-r2/value_customer_proxy_evidence_pack.zip
+  - SHA256(value_customer_proxy_evidence_pack.zip): C2A8350EFA0D8BEB957E65DE42C0591080085F614B10E255430774B463F67029
+  - Publish run: https://github.com/RobertPaulig/Geometric_table/actions/runs/20922529046
+  - Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/46 (merge: 5064d50cddc88622872a3faf67655dd395701342)
+  - Lineage PR: https://github.com/RobertPaulig/Geometric_table/pull/47 (merge: 457a14ce898522c417f2d76db6faf7892736f93e)
 
 ---
 
