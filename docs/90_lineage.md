@@ -329,3 +329,8 @@
 - What: added `docs/standard_claims.md` (что гарантируем/не гарантируем); added guardrail tests for frozen `schema_version` and evidence-pack required files; added `REF-STANDARD-CLAIMS` in `docs/99_index.md`; updated `docs/10_contracts_policy.md`.
 - PR: https://github.com/RobertPaulig/Geometric_table/pull/37
 - Head SHA: 4b41e6ae7ff9fcb7cfdba511b8f20169f80b0c01
+
+### 2026-01-11 - VALUE-M3: acceptance criteria contract (proxy)
+- What: added `docs/value_m3_acceptance_criteria.md`; added `REF-VALUE-M3-ACCEPT` in `docs/99_index.md`; marked VALUE-M3 as in-progress in `docs/ROADMAP.md`.
+- PR: https://github.com/RobertPaulig/Geometric_table/pull/38
+- Head SHA: 568c1dc3e7f4d54a08aa5ec2b7a4f0b0f7b2f6c6
