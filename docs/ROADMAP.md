@@ -90,7 +90,7 @@ DoD (жёсткий, измеримый):
 ---
 
 ## VALUE-M3 — Customer Truth (Pfizer / proxy) + acceptance criteria
-Статус: [ ] planned  [x] in-progress  [ ] done
+Статус: [ ] planned  [ ] in-progress  [x] done
 
 Acceptance criteria (контракт): [`docs/value_m3_acceptance_criteria.md`](value_m3_acceptance_criteria.md)
 Цель: перейти от синтетики к реальной проверке пользы на данных/скорах клиента.
@@ -99,6 +99,14 @@ DoD:
 - Согласованные acceptance criteria (в терминах gate/slack/FAIL-rate на их наборах)
 - Выпуск evidence pack (возможно private) с тем же форматом истины: manifest/checksums/zip + SHA256
 - Политика хранения/доступа (если private) описана в docs, но формат и верификация такие же
+
+Proof:
+- Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/value-customer-proxy-2026-01-12
+- Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/value-customer-proxy-2026-01-12/value_customer_proxy_evidence_pack.zip
+- SHA256(value_customer_proxy_evidence_pack.zip): FE7AA762DCC6D512771DA40E90EB58557B32D6A3641033C65546D0553C16B225
+- Publish run: https://github.com/RobertPaulig/Geometric_table/actions/runs/20914040368
+- Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/41 (merge: b3e2602bc08a1e9164ce6cad9fb322f65585db2c)
+- Lineage PR: https://github.com/RobertPaulig/Geometric_table/pull/42 (merge: acfb13224f7727e8b89a638708f17ddf44b5e7e5)
 
 ---
 
