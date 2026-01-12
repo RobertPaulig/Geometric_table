@@ -36,7 +36,7 @@ jobs:
 
       - name: Validate tag format
         run: |
-          echo "${{ inputs.tag }}" | grep -E '^value-customer-proxy-[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+          echo "${{ inputs.tag }}" | grep -E '^value-customer-proxy-[0-9]{4}-[0-9]{2}-[0-9]{2}(-r[0-9]+)?$'
 
       - uses: actions/setup-python@v5
         with:
@@ -113,10 +113,21 @@ jobs:
         run: |
           python - << 'PY'
           import csv
+          import json
           import os
           import statistics
           from collections import Counter
           from pathlib import Path
+          
+          metrics_path = Path("out_value_customer_proxy/metrics.json")
+          metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+          scores_coverage = metrics.get("scores_coverage", {})
+          rows_missing_scores_input = scores_coverage.get("rows_missing_scores_input", None)
+          if rows_missing_scores_input is not None:
+              try:
+                  rows_missing_scores_input = int(rows_missing_scores_input)
+              except (TypeError, ValueError):
+                  rows_missing_scores_input = None
           
           summary_path = Path("out_value_customer_proxy/summary.csv")
           rows = list(csv.DictReader(summary_path.read_text(encoding="utf-8").splitlines()))
@@ -165,6 +176,10 @@ jobs:
           lines = []
           lines.append(f"  - rows_total: {total}")
           lines.append(f"  - rows_ok: {len(ok_rows)}")
+          if rows_missing_scores_input is None:
+              lines.append("  - scores_coverage.rows_missing_scores_input: (missing)")
+          else:
+              lines.append(f"  - scores_coverage.rows_missing_scores_input: {rows_missing_scores_input}")
           lines.append(
               "  - status_counts: "
               f"OK={status_counts.get('OK', 0)}, SKIP={status_counts.get('SKIP', 0)}, ERROR={status_counts.get('ERROR', 0)}"
@@ -232,7 +247,17 @@ jobs:
           m = json.load(open("out_value_customer_proxy/metrics.json", "r", encoding="utf-8"))
           err = int(m.get("counts", {}).get("ERROR", 0))
           assert err == 0, f"Gate-Customer-Proxy failed: ERROR={err}"
+          
+          scores_coverage = m.get("scores_coverage", None)
+          if not isinstance(scores_coverage, dict):
+              raise AssertionError("Gate-Customer-Proxy failed: missing scores_coverage in metrics.json")
+          if "rows_missing_scores_input" not in scores_coverage:
+              raise AssertionError("Gate-Customer-Proxy failed: missing scores_coverage.rows_missing_scores_input in metrics.json")
+          missing = int(scores_coverage["rows_missing_scores_input"])
+          assert missing == 0, f"Gate-Customer-Proxy failed: rows_missing_scores_input={missing} (expected 0)"
+          
           print("Gate OK: ERROR=0")
+          print("Gate OK: rows_missing_scores_input=0")
           PY
 
       - name: Upload build artifact (zip)
