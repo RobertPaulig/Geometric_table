@@ -162,6 +162,15 @@ Proof:
 - Merge commit: https://github.com/RobertPaulig/Geometric_table/commit/c2d8b80a6cef402fc3015aff2cc95a82790521e5
 - CI run (3/3 ci/* на merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/20897172830
 
+## CI-AUTO-PR-1 — Auto CI для automation PR (без allow-empty commit)
+Статус: [x] done
+
+Proof:
+- PR #49 (workflow_dispatch + trigger CI): https://github.com/RobertPaulig/Geometric_table/commit/53a61417fb1b07d81506cdc539fd797151af805c
+- Publish run verify (лог содержит `pytest run url:` + `tested_sha:`): https://github.com/RobertPaulig/Geometric_table/actions/runs/20937794112
+- Automation PR #52 (live proof, merged): https://github.com/RobertPaulig/Geometric_table/commit/f089a00b235567b6af09ad09b21ee0883150ab64
+- Lineage PR #53 (запись в docs/90_lineage.md): https://github.com/RobertPaulig/Geometric_table/commit/0691248c135c11486d7c82a607386b51266bd359
+
 # ROADMAP — HETERO-2 как SaaS (Pfizer-ready evidence pipeline)
 
 Назначение: зафиксировать целевую картину SaaS и вести разработку через обязательные вехи (milestones).
