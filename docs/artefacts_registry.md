@@ -239,3 +239,12 @@ separation facts (computed on status==OK rows only):
   - share_rows_with_n_decoys_gt_0: 0.300 (30.0%)
   - median_slack: 0.000000
   - pass_rate: 0.666667
+
+## ci-auto-pr-verify-2026-01-13
+
+- Source commit: 53a61417fb1b07d81506cdc539fd797151af805c
+- Release asset: https://github.com/RobertPaulig/Geometric_table/releases/download/ci-auto-pr-verify-2026-01-13/pilot_evidence_pack.zip
+- SHA256(pilot_evidence_pack.zip): CC0FEA7239BF7367036279758CCF256D9BFF5D6F0C3B7F77A82E77215A7B9D87
+- Command:
+  python scripts/pilot_generate_input.py --out_dir out_pilot --rows 1000 --k_decoys 2 --seed 0
+  hetero2-batch --input out_pilot/input.csv --out_dir out_pilot --artifacts light --score_mode external_scores --scores_input out_pilot/scores.json --k_decoys 2 --workers 2 --timeout_s 60 --maxtasksperchild 100 --seed_strategy per_row --seed 0 --zip_pack
