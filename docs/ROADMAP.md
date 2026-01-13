@@ -131,6 +131,28 @@ DoD:
 
 ---
 
+## VALUE-M5 - Utility (cost&lift) pipeline: proxy truth -> cost_lift_report.json -> release/registry/lineage
+Статус: [ ] planned  [x] in-progress  [ ] done
+
+Цель: публиковать utility-артефакт “Claim-2 money proof” (cost&lift на expensive truth) как воспроизводимую цепочку (truth -> report -> pack -> registry -> lineage).
+
+Proxy truth rule (v1, no-leakage):
+- truth зависит только от input (`molecule_id` + canonical_smiles) и детерминированен (byte-for-byte)
+- truth.csv валиден по `customer_truth.v1` и содержит `truth_source=proxy_rule_v1`
+- truth не читает `summary.csv/metrics.json/audit` и не импортирует audit-модули
+
+DoD:
+- Release tag: `value-utility-proxy-YYYY-MM-DD(-rN)`
+- evidence_pack.zip содержит `truth.csv` и `cost_lift_report.json` (+ zip validate и обязательные файлы pack)
+- `cost_lift_report.json` валиден по `cost_lift.v1` (schema + методы + bootstrap CI) и использует `skip_policy=unknown_bucket`
+- Quality gates: `ERROR=0`, `scores_coverage.rows_missing_scores_input==0`
+- Истина: Release asset + SHA256 + registry entry + lineage entry
+- Code gates: `ci/test|ci/test-chem|ci/docker` = success на source SHA
+
+Примечание: uplift/дельты не гейтим (фиксируем как факт в outcome + registry), гейтим только валидность/воспроизводимость/no-leakage.
+
+---
+
 ## Как это превращается в реальные “вехи-факты” через ваши workflows (без нового велосипеда)
 
 Вы уже умеете делать “истину” через publish workflow:
