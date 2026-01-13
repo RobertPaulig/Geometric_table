@@ -31,6 +31,10 @@
   Зачем: acceptance criteria для VALUE-M3 (customer/proxy pack) как проверяемый контракт.  
   Где используется: выпуск и приёмка VALUE-M3, критерии GO/STOP для клиента.
 
+- **REF-COST-LIFT** — `scripts/cost_lift.py`  
+  Зачем: расчёт utility-артефакта cost&lift (Claim-2 money proof) по `summary.csv` + customer truth CSV.  
+  Где используется: VALUE-M5-UTILITY-1 (публикация “денег”, а не только packs).
+
 - **REF-DECISION-LOG** - `docs/05_decision_log.md`  
   Зачем: фиксируем принятые решения, инварианты, гейты, изменения метрик и интерпретаций.  
   Где используется: аудит изменений и восстановление причинно-следственной линии.
@@ -80,6 +84,10 @@
 - **REF-CONTRACT-HETERO-AUDIT-V2** — `docs/contracts/hetero_audit.v2.md`  
   Зачем: семантика `audit.neg_controls.gate/slack/verdict` (VALUE-M2).  
   Где используется: оценка качества скоринга и separation facts.
+
+- **REF-CONTRACT-CUSTOMER-TRUTH-V1** — `docs/contracts/customer_truth.v1.md`  
+  Зачем: frozen CSV-контракт “expensive truth labels” для расчёта cost&lift.  
+  Где используется: VALUE-M5-UTILITY-1 (customer/proxy truth → utility report).
 
 ## Отчёты / релиз-заметки
 
