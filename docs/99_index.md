@@ -89,6 +89,10 @@
   Зачем: frozen CSV-контракт “expensive truth labels” для расчёта cost&lift.  
   Где используется: VALUE-M5-UTILITY-1 (customer/proxy truth → utility report).
 
+- **REF-CONTRACT-COST-LIFT-V1** — `docs/contracts/cost_lift.v1.md`  
+  Зачем: frozen контракт `cost_lift.v1` для `cost_lift_report.json` (utility report: cost&lift).  
+  Где используется: VALUE-M5-UTILITY-1 (Claim-2 money proof; uplift + CI + coverage).
+
 ## Отчёты / релиз-заметки
 
 - **REF-REPORTS** — `REPORT.md`, `REPORT_baseline.md`, `REPORT_wsZ1.md`  
