@@ -386,3 +386,23 @@
 - PR: https://github.com/RobertPaulig/Geometric_table/pull/55
 - Merge commit: 021eb815091e390b668622b3f4608e6e4ca0a047
 - CI run (main): https://github.com/RobertPaulig/Geometric_table/actions/runs/20946389319
+
+### 2026-01-13 - VALUE-M5 utility proxy evidence pack (proxy truth + cost&lift)
+- Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/value-utility-proxy-2026-01-13
+- Source commit: 97d1e2e24b31defded76bf74618409eb611d92bc
+- Publish run: https://github.com/RobertPaulig/Geometric_table/actions/runs/20952518490
+- Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/value-utility-proxy-2026-01-13/value_utility_proxy_evidence_pack.zip
+- SHA256(value_utility_proxy_evidence_pack.zip): C1AFC8992DDB88B3528030395D8D1E69DB395C7EE89AA5B902EC300A761A3FD4
+- Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/63 (merge: 6a8b38a1a03870f0266be7a6ba61d6d4d3f99fce)
+- Facts:
+  - rows_total: 200
+  - rows_ok: 60
+  - status_counts: OK=60, SKIP=140, ERROR=0
+  - top_skip_reasons: no_decoys_generated: 140
+  - truth_source: proxy_rule_v1 (deterministic, no-leakage)
+  - utility (K_effective=60; skip_policy=unknown_bucket):
+    - baseline_random_hit_rate: 0.333333 (ci: 0.216667..0.450000)
+    - baseline_score_only_hit_rate: 0.333333 (ci: 0.216667..0.433333)
+    - filtered_hit_rate: 0.500000 (ci: 0.350000..0.675000)
+    - uplift_vs_random: 0.166667
+    - uplift_vs_score_only: 0.166667
