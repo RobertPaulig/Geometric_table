@@ -290,15 +290,15 @@ jobs:
           lines.append(f"    - selection_K_effective: {k_effective}")
           lines.append(
               "    - baseline_random_hit_rate: "
-              f\"{float(m_random['hit_rate']):.6f} (ci: {float(m_random['ci_low']):.6f}..{float(m_random['ci_high']):.6f})\"
+              + f"{float(m_random['hit_rate']):.6f} (ci: {float(m_random['ci_low']):.6f}..{float(m_random['ci_high']):.6f})"
           )
           lines.append(
               "    - baseline_score_only_hit_rate: "
-              f\"{float(m_score['hit_rate']):.6f} (ci: {float(m_score['ci_low']):.6f}..{float(m_score['ci_high']):.6f})\"
+              + f"{float(m_score['hit_rate']):.6f} (ci: {float(m_score['ci_low']):.6f}..{float(m_score['ci_high']):.6f})"
           )
           lines.append(
               "    - filtered_hit_rate: "
-              f\"{float(m_filtered['hit_rate']):.6f} (ci: {float(m_filtered['ci_low']):.6f}..{float(m_filtered['ci_high']):.6f})\"
+              + f"{float(m_filtered['hit_rate']):.6f} (ci: {float(m_filtered['ci_low']):.6f}..{float(m_filtered['ci_high']):.6f})"
           )
           lines.append(f"    - uplift_vs_random: {uplift_vs_random:.6f}")
           lines.append(f"    - uplift_vs_score_only: {uplift_vs_score:.6f}")
