@@ -257,3 +257,37 @@ separation facts (computed on status==OK rows only):
 - Command:
   python scripts/pilot_generate_input.py --out_dir out_pilot --rows 1000 --k_decoys 2 --seed 0
   hetero2-batch --input out_pilot/input.csv --out_dir out_pilot --artifacts light --score_mode external_scores --scores_input out_pilot/scores.json --k_decoys 2 --workers 2 --timeout_s 60 --maxtasksperchild 100 --seed_strategy per_row --seed 0 --zip_pack
+
+## value-utility-proxy-2026-01-13
+
+- Source commit: 97d1e2e24b31defded76bf74618409eb611d92bc
+- Release asset: https://github.com/RobertPaulig/Geometric_table/releases/download/value-utility-proxy-2026-01-13/value_utility_proxy_evidence_pack.zip
+- SHA256(value_utility_proxy_evidence_pack.zip): C1AFC8992DDB88B3528030395D8D1E69DB395C7EE89AA5B902EC300A761A3FD4
+- Truth contract: docs/contracts/customer_truth.v1.md
+- Utility report contract: docs/contracts/cost_lift.v1.md
+- Command:
+  python scripts/pilot_generate_input.py --out_dir out_value_utility_proxy --rows 200 --k_decoys 20 --seed 0 --full_cover_count 3
+  (scores variant) proxy random (seed=0): out_value_utility_proxy/scores_proxy.json
+  python scripts/generate_proxy_truth.py --input_csv out_value_utility_proxy/input.csv --out_csv out_value_utility_proxy/truth.csv
+  hetero2-batch --input out_value_utility_proxy/input.csv --out_dir out_value_utility_proxy --artifacts light --score_mode external_scores --scores_input out_value_utility_proxy/scores_proxy.json --k_decoys 20 --workers 2 --timeout_s 60 --maxtasksperchild 100 --seed_strategy per_row --seed 0 --no_manifest
+  python scripts/cost_lift.py --summary_csv out_value_utility_proxy/summary.csv --truth_csv out_value_utility_proxy/truth.csv --k 10000 --seed 0 --skip_policy unknown_bucket --out out_value_utility_proxy/cost_lift_report.json --bootstrap_n 500
+- Outcome (facts from summary.csv + cost_lift_report.json):
+  - rows_total: 200
+  - rows_ok: 60
+  - scores_coverage.rows_missing_scores_input: 0
+  - status_counts: OK=60, SKIP=140, ERROR=0
+  - top_skip_reasons:
+    - no_decoys_generated: 140
+  - coverage_ok_rate: 0.300000
+  - share_rows_with_n_decoys_gt_0: 0.300000
+  - utility (cost_lift.v1):
+    - truth_source: proxy_rule_v1
+    - truth_schema: customer_truth.v1
+    - skip_policy: unknown_bucket
+    - selection_K_requested: 10000
+    - selection_K_effective: 60
+    - baseline_random_hit_rate: 0.333333 (ci: 0.216667..0.450000)
+    - baseline_score_only_hit_rate: 0.333333 (ci: 0.216667..0.433333)
+    - filtered_hit_rate: 0.500000 (ci: 0.350000..0.675000)
+    - uplift_vs_random: 0.166667
+    - uplift_vs_score_only: 0.166667
