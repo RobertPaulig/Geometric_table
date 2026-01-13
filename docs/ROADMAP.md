@@ -132,7 +132,7 @@ DoD:
 ---
 
 ## VALUE-M5 - Utility (cost&lift) pipeline: proxy truth -> cost_lift_report.json -> release/registry/lineage
-Статус: [ ] planned  [x] in-progress  [ ] done
+Статус: [ ] planned  [ ] in-progress  [x] done
 
 Цель: публиковать utility-артефакт “Claim-2 money proof” (cost&lift на expensive truth) как воспроизводимую цепочку (truth -> report -> pack -> registry -> lineage).
 
@@ -148,6 +148,14 @@ DoD:
 - Quality gates: `ERROR=0`, `scores_coverage.rows_missing_scores_input==0`
 - Истина: Release asset + SHA256 + registry entry + lineage entry
 - Code gates: `ci/test|ci/test-chem|ci/docker` = success на source SHA
+
+Proof:
+- Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/value-utility-proxy-2026-01-13
+- Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/value-utility-proxy-2026-01-13/value_utility_proxy_evidence_pack.zip
+- SHA256(value_utility_proxy_evidence_pack.zip): C1AFC8992DDB88B3528030395D8D1E69DB395C7EE89AA5B902EC300A761A3FD4
+- Publish run: https://github.com/RobertPaulig/Geometric_table/actions/runs/20952518490
+- Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/63 (merge: 6a8b38a1a03870f0266be7a6ba61d6d4d3f99fce)
+- Lineage PR: https://github.com/RobertPaulig/Geometric_table/pull/64 (merge: 85611c948c5cae89acecc468bcd459818ed37d11)
 
 Примечание: uplift/дельты не гейтим (фиксируем как факт в outcome + registry), гейтим только валидность/воспроизводимость/no-leakage.
 
