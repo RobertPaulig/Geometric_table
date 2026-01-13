@@ -1,0 +1,547 @@
+name: publish-value-utility-proxy
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+  statuses: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref to run on (branch, tag, or SHA). Example: main or 9c54b043..."
+        required: true
+        default: "main"
+      tag:
+        description: "Release tag to create/update. Must match: value-utility-proxy-YYYY-MM-DD(-rN)"
+        required: true
+      prerelease:
+        description: "Mark GitHub release as pre-release"
+        required: true
+        default: "true"
+
+jobs:
+  build-pack:
+    runs-on: ubuntu-latest
+    outputs:
+      sha256: ${{ steps.hash.outputs.sha256 }}
+      source_sha: ${{ steps.meta.outputs.source_sha }}
+      asset_url: ${{ steps.meta.outputs.asset_url }}
+      facts_md: ${{ steps.facts.outputs.facts_md }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Validate tag format
+        run: |
+          echo "${{ inputs.tag }}" | grep -E '^value-utility-proxy-[0-9]{4}-[0-9]{2}-[0-9]{2}(-r[0-9]+)?$'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install (dev,chem)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,chem]"
+
+      - name: Generate proxy input (deterministic)
+        run: |
+          python scripts/pilot_generate_input.py \
+            --out_dir out_value_utility_proxy \
+            --rows 200 \
+            --k_decoys 20 \
+            --seed 0 \
+            --full_cover_count 3
+
+      - name: Generate proxy scores variant (hetero_scores.v1; deterministic random)
+        run: |
+          python - << 'PY'
+          import json
+          import random
+          from pathlib import Path
+
+          base_path = Path("out_value_utility_proxy/scores.json")
+          base = json.loads(base_path.read_text(encoding="utf-8"))
+
+          schema_version = str(base.get("schema_version", ""))
+          if schema_version != "hetero_scores.v1":
+              raise ValueError(f"expected schema_version=hetero_scores.v1, got {schema_version!r}")
+
+          rng = random.Random(0)
+
+          proxy = json.loads(json.dumps(base))
+          proxy["original"]["score"] = float(rng.random())
+          for decoy in proxy.get("decoys", {}).values():
+              decoy["score"] = float(rng.random())
+
+          out_path = Path("out_value_utility_proxy/scores_proxy.json")
+          out_path.write_text(json.dumps(proxy, indent=2), encoding="utf-8")
+          print(f"Wrote {out_path}")
+          PY
+
+      - name: Generate proxy truth (customer_truth.v1; proxy_rule_v1)
+        run: |
+          python scripts/generate_proxy_truth.py \
+            --input_csv out_value_utility_proxy/input.csv \
+            --out_csv out_value_utility_proxy/truth.csv
+
+      - name: Run hetero2-batch (light; no_manifest; no zip yet)
+        run: |
+          hetero2-batch \
+            --input out_value_utility_proxy/input.csv \
+            --out_dir out_value_utility_proxy \
+            --artifacts light \
+            --score_mode external_scores \
+            --scores_input out_value_utility_proxy/scores_proxy.json \
+            --k_decoys 20 \
+            --workers 2 \
+            --timeout_s 60 \
+            --maxtasksperchild 100 \
+            --seed_strategy per_row \
+            --seed 0 \
+            --no_manifest
+
+      - name: Compute cost&lift utility report (cost_lift.v1)
+        run: |
+          python scripts/cost_lift.py \
+            --summary_csv out_value_utility_proxy/summary.csv \
+            --truth_csv out_value_utility_proxy/truth.csv \
+            --k 10000 \
+            --seed 0 \
+            --skip_policy unknown_bucket \
+            --out out_value_utility_proxy/cost_lift_report.json \
+            --bootstrap_n 500
+
+      - name: Rebuild manifest/checksums/zip (include truth.csv + cost_lift_report.json)
+        run: |
+          python - << 'PY'
+          import json
+          from pathlib import Path
+
+          from hetero2 import batch as hetero2_batch
+
+          out_dir = Path("out_value_utility_proxy")
+          metrics_path = out_dir / "metrics.json"
+          scores_input = out_dir / "scores_proxy.json"
+
+          required = [out_dir / "truth.csv", out_dir / "cost_lift_report.json", out_dir / "summary.csv", metrics_path, out_dir / "index.md"]
+          missing = [str(p) for p in required if not p.exists()]
+          if missing:
+              raise AssertionError(f"missing required files before repack: {missing}")
+
+          metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+          cfg = metrics.get("config", {}) if isinstance(metrics.get("config", {}), dict) else {}
+
+          seed_strategy = str(cfg.get("seed_strategy", "per_row"))
+          seed = int(cfg.get("seed", 0))
+          score_mode = str(cfg.get("score_mode", "external_scores"))
+          guardrails_max_atoms = int(cfg.get("guardrails_max_atoms", 200))
+          guardrails_require_connected = bool(cfg.get("guardrails_require_connected", True))
+          scores_prov = hetero2_batch._scores_provenance(str(scores_input))
+
+          file_infos = hetero2_batch._compute_file_infos(out_dir, skip_names={"manifest.json", "checksums.sha256", "evidence_pack.zip"})
+          manifest_files = list(file_infos)
+          manifest_files.append({"path": "./manifest.json", "size_bytes": None, "sha256": None})
+          manifest_files.append(
+              {
+                  "path": "./metrics.json",
+                  "size_bytes": metrics_path.stat().st_size,
+                  "sha256": hetero2_batch._sha256_of_file(metrics_path),
+              }
+          )
+
+          hetero2_batch._write_manifest(
+              out_dir,
+              seed=seed,
+              seed_strategy=seed_strategy,
+              score_mode=score_mode,
+              scores_provenance=scores_prov,
+              guardrails_max_atoms=guardrails_max_atoms,
+              guardrails_require_connected=guardrails_require_connected,
+              files=manifest_files,
+          )
+
+          file_infos_final = hetero2_batch._compute_file_infos(out_dir, skip_names={"checksums.sha256", "evidence_pack.zip"})
+          hetero2_batch._write_checksums(out_dir, file_infos_final)
+          hetero2_batch._write_zip_pack(out_dir)
+          print("Gate OK: evidence_pack.zip rebuilt with truth.csv + cost_lift_report.json")
+          PY
+
+      - name: Validate zip (no unpack)
+        run: |
+          python -m zipfile -t out_value_utility_proxy/evidence_pack.zip
+          python -m zipfile -l out_value_utility_proxy/evidence_pack.zip | grep -E "manifest.json|checksums.sha256|metrics.json|index.md|summary.csv|truth.csv|cost_lift_report.json"
+
+      - name: Prepare asset
+        run: |
+          cp out_value_utility_proxy/evidence_pack.zip out_value_utility_proxy/value_utility_proxy_evidence_pack.zip
+
+      - name: Compute facts (summary.csv + cost_lift_report.json)
+        id: facts
+        run: |
+          python - << 'PY'
+          import csv
+          import json
+          import os
+          from collections import Counter
+          from pathlib import Path
+
+          out_dir = Path("out_value_utility_proxy")
+
+          metrics = json.loads((out_dir / "metrics.json").read_text(encoding="utf-8"))
+          counts = metrics.get("counts", {}) if isinstance(metrics.get("counts", {}), dict) else {}
+          scores_coverage = metrics.get("scores_coverage", {}) if isinstance(metrics.get("scores_coverage", {}), dict) else {}
+
+          rows_missing_scores_input = scores_coverage.get("rows_missing_scores_input", None)
+          if rows_missing_scores_input is not None:
+              rows_missing_scores_input = int(rows_missing_scores_input)
+
+          summary_rows = list(csv.DictReader((out_dir / "summary.csv").read_text(encoding="utf-8").splitlines()))
+          total = len(summary_rows)
+          status_counts = Counter((str(r.get("status", "")).strip() or "UNKNOWN") for r in summary_rows)
+
+          skip_reasons = Counter(
+              (str(r.get("reason", "")).strip() or "UNKNOWN")
+              for r in summary_rows
+              if str(r.get("status", "")).strip() == "SKIP" and str(r.get("reason", "")).strip()
+          )
+          top_skip = skip_reasons.most_common(5)
+
+          rows_with_decoys = 0
+          for r in summary_rows:
+              raw = str(r.get("n_decoys", "")).strip()
+              try:
+                  n_decoys = int(raw) if raw else 0
+              except ValueError:
+                  n_decoys = 0
+              if n_decoys > 0:
+                  rows_with_decoys += 1
+          share_decoys = (rows_with_decoys / total) if total else 0.0
+
+          truth_rows = list(csv.DictReader((out_dir / "truth.csv").read_text(encoding="utf-8").splitlines()))
+          if not truth_rows:
+              raise AssertionError("truth.csv has no rows")
+          required_truth_cols = {"molecule_id", "expensive_label", "truth_source", "truth_version"}
+          missing_cols = [c for c in sorted(required_truth_cols) if c not in truth_rows[0]]
+          if missing_cols:
+              raise AssertionError(f"truth.csv missing required columns: {missing_cols}")
+          truth_sources = {str(r.get("truth_source", "")).strip() for r in truth_rows}
+          truth_versions = {str(r.get("truth_version", "")).strip() for r in truth_rows}
+          if truth_sources != {"proxy_rule_v1"}:
+              raise AssertionError(f"unexpected truth_source set: {sorted(truth_sources)}")
+          if truth_versions != {"customer_truth.v1"}:
+              raise AssertionError(f"unexpected truth_version set: {sorted(truth_versions)}")
+
+          report = json.loads((out_dir / "cost_lift_report.json").read_text(encoding="utf-8"))
+          if report.get("report_schema") != "cost_lift.v1":
+              raise AssertionError(f"unexpected report_schema: {report.get('report_schema')!r}")
+          if report.get("truth_schema") != "customer_truth.v1":
+              raise AssertionError(f"unexpected truth_schema: {report.get('truth_schema')!r}")
+          if report.get("skip_policy") != "unknown_bucket":
+              raise AssertionError(f"unexpected skip_policy: {report.get('skip_policy')!r}")
+
+          methods = report.get("methods", {})
+          for name in ["baseline_random", "baseline_score_only_topk", "filtered_score_plus_audit_topk"]:
+              if name not in methods:
+                  raise AssertionError(f"missing method in cost_lift_report.json: {name}")
+              for key in ["k_effective", "hits", "hit_rate", "ci_low", "ci_high"]:
+                  if key not in methods[name]:
+                      raise AssertionError(f"missing methods.{name}.{key} in cost_lift_report.json")
+
+          uplift_vs_score = float(report.get("uplift_score_plus_audit_vs_score_only"))
+          uplift_vs_random = float(report.get("uplift_score_plus_audit_vs_random"))
+
+          k_requested = int(report.get("K_requested"))
+          k_effective = int(report.get("K_effective"))
+          n_ok = int(report.get("N_ok"))
+          coverage_ok_rate = (n_ok / total) if total else 0.0
+
+          m_random = methods["baseline_random"]
+          m_score = methods["baseline_score_only_topk"]
+          m_filtered = methods["filtered_score_plus_audit_topk"]
+
+          lines = []
+          lines.append(f"  - rows_total: {total}")
+          lines.append(f"  - rows_ok: {status_counts.get('OK', 0)}")
+          lines.append(f"  - scores_coverage.rows_missing_scores_input: {rows_missing_scores_input}")
+          lines.append(
+              "  - status_counts: "
+              f"OK={status_counts.get('OK', 0)}, SKIP={status_counts.get('SKIP', 0)}, ERROR={status_counts.get('ERROR', 0)}"
+          )
+          if top_skip:
+              lines.append("  - top_skip_reasons:")
+              for reason, cnt in top_skip:
+                  lines.append(f"    - {reason}: {cnt}")
+          else:
+              lines.append("  - top_skip_reasons: (none)")
+          lines.append(f"  - coverage_ok_rate: {coverage_ok_rate:.6f}")
+          lines.append(f"  - share_rows_with_n_decoys_gt_0: {share_decoys:.6f}")
+
+          lines.append("  - utility (cost_lift.v1):")
+          lines.append("    - truth_source: proxy_rule_v1")
+          lines.append("    - truth_schema: customer_truth.v1")
+          lines.append("    - skip_policy: unknown_bucket")
+          lines.append(f"    - selection_K_requested: {k_requested}")
+          lines.append(f"    - selection_K_effective: {k_effective}")
+          lines.append(
+              "    - baseline_random_hit_rate: "
+              f\"{float(m_random['hit_rate']):.6f} (ci: {float(m_random['ci_low']):.6f}..{float(m_random['ci_high']):.6f})\"
+          )
+          lines.append(
+              "    - baseline_score_only_hit_rate: "
+              f\"{float(m_score['hit_rate']):.6f} (ci: {float(m_score['ci_low']):.6f}..{float(m_score['ci_high']):.6f})\"
+          )
+          lines.append(
+              "    - filtered_hit_rate: "
+              f\"{float(m_filtered['hit_rate']):.6f} (ci: {float(m_filtered['ci_low']):.6f}..{float(m_filtered['ci_high']):.6f})\"
+          )
+          lines.append(f"    - uplift_vs_random: {uplift_vs_random:.6f}")
+          lines.append(f"    - uplift_vs_score_only: {uplift_vs_score:.6f}")
+
+          facts_md = \"\\n\".join(lines) + \"\\n\"
+          (out_dir / \"value_utility_proxy_facts.md\").write_text(facts_md, encoding=\"utf-8\")
+          print(facts_md)
+
+          gh_out = os.environ.get(\"GITHUB_OUTPUT\")
+          if gh_out:
+              with open(gh_out, \"a\", encoding=\"utf-8\") as f:
+                  f.write(\"facts_md<<EOF\\n\")
+                  f.write(facts_md)
+                  f.write(\"EOF\\n\")
+          PY
+
+      - name: Compute SHA256
+        id: hash
+        run: |
+          SHA256=$(sha256sum out_value_utility_proxy/value_utility_proxy_evidence_pack.zip | awk '{print toupper($1)}')
+          echo "sha256=$SHA256" >> "$GITHUB_OUTPUT"
+          echo "$SHA256  value_utility_proxy_evidence_pack.zip" > out_value_utility_proxy/value_utility_proxy_evidence_pack.zip.sha256
+
+      - name: Write release notes
+        run: |
+          cat > release_notes.md << 'EOF'
+          VALUE-M5 utility evidence pack (proxy truth; cost&lift report)
+
+          - Truth contract: docs/contracts/customer_truth.v1.md
+          - Utility report contract: docs/contracts/cost_lift.v1.md
+          - Source ref: ${{ inputs.ref }}
+          - Input generation:
+            python scripts/pilot_generate_input.py --out_dir out_value_utility_proxy --rows 200 --k_decoys 20 --seed 0 --full_cover_count 3
+          - Scores variant:
+            hetero_scores.v1 random proxy (seed=0) -> out_value_utility_proxy/scores_proxy.json
+          - Proxy truth (no-leakage, deterministic):
+            python scripts/generate_proxy_truth.py --input_csv out_value_utility_proxy/input.csv --out_csv out_value_utility_proxy/truth.csv
+          - Batch (repro):
+            hetero2-batch --input out_value_utility_proxy/input.csv --out_dir out_value_utility_proxy --artifacts light --score_mode external_scores --scores_input out_value_utility_proxy/scores_proxy.json --k_decoys 20 --workers 2 --timeout_s 60 --maxtasksperchild 100 --seed_strategy per_row --seed 0 --no_manifest
+          - Utility report:
+            python scripts/cost_lift.py --summary_csv out_value_utility_proxy/summary.csv --truth_csv out_value_utility_proxy/truth.csv --k 10000 --seed 0 --skip_policy unknown_bucket --out out_value_utility_proxy/cost_lift_report.json --bootstrap_n 500
+          - Pack: summary.csv, metrics.json, index.md, manifest.json, checksums.sha256, truth.csv, cost_lift_report.json, value_utility_proxy_evidence_pack.zip
+          - SHA256(value_utility_proxy_evidence_pack.zip): ${{ steps.hash.outputs.sha256 }}
+          - Outcome (facts from summary.csv + cost_lift_report.json):
+          ${{ steps.facts.outputs.facts_md }}
+          EOF
+
+      - name: Prepare meta (asset URL, source SHA)
+        id: meta
+        run: |
+          SOURCE_SHA=$(git rev-parse HEAD)
+          echo "source_sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
+          ASSET_URL="https://github.com/${{ github.repository }}/releases/download/${{ inputs.tag }}/value_utility_proxy_evidence_pack.zip"
+          echo "asset_url=$ASSET_URL" >> "$GITHUB_OUTPUT"
+
+      - name: "Gate: ERROR must be 0"
+        run: |
+          python - << 'PY'
+          import json
+
+          m = json.load(open("out_value_utility_proxy/metrics.json", "r", encoding="utf-8"))
+          err = int(m.get("counts", {}).get("ERROR", 0))
+          assert err == 0, f"Gate-Utility-Proxy failed: ERROR={err}"
+
+          scores_coverage = m.get("scores_coverage", None)
+          if not isinstance(scores_coverage, dict):
+              raise AssertionError("Gate-Utility-Proxy failed: missing scores_coverage in metrics.json")
+          if "rows_missing_scores_input" not in scores_coverage:
+              raise AssertionError("Gate-Utility-Proxy failed: missing scores_coverage.rows_missing_scores_input in metrics.json")
+          missing = int(scores_coverage["rows_missing_scores_input"])
+          assert missing == 0, f"Gate-Utility-Proxy failed: rows_missing_scores_input={missing} (expected 0)"
+
+          print("Gate OK: ERROR=0")
+          print("Gate OK: rows_missing_scores_input=0")
+          PY
+
+      - name: Upload build artifact (zip)
+        uses: actions/upload-artifact@v4
+        with:
+          name: value-utility-proxy-evidence-pack
+          path: |
+            out_value_utility_proxy/value_utility_proxy_evidence_pack.zip
+            out_value_utility_proxy/value_utility_proxy_evidence_pack.zip.sha256
+            out_value_utility_proxy/value_utility_proxy_facts.md
+            release_notes.md
+
+  publish-release:
+    needs: build-pack
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: value-utility-proxy-evidence-pack
+          path: .
+
+      - name: "Gate: required CI contexts must be success"
+        env:
+          SOURCE_SHA: ${{ needs.build-pack.outputs.source_sha }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python - << 'PY'
+          import json
+          import os
+          import sys
+          import urllib.request
+
+          repo = os.environ["GITHUB_REPOSITORY"]
+          sha = os.environ["SOURCE_SHA"]
+          token = os.environ["GITHUB_TOKEN"]
+
+          url = f"https://api.github.com/repos/{repo}/commits/{sha}/status"
+          req = urllib.request.Request(
+              url,
+              headers={
+                  "Authorization": f"token {token}",
+                  "Accept": "application/vnd.github+json",
+              },
+          )
+          with urllib.request.urlopen(req) as resp:
+              data = json.load(resp)
+
+          latest_by_context = {}
+          for st in data.get("statuses", []):
+              ctx = st.get("context", "")
+              if ctx and ctx not in latest_by_context:
+                  latest_by_context[ctx] = st.get("state", "")
+
+          required = ["ci/test", "ci/test-chem", "ci/docker"]
+          missing = [c for c in required if c not in latest_by_context]
+          bad = [c for c in required if latest_by_context.get(c) != "success"]
+
+          if missing or bad:
+              print("Gate-Required-Contexts failed")
+              print(f"source_sha={sha}")
+              print(f"missing={missing}")
+              print("states=" + json.dumps({c: latest_by_context.get(c) for c in required}, indent=2, sort_keys=True))
+              sys.exit(1)
+
+          print("Gate OK: required contexts success")
+          print(f"source_sha={sha}")
+          for c in required:
+              print(f"{c}=success")
+          PY
+
+      - name: Create/Update GitHub Release + upload asset
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag }}
+          target_commitish: ${{ needs.build-pack.outputs.source_sha }}
+          name: "VALUE-M5 utility evidence pack (proxy truth)"
+          body_path: release_notes.md
+          prerelease: ${{ inputs.prerelease }}
+          files: |
+            out_value_utility_proxy/value_utility_proxy_evidence_pack.zip
+            out_value_utility_proxy/value_utility_proxy_evidence_pack.zip.sha256
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  registry-pr:
+    needs: [build-pack, publish-release]
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: "main"
+
+      - name: Update artefacts registry (append)
+        run: |
+          mkdir -p docs
+          FILE="docs/artefacts_registry.md"
+          if [ ! -f "$FILE" ]; then
+            echo "# Artefacts Registry" > "$FILE"
+            echo "" >> "$FILE"
+          fi
+
+          cat >> "$FILE" << EOF
+
+          ## ${{ inputs.tag }}
+
+          - Source commit: ${{ needs.build-pack.outputs.source_sha }}
+          - Release asset: ${{ needs.build-pack.outputs.asset_url }}
+          - SHA256(value_utility_proxy_evidence_pack.zip): ${{ needs.build-pack.outputs.sha256 }}
+          - Truth contract: docs/contracts/customer_truth.v1.md
+          - Utility report contract: docs/contracts/cost_lift.v1.md
+          - Command:
+            python scripts/pilot_generate_input.py --out_dir out_value_utility_proxy --rows 200 --k_decoys 20 --seed 0 --full_cover_count 3
+            (scores variant) proxy random (seed=0): out_value_utility_proxy/scores_proxy.json
+            python scripts/generate_proxy_truth.py --input_csv out_value_utility_proxy/input.csv --out_csv out_value_utility_proxy/truth.csv
+            hetero2-batch --input out_value_utility_proxy/input.csv --out_dir out_value_utility_proxy --artifacts light --score_mode external_scores --scores_input out_value_utility_proxy/scores_proxy.json --k_decoys 20 --workers 2 --timeout_s 60 --maxtasksperchild 100 --seed_strategy per_row --seed 0 --no_manifest
+            python scripts/cost_lift.py --summary_csv out_value_utility_proxy/summary.csv --truth_csv out_value_utility_proxy/truth.csv --k 10000 --seed 0 --skip_policy unknown_bucket --out out_value_utility_proxy/cost_lift_report.json --bootstrap_n 500
+          - Outcome (facts from summary.csv + cost_lift_report.json):
+          ${{ needs.build-pack.outputs.facts_md }}
+          EOF
+
+      - name: Create PR with registry update
+        id: registry_cpr
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: "automation/artefact-${{ inputs.tag }}"
+          title: "Add artefact registry entry for ${{ inputs.tag }}"
+          commit-message: "docs: add artefact registry entry for ${{ inputs.tag }}"
+          body: |
+            Automated update: appended artefact entry after publishing VALUE-M5 utility proxy release asset.
+          base: "main"
+          add-paths: |
+            docs/artefacts_registry.md
+
+      - name: Trigger CI (pytest workflow_dispatch) for automation PR branch
+        if: steps.registry_cpr.outputs.pull-request-url != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          BRANCH: "automation/artefact-${{ inputs.tag }}"
+          PR_URL: ${{ steps.registry_cpr.outputs.pull-request-url }}
+        run: |
+          set -euo pipefail
+          echo "Automation PR: $PR_URL"
+          echo "Triggering pytest workflow on branch: $BRANCH"
+
+          gh workflow run pytest.yml --ref "$BRANCH" --repo "$REPO"
+
+          RUN_ID=""
+          for i in $(seq 1 30); do
+            RUN_ID=$(gh run list --workflow pytest.yml --branch "$BRANCH" --event workflow_dispatch --limit 1 --json databaseId --jq '.[0].databaseId' --repo "$REPO" 2>/dev/null || true)
+            if [ -n "$RUN_ID" ] && [ "$RUN_ID" != "null" ]; then
+              break
+            fi
+            sleep 2
+          done
+
+          if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
+            echo "ERROR: failed to locate dispatched pytest run"
+            gh run list --workflow pytest.yml --branch "$BRANCH" --limit 5 --repo "$REPO" || true
+            exit 1
+          fi
+
+          RUN_URL=$(gh run view "$RUN_ID" --json url --jq '.url' --repo "$REPO")
+          TESTED_SHA=$(gh run view "$RUN_ID" --json headSha --jq '.headSha' --repo "$REPO")
+          echo "pytest run url: $RUN_URL"
+          echo "tested_sha: $TESTED_SHA"
+
+          gh run watch "$RUN_ID" --exit-status --repo "$REPO"
