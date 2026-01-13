@@ -380,3 +380,9 @@
   - share_rows_with_n_decoys_gt_0: 0.300 (30.0%)
   - median_slack: 0.000000
   - pass_rate: 0.666667
+
+### 2026-01-13 - CORE-UTILITY-1: customer truth contract + cost&lift report (VALUE-M5 utility baseline)
+- What: added `docs/contracts/customer_truth.v1.md`; added `scripts/cost_lift.py` (outputs `cost_lift_report.json` / schema `cost_lift.v1`); added guardrail test `tests/test_cost_lift_report_contract.py`; added refs in `docs/99_index.md`.
+- PR: https://github.com/RobertPaulig/Geometric_table/pull/55
+- Merge commit: 021eb815091e390b668622b3f4608e6e4ca0a047
+- CI run (main): https://github.com/RobertPaulig/Geometric_table/actions/runs/20946389319
