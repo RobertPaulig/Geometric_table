@@ -291,3 +291,40 @@ separation facts (computed on status==OK rows only):
     - filtered_hit_rate: 0.500000 (ci: 0.350000..0.675000)
     - uplift_vs_random: 0.166667
     - uplift_vs_score_only: 0.166667
+
+## value-utility-realtruth-2026-01-14-r1
+
+- Source commit: 72720901439cc5f3e2b559f5e606568a8d40bece
+- Release asset: https://github.com/RobertPaulig/Geometric_table/releases/download/value-utility-realtruth-2026-01-14-r1/value_utility_realtruth_evidence_pack.zip
+- SHA256(value_utility_realtruth_evidence_pack.zip): 65A00E8879B9B03BF558F630C85EABFC0C285C1B8DF3635D231B4A90DD7D816B
+- Truth contract: docs/contracts/customer_truth.v1.md
+- Utility report contract: docs/contracts/cost_lift.v1.md
+- Command:
+  python scripts/pilot_generate_input.py --out_dir out_value_utility_realtruth --rows 200 --k_decoys 20 --seed 0 --full_cover_count 3
+  (scores variant) random proxy (seed=0): out_value_utility_realtruth/scores_proxy.json
+  (external truth) truth_url: https://api.github.com/repos/RobertPaulig/Geometric_table/releases/assets/340297819
+  (external truth) truth_sha256: 1403593FC0497E19CA2A8DD78B5BC6DEE88790F809AED0FA47F6F0744198C2A2
+  hetero2-batch --input out_value_utility_realtruth/input.csv --out_dir out_value_utility_realtruth --artifacts light --score_mode external_scores --scores_input out_value_utility_realtruth/scores_proxy.json --k_decoys 20 --workers 2 --timeout_s 60 --maxtasksperchild 100 --seed_strategy per_row --seed 0 --no_manifest
+  python scripts/cost_lift.py --summary_csv out_value_utility_realtruth/summary.csv --truth_csv out_value_utility_realtruth/truth.csv --k 10000 --seed 0 --skip_policy unknown_bucket --out out_value_utility_realtruth/cost_lift_report.json --bootstrap_n 500
+- Outcome (facts from summary.csv + cost_lift_report.json):
+  - rows_total: 200
+  - rows_ok: 60
+  - scores_coverage.rows_missing_scores_input: 0
+  - truth_url: https://api.github.com/repos/RobertPaulig/Geometric_table/releases/assets/340297819
+  - truth_csv_sha256: 1403593FC0497E19CA2A8DD78B5BC6DEE88790F809AED0FA47F6F0744198C2A2
+  - status_counts: OK=60, SKIP=140, ERROR=0
+  - top_skip_reasons:
+    - no_decoys_generated: 140
+  - coverage_ok_rate: 0.300000
+  - share_rows_with_n_decoys_gt_0: 0.300000
+  - utility (cost_lift.v1):
+    - truth_source: external
+    - truth_schema: customer_truth.v1
+    - skip_policy: unknown_bucket
+    - selection_K_requested: 10000
+    - selection_K_effective: 60
+    - baseline_random_hit_rate: 0.066667 (ci: 0.016667..0.133333)
+    - baseline_score_only_hit_rate: 0.066667 (ci: 0.016667..0.133333)
+    - filtered_hit_rate: 0.075000 (ci: 0.000000..0.150000)
+    - uplift_vs_random: 0.008333
+    - uplift_vs_score_only: 0.008333
