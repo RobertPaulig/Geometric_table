@@ -406,3 +406,28 @@
     - filtered_hit_rate: 0.500000 (ci: 0.350000..0.675000)
     - uplift_vs_random: 0.166667
     - uplift_vs_score_only: 0.166667
+
+### 2026-01-14 - VALUE-M6: utility real-truth ingest evidence pack (external truth.csv + sha256)
+- Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/value-utility-realtruth-2026-01-14-r1
+- Source commit: 72720901439cc5f3e2b559f5e606568a8d40bece
+- Publish run: https://github.com/RobertPaulig/Geometric_table/actions/runs/20983871401
+- truth.csv (customer_truth.v1):
+  - truth_url: https://api.github.com/repos/RobertPaulig/Geometric_table/releases/assets/340297819
+  - SHA256(truth.csv): 1403593FC0497E19CA2A8DD78B5BC6DEE88790F809AED0FA47F6F0744198C2A2
+  - truth_source: external (PASS=11, FAIL=189)
+- Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/value-utility-realtruth-2026-01-14-r1/value_utility_realtruth_evidence_pack.zip
+- SHA256(value_utility_realtruth_evidence_pack.zip): 65A00E8879B9B03BF558F630C85EABFC0C285C1B8DF3635D231B4A90DD7D816B
+- Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/71 (merge: bc7c45d771a16bc8b387e11bcdaac1c18fe79207)
+- Facts:
+  - rows_total: 200
+  - rows_ok: 60
+  - scores_coverage.rows_missing_scores_input: 0
+  - status_counts: OK=60, SKIP=140, ERROR=0
+  - top_skip_reasons: no_decoys_generated: 140
+  - share_rows_with_n_decoys_gt_0: 0.300 (30.0%)
+  - utility (skip_policy=unknown_bucket; K_requested=10000; K_effective=60; N_with_truth=60):
+    - baseline_random_hit_rate: 0.066667 (ci: 0.016667..0.133333)
+    - baseline_score_only_hit_rate: 0.066667 (ci: 0.016667..0.133333)
+    - filtered_hit_rate: 0.075000 (ci: 0.000000..0.150000; k_effective=40)
+    - uplift_vs_random: 0.008333
+    - uplift_vs_score_only: 0.008333
