@@ -191,7 +191,7 @@ Proof:
 - Lineage PR: https://github.com/RobertPaulig/Geometric_table/pull/72 (merge: 207affa63f7b246b9dd5ac2a52aa8cd6b4d9b27c)
 
 ## VALUE-M7 - REAL-SCORES-INGEST-1: external scores.json (hetero_scores.v1) -> utility pack (pinned by sha256)
-Статус: [ ] planned  [x] in-progress  [ ] done
+Статус: [ ] planned  [ ] in-progress  [x] done
 
 Цель: сделать ingest внешних raw scores (frozen `hetero_scores.v1`) как "истину загрузки": `scores_url + scores_sha256`, без генерации scores внутри workflow, с тем же конвейером utility-артефакта (truth -> cost_lift -> pack -> release -> registry -> lineage).
 
@@ -208,6 +208,22 @@ DoD:
 - Quality gates: `ERROR=0`, `scores_coverage.rows_missing_scores_input==0`
 - Истина: Release asset + SHA256 + registry entry + lineage entry
 - Code gates: `ci/test|ci/test-chem|ci/docker` = success на source SHA
+
+Proof:
+- Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/value-utility-realtruth-2026-01-14-r2
+- Source commit: 4b89a5a464bdc5e547649dd610ee8af24b250368
+- Publish run: https://github.com/RobertPaulig/Geometric_table/actions/runs/20997753050
+- scores.json (hetero_scores.v1; external):
+  - scores_url: https://api.github.com/repos/RobertPaulig/Geometric_table/releases/assets/340466779
+  - SHA256(scores.json): 19F08F234C438515A37B6CB0B95040C74191BC2C383EAFD6CF6EFF9B26A3F168
+  - score_key: external_ci_rule_v1
+- truth.csv (customer_truth.v1):
+  - truth_url: https://api.github.com/repos/RobertPaulig/Geometric_table/releases/assets/340297819
+  - SHA256(truth.csv): 1403593FC0497E19CA2A8DD78B5BC6DEE88790F809AED0FA47F6F0744198C2A2
+- Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/value-utility-realtruth-2026-01-14-r2/value_utility_realtruth_evidence_pack.zip
+- SHA256(value_utility_realtruth_evidence_pack.zip): 18E54A8CDE6550DCE9E965711189331E8D0F05DA44C6A4CAB5A5A8FEED64D5B9
+- Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/75 (merge: 43c56a13349452ccc0af80e0853f1d3abb7c55d1)
+- Lineage PR: https://github.com/RobertPaulig/Geometric_table/pull/76 (merge: 8029baf6df12236d99e778845748e40058706272)
 
 ---
 
