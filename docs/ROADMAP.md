@@ -190,9 +190,28 @@ Proof:
 - Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/71 (merge: bc7c45d771a16bc8b387e11bcdaac1c18fe79207)
 - Lineage PR: https://github.com/RobertPaulig/Geometric_table/pull/72 (merge: 207affa63f7b246b9dd5ac2a52aa8cd6b4d9b27c)
 
+## VALUE-M7 - REAL-SCORES-INGEST-1: external scores.json (hetero_scores.v1) -> utility pack (pinned by sha256)
+Статус: [ ] planned  [x] in-progress  [ ] done
+
+Цель: сделать ingest внешних raw scores (frozen `hetero_scores.v1`) как "истину загрузки": `scores_url + scores_sha256`, без генерации scores внутри workflow, с тем же конвейером utility-артефакта (truth -> cost_lift -> pack -> release -> registry -> lineage).
+
+Scope (v1):
+- scores приходят снаружи (не генерируются в workflow) и проходят строгую верификацию загрузки: scores_url + scores_sha256
+- scores.json валиден по `hetero_scores.v1` (schema_version + required fields); score_key (если присутствует) фиксируется как факт в outcome
+- внешний scores-файл кладём в evidence pack и фиксируем provenance (manifest/checksums + release notes + registry outcome)
+
+DoD:
+- workflow `publish_value_utility_realtruth.yml` поддерживает optional `scores_url/scores_sha256` и при наличии печатает:
+  - `Gate OK: scores.json downloaded + sha256 verified + hetero_scores.v1 validated`
+- batch использует внешний `--scores_input` (а не proxy scores)
+- evidence_pack.zip содержит `truth.csv`, `cost_lift_report.json`, и внешний scores-файл (например `scores_external.json`)
+- Quality gates: `ERROR=0`, `scores_coverage.rows_missing_scores_input==0`
+- Истина: Release asset + SHA256 + registry entry + lineage entry
+- Code gates: `ci/test|ci/test-chem|ci/docker` = success на source SHA
+
 ---
 
-## Как это превращается в реальные “вехи-факты” через ваши workflows (без нового велосипеда)
+## Как это превращается в реальные "вехи-факты" через ваши workflows (без нового велосипеда)
 
 Вы уже умеете делать “истину” через publish workflow:
 

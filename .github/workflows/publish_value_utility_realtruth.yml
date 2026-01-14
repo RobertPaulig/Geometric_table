@@ -26,6 +26,14 @@ on:
       truth_sha256:
         description: "Expected SHA256 (64 hex chars) for truth.csv downloaded from truth_url"
         required: true
+      scores_url:
+        description: "Optional URL to external scores.json (hetero_scores.v1). If empty, workflow uses deterministic proxy scores."
+        required: false
+        default: ""
+      scores_sha256:
+        description: "Expected SHA256 (64 hex chars) for scores.json downloaded from scores_url (required if scores_url is set)"
+        required: false
+        default: ""
       selection_k:
         description: "Selection budget K for cost_lift_report.json"
         required: true
@@ -57,6 +65,14 @@ jobs:
         run: |
           echo "${{ inputs.selection_k }}" | grep -E '^[0-9]+$'
           echo "${{ inputs.skip_policy }}" | grep -E '^unknown_bucket$'
+          if [ -n "${{ inputs.scores_url }}" ]; then
+            echo "${{ inputs.scores_sha256 }}" | grep -E '^[0-9a-fA-F]{64}$'
+          else
+            if [ -n "${{ inputs.scores_sha256 }}" ]; then
+              echo "ERROR: scores_sha256 provided but scores_url is empty" >&2
+              exit 1
+            fi
+          fi
 
       - uses: actions/setup-python@v5
         with:
@@ -101,6 +117,116 @@ jobs:
           out_path = Path("out_value_utility_realtruth/scores_proxy.json")
           out_path.write_text(json.dumps(proxy, indent=2), encoding="utf-8")
           print(f"Wrote {out_path}")
+          PY
+
+      - name: Download external scores (hetero_scores.v1; sha256 pinned)
+        if: ${{ inputs.scores_url != '' }}
+        env:
+          SCORES_URL: ${{ inputs.scores_url }}
+          SCORES_SHA256: ${{ inputs.scores_sha256 }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python - << 'PY'
+          import hashlib
+          import json
+          import os
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+          from pathlib import Path
+
+          url = (os.environ.get("SCORES_URL") or "").strip()
+          expected = (os.environ.get("SCORES_SHA256") or "").strip().lower()
+
+          if not url:
+              raise SystemExit("scores_url is empty")
+          if len(expected) != 64 or any(c not in "0123456789abcdef" for c in expected):
+              raise SystemExit(f"invalid scores_sha256 (expected 64 hex chars): {expected!r}")
+
+          out_dir = Path("out_value_utility_realtruth")
+          out_dir.mkdir(parents=True, exist_ok=True)
+          dest = out_dir / "scores_external.json"
+
+          parsed = urllib.parse.urlparse(url)
+          if parsed.scheme not in {"https"}:
+              raise SystemExit(f"scores_url must be https, got scheme={parsed.scheme!r}")
+          host = (parsed.hostname or "").strip().lower()
+          if not host:
+              raise SystemExit(f"scores_url has no hostname: {url!r}")
+
+          auth_allowlist = {"github.com", "raw.githubusercontent.com", "api.github.com"}
+          allow_auth_header = host in auth_allowlist
+
+          headers = {"User-Agent": "publish-value-utility-realtruth"}
+          token = (os.environ.get("GITHUB_TOKEN") or "").strip()
+          send_auth_header = bool(token) and allow_auth_header and host in {"raw.githubusercontent.com", "api.github.com"}
+          if token and host == "github.com":
+              print("Auth header disabled for scores_url host github.com; downloading without Authorization")
+          elif send_auth_header:
+              headers["Authorization"] = f"token {token}"
+              headers["Accept"] = "application/octet-stream"
+              print(f"Auth header enabled for scores_url host: {host}")
+          elif token and not allow_auth_header:
+              print(f"WARNING: scores_url host not allowed for auth header: {host}; downloading without Authorization")
+
+          class SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, req, fp, code, msg, hdrs, newurl):
+                  new_req = super().redirect_request(req, fp, code, msg, hdrs, newurl)
+                  if new_req is None:
+                      return None
+                  new_host = (urllib.parse.urlparse(new_req.full_url).hostname or "").strip().lower()
+                  if "Authorization" in getattr(new_req, "headers", {}) and new_host not in auth_allowlist:
+                      new_req.headers.pop("Authorization", None)
+                  if hasattr(new_req, "unredirected_hdrs") and "Authorization" in new_req.unredirected_hdrs and new_host not in auth_allowlist:
+                      new_req.unredirected_hdrs.pop("Authorization", None)
+                  return new_req
+
+          opener = urllib.request.build_opener(SafeRedirectHandler())
+          req = urllib.request.Request(url, headers=headers)
+          try:
+              with opener.open(req, timeout=60) as resp:
+                  data = resp.read()
+          except urllib.error.HTTPError as e:
+              if not allow_auth_header and e.code in {401, 403, 404}:
+                  raise SystemExit(
+                      f"Download failed for scores_url host {host!r} without Authorization (HTTP {e.code}). "
+                      f"Auth header is forbidden for this host; provide a public URL or GitHub-hosted asset."
+                  ) from e
+              raise
+
+          dest.write_bytes(data)
+          actual = hashlib.sha256(data).hexdigest()
+          if actual != expected:
+              raise SystemExit(f"scores_sha256 mismatch: expected={expected} actual={actual}")
+
+          payload = json.loads(dest.read_text(encoding="utf-8"))
+          schema_version = str(payload.get("schema_version", ""))
+          if schema_version != "hetero_scores.v1":
+              raise SystemExit(f"scores.json: unexpected schema_version: {schema_version!r}")
+
+          original = payload.get("original")
+          if not isinstance(original, dict):
+              raise SystemExit("scores.json: missing/invalid original object")
+          if "score" not in original or "weight" not in original:
+              raise SystemExit("scores.json: original must contain score and weight")
+          float(original["score"])
+          float(original["weight"])
+
+          decoys = payload.get("decoys")
+          if not isinstance(decoys, dict):
+              raise SystemExit("scores.json: missing/invalid decoys mapping")
+          for h, v in decoys.items():
+              if not isinstance(h, str) or not h:
+                  raise SystemExit("scores.json: decoys keys must be non-empty strings")
+              if not isinstance(v, dict):
+                  raise SystemExit(f"scores.json: invalid decoys[{h!r}] entry (expected object)")
+              if "score" not in v or "weight" not in v:
+                  raise SystemExit(f"scores.json: decoys[{h!r}] must contain score and weight")
+              float(v["score"])
+              float(v["weight"])
+
+          print("Gate OK: scores.json downloaded + sha256 verified + hetero_scores.v1 validated")
+          print(f"scores_sha256={actual.upper()}")
           PY
 
       - name: Download external truth (customer_truth.v1; sha256 pinned)
@@ -227,6 +353,17 @@ jobs:
           print(f"truth_sha256={actual.upper()}")
           PY
 
+      - name: Select scores input (external vs proxy)
+        id: scores
+        run: |
+          if [ -n "${{ inputs.scores_url }}" ]; then
+            echo "scores_input_path=out_value_utility_realtruth/scores_external.json" >> "$GITHUB_OUTPUT"
+            echo "scores_source=external" >> "$GITHUB_OUTPUT"
+          else
+            echo "scores_input_path=out_value_utility_realtruth/scores_proxy.json" >> "$GITHUB_OUTPUT"
+            echo "scores_source=proxy" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Run hetero2-batch (light; no_manifest; no zip yet)
         run: |
           hetero2-batch \
@@ -234,7 +371,7 @@ jobs:
             --out_dir out_value_utility_realtruth \
             --artifacts light \
             --score_mode external_scores \
-            --scores_input out_value_utility_realtruth/scores_proxy.json \
+            --scores_input ${{ steps.scores.outputs.scores_input_path }} \
             --k_decoys 20 \
             --workers 2 \
             --timeout_s 60 \
@@ -255,16 +392,23 @@ jobs:
             --bootstrap_n 500
 
       - name: Rebuild manifest/checksums/zip (include truth.csv + cost_lift_report.json)
+        env:
+          SCORES_INPUT_PATH: ${{ steps.scores.outputs.scores_input_path }}
         run: |
           python - << 'PY'
           import json
+          import os
           from pathlib import Path
 
           from hetero2 import batch as hetero2_batch
 
           out_dir = Path("out_value_utility_realtruth")
           metrics_path = out_dir / "metrics.json"
-          scores_input = out_dir / "scores_proxy.json"
+          scores_input = Path((os.environ.get("SCORES_INPUT_PATH") or "").strip())
+          if not str(scores_input):
+              raise AssertionError("missing SCORES_INPUT_PATH env")
+          if not scores_input.exists():
+              raise AssertionError(f"scores_input not found: {scores_input}")
 
           required = [out_dir / "truth.csv", out_dir / "cost_lift_report.json", out_dir / "summary.csv", metrics_path, out_dir / "index.md"]
           missing = [str(p) for p in required if not p.exists()]
@@ -323,6 +467,10 @@ jobs:
         env:
           TRUTH_URL: ${{ inputs.truth_url }}
           TRUTH_SHA256: ${{ inputs.truth_sha256 }}
+          SCORES_URL: ${{ inputs.scores_url }}
+          SCORES_SHA256: ${{ inputs.scores_sha256 }}
+          SCORES_SOURCE: ${{ steps.scores.outputs.scores_source }}
+          SCORES_INPUT_PATH: ${{ steps.scores.outputs.scores_input_path }}
           SELECTION_K: ${{ inputs.selection_k }}
           SKIP_POLICY: ${{ inputs.skip_policy }}
         run: |
@@ -340,12 +488,22 @@ jobs:
           expected_selection_k_raw = (os.environ.get("SELECTION_K") or "").strip()
           truth_url = (os.environ.get("TRUTH_URL") or "").strip()
           truth_sha256_expected = (os.environ.get("TRUTH_SHA256") or "").strip().upper()
+          scores_url = (os.environ.get("SCORES_URL") or "").strip()
+          scores_sha256_expected = (os.environ.get("SCORES_SHA256") or "").strip().upper()
+          scores_source = (os.environ.get("SCORES_SOURCE") or "").strip()
+          scores_input_path = (os.environ.get("SCORES_INPUT_PATH") or "").strip()
 
           if not expected_skip_policy:
               raise AssertionError("missing SKIP_POLICY env")
           if not expected_selection_k_raw.isdigit():
               raise AssertionError(f"invalid SELECTION_K env: {expected_selection_k_raw!r}")
           expected_selection_k = int(expected_selection_k_raw)
+          if scores_url and not scores_sha256_expected:
+              raise AssertionError("scores_url is set but SCORES_SHA256 is empty")
+          if (not scores_url) and scores_sha256_expected:
+              raise AssertionError("scores_sha256 provided but scores_url is empty")
+          if not scores_input_path:
+              raise AssertionError("missing SCORES_INPUT_PATH env")
 
           metrics = json.loads((out_dir / "metrics.json").read_text(encoding="utf-8"))
           counts = metrics.get("counts", {}) if isinstance(metrics.get("counts", {}), dict) else {}
@@ -397,6 +555,18 @@ jobs:
                   f"truth.csv SHA256 mismatch after download: expected={truth_sha256_expected} actual={truth_sha256_actual}"
               )
 
+          scores_path = Path(scores_input_path)
+          scores_sha256_actual = hashlib.sha256(scores_path.read_bytes()).hexdigest().upper()
+          if scores_sha256_expected and scores_sha256_actual != scores_sha256_expected:
+              raise AssertionError(
+                  f"scores SHA256 mismatch after download: expected={scores_sha256_expected} actual={scores_sha256_actual}"
+              )
+          scores_payload = json.loads(scores_path.read_text(encoding="utf-8"))
+          scores_schema_version = str(scores_payload.get("schema_version", ""))
+          if scores_schema_version != "hetero_scores.v1":
+              raise AssertionError(f"unexpected scores schema_version: {scores_schema_version!r}")
+          score_key = scores_payload.get("score_key", None)
+
           report = json.loads((out_dir / "cost_lift_report.json").read_text(encoding="utf-8"))
           if report.get("report_schema") != "cost_lift.v1":
               raise AssertionError(f"unexpected report_schema: {report.get('report_schema')!r}")
@@ -435,6 +605,17 @@ jobs:
           lines.append(f"  - scores_coverage.rows_missing_scores_input: {rows_missing_scores_input}")
           lines.append(f"  - truth_url: {truth_url}")
           lines.append(f"  - truth_csv_sha256: {truth_sha256_actual}")
+          lines.append(f"  - scores_source: {scores_source or '(unknown)'}")
+          lines.append(f"  - scores_input_file: {scores_path.name}")
+          if scores_url:
+              lines.append(f"  - scores_url: {scores_url}")
+              lines.append(f"  - scores_sha256_expected: {scores_sha256_expected}")
+          else:
+              lines.append("  - scores_url: (none; using proxy scores)")
+          lines.append(f"  - scores_json_sha256: {scores_sha256_actual}")
+          lines.append(f"  - scores_schema_version: {scores_schema_version}")
+          if score_key is not None:
+              lines.append(f"  - score_key: {score_key}")
           lines.append(
               "  - status_counts: "
               f"OK={status_counts.get('OK', 0)}, SKIP={status_counts.get('SKIP', 0)}, ERROR={status_counts.get('ERROR', 0)}"
@@ -498,13 +679,16 @@ jobs:
           - Source ref: ${{ inputs.ref }}
           - Input generation:
             python scripts/pilot_generate_input.py --out_dir out_value_utility_realtruth --rows 200 --k_decoys 20 --seed 0 --full_cover_count 3
-           - Scores variant:
-             hetero_scores.v1 random proxy (seed=0) -> out_value_utility_realtruth/scores_proxy.json
+           - Scores (hetero_scores.v1):
+             scores_url: ${{ inputs.scores_url }}
+             scores_sha256: ${{ inputs.scores_sha256 }}
+             scores_source: ${{ steps.scores.outputs.scores_source }}
+             scores_input_file: ${{ steps.scores.outputs.scores_input_path }}
            - External truth (customer_truth.v1):
              truth_url: ${{ inputs.truth_url }}
              truth_sha256: ${{ inputs.truth_sha256 }}
            - Batch (repro):
-             hetero2-batch --input out_value_utility_realtruth/input.csv --out_dir out_value_utility_realtruth --artifacts light --score_mode external_scores --scores_input out_value_utility_realtruth/scores_proxy.json --k_decoys 20 --workers 2 --timeout_s 60 --maxtasksperchild 100 --seed_strategy per_row --seed 0 --no_manifest
+             hetero2-batch --input out_value_utility_realtruth/input.csv --out_dir out_value_utility_realtruth --artifacts light --score_mode external_scores --scores_input ${{ steps.scores.outputs.scores_input_path }} --k_decoys 20 --workers 2 --timeout_s 60 --maxtasksperchild 100 --seed_strategy per_row --seed 0 --no_manifest
            - Utility report:
              python scripts/cost_lift.py --summary_csv out_value_utility_realtruth/summary.csv --truth_csv out_value_utility_realtruth/truth.csv --k ${{ inputs.selection_k }} --seed 0 --skip_policy ${{ inputs.skip_policy }} --out out_value_utility_realtruth/cost_lift_report.json --bootstrap_n 500
           - Pack: summary.csv, metrics.json, index.md, manifest.json, checksums.sha256, truth.csv, cost_lift_report.json, value_utility_realtruth_evidence_pack.zip
@@ -644,6 +828,11 @@ jobs:
             echo "" >> "$FILE"
           fi
 
+          SCORES_INPUT_FILE="out_value_utility_realtruth/scores_proxy.json"
+          if [ -n "${{ inputs.scores_url }}" ]; then
+            SCORES_INPUT_FILE="out_value_utility_realtruth/scores_external.json"
+          fi
+
           cat >> "$FILE" << EOF
 
           ## ${{ inputs.tag }}
@@ -655,10 +844,12 @@ jobs:
           - Utility report contract: docs/contracts/cost_lift.v1.md
           - Command:
             python scripts/pilot_generate_input.py --out_dir out_value_utility_realtruth --rows 200 --k_decoys 20 --seed 0 --full_cover_count 3
-            (scores variant) random proxy (seed=0): out_value_utility_realtruth/scores_proxy.json
+            (scores input) scores_url: ${{ inputs.scores_url }}
+            (scores input) scores_sha256: ${{ inputs.scores_sha256 }}
+            (scores input) scores_input_file: $SCORES_INPUT_FILE
             (external truth) truth_url: ${{ inputs.truth_url }}
             (external truth) truth_sha256: ${{ inputs.truth_sha256 }}
-            hetero2-batch --input out_value_utility_realtruth/input.csv --out_dir out_value_utility_realtruth --artifacts light --score_mode external_scores --scores_input out_value_utility_realtruth/scores_proxy.json --k_decoys 20 --workers 2 --timeout_s 60 --maxtasksperchild 100 --seed_strategy per_row --seed 0 --no_manifest
+            hetero2-batch --input out_value_utility_realtruth/input.csv --out_dir out_value_utility_realtruth --artifacts light --score_mode external_scores --scores_input $SCORES_INPUT_FILE --k_decoys 20 --workers 2 --timeout_s 60 --maxtasksperchild 100 --seed_strategy per_row --seed 0 --no_manifest
             python scripts/cost_lift.py --summary_csv out_value_utility_realtruth/summary.csv --truth_csv out_value_utility_realtruth/truth.csv --k ${{ inputs.selection_k }} --seed 0 --skip_policy ${{ inputs.skip_policy }} --out out_value_utility_realtruth/cost_lift_report.json --bootstrap_n 500
           - Outcome (facts from summary.csv + cost_lift_report.json):
           ${{ needs.build-pack.outputs.facts_md }}
