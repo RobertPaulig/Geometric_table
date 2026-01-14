@@ -374,3 +374,48 @@ separation facts (computed on status==OK rows only):
     - filtered_hit_rate: 0.066667 (ci: 0.016667..0.150000)
     - uplift_vs_random: 0.000000
     - uplift_vs_score_only: 0.000000
+
+## value-utility-realtruth-2026-01-14-r3
+
+- Source commit: cdc081b4d18b3e3f1d63d7f6ac335e4fb0f8d437
+- Release asset: https://github.com/RobertPaulig/Geometric_table/releases/download/value-utility-realtruth-2026-01-14-r3/value_utility_realtruth_evidence_pack.zip
+- SHA256(value_utility_realtruth_evidence_pack.zip): 704B1F82933799E65F5F33D982A0D3EEBC34DA06BE8001670500B869CE3C5A00
+- Truth contract: docs/contracts/customer_truth.v1.md
+- Utility report contract: docs/contracts/cost_lift.v1.md
+- Command:
+  python scripts/pilot_generate_input.py --out_dir out_value_utility_realtruth --rows 200 --k_decoys 20 --seed 0 --full_cover_count 3
+  (scores input) scores_url: https://api.github.com/repos/RobertPaulig/Geometric_table/releases/assets/340539600
+  (scores input) scores_sha256: D22A19B51EAEBDE1A778B2FE69E10F9E78BA726F64CBF9A643ADD235D167D157
+  (scores input) scores_input_file: out_value_utility_realtruth/scores_external.json
+  (external truth) truth_url: https://api.github.com/repos/RobertPaulig/Geometric_table/releases/assets/340297819
+  (external truth) truth_sha256: 1403593FC0497E19CA2A8DD78B5BC6DEE88790F809AED0FA47F6F0744198C2A2
+  hetero2-batch --input out_value_utility_realtruth/input.csv --out_dir out_value_utility_realtruth --artifacts light --score_mode external_scores --scores_input out_value_utility_realtruth/scores_external.json --k_decoys 20 --workers 2 --timeout_s 60 --maxtasksperchild 100 --seed_strategy per_row --seed 0 --no_manifest
+  python scripts/cost_lift.py --summary_csv out_value_utility_realtruth/summary.csv --truth_csv out_value_utility_realtruth/truth.csv --k 10000 --seed 0 --skip_policy unknown_bucket --out out_value_utility_realtruth/cost_lift_report.json --bootstrap_n 500
+- Outcome (facts from summary.csv + cost_lift_report.json):
+  - rows_total: 200
+  - rows_ok: 200
+  - scores_coverage.rows_missing_scores_input: 0
+  - truth_url: https://api.github.com/repos/RobertPaulig/Geometric_table/releases/assets/340297819
+  - truth_csv_sha256: 1403593FC0497E19CA2A8DD78B5BC6DEE88790F809AED0FA47F6F0744198C2A2
+  - scores_source: external
+  - scores_input_file: scores_external.json
+  - scores_url: https://api.github.com/repos/RobertPaulig/Geometric_table/releases/assets/340539600
+  - scores_sha256_expected: D22A19B51EAEBDE1A778B2FE69E10F9E78BA726F64CBF9A643ADD235D167D157
+  - scores_json_sha256: D22A19B51EAEBDE1A778B2FE69E10F9E78BA726F64CBF9A643ADD235D167D157
+  - scores_schema_version: hetero_scores.v1
+  - score_key: external_ci_rule_v2
+  - status_counts: OK=200, SKIP=0, ERROR=0
+  - top_skip_reasons: (none)
+  - coverage_ok_rate: 1.000000
+  - share_rows_with_n_decoys_gt_0: 1.000000
+  - utility (cost_lift.v1):
+    - truth_source: external
+    - truth_schema: customer_truth.v1
+    - skip_policy: unknown_bucket
+    - selection_K_requested: 10000
+    - selection_K_effective: 200
+    - baseline_random_hit_rate: 0.055000 (ci: 0.025000..0.085000)
+    - baseline_score_only_hit_rate: 0.055000 (ci: 0.025000..0.085000)
+    - filtered_hit_rate: 0.055000 (ci: 0.025000..0.085000)
+    - uplift_vs_random: 0.000000
+    - uplift_vs_score_only: 0.000000
