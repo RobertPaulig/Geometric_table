@@ -142,7 +142,10 @@ jobs:
 
           headers = {"User-Agent": "publish-value-utility-realtruth"}
           token = (os.environ.get("GITHUB_TOKEN") or "").strip()
-          if token and allow_auth_header:
+          send_auth_header = bool(token) and allow_auth_header and host in {"raw.githubusercontent.com", "api.github.com"}
+          if token and host == "github.com":
+              print("Auth header disabled for truth_url host github.com; downloading without Authorization")
+          elif send_auth_header:
               headers["Authorization"] = f"token {token}"
               headers["Accept"] = "application/octet-stream"
               print(f"Auth header enabled for truth_url host: {host}")
