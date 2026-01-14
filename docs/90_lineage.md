@@ -431,3 +431,31 @@
     - filtered_hit_rate: 0.075000 (ci: 0.000000..0.150000; k_effective=40)
     - uplift_vs_random: 0.008333
     - uplift_vs_score_only: 0.008333
+
+### 2026-01-14 - VALUE-M7: real scores ingest evidence pack (external hetero_scores.v1 pinned by sha256)
+- Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/value-utility-realtruth-2026-01-14-r2
+- Source commit: 4b89a5a464bdc5e547649dd610ee8af24b250368
+- Publish run: https://github.com/RobertPaulig/Geometric_table/actions/runs/20997753050
+- scores.json (hetero_scores.v1; external):
+  - scores_url: https://api.github.com/repos/RobertPaulig/Geometric_table/releases/assets/340466779
+  - SHA256(scores.json): 19F08F234C438515A37B6CB0B95040C74191BC2C383EAFD6CF6EFF9B26A3F168
+  - score_key: external_ci_rule_v1
+- truth.csv (customer_truth.v1):
+  - truth_url: https://api.github.com/repos/RobertPaulig/Geometric_table/releases/assets/340297819
+  - SHA256(truth.csv): 1403593FC0497E19CA2A8DD78B5BC6DEE88790F809AED0FA47F6F0744198C2A2
+- Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/value-utility-realtruth-2026-01-14-r2/value_utility_realtruth_evidence_pack.zip
+- SHA256(value_utility_realtruth_evidence_pack.zip): 18E54A8CDE6550DCE9E965711189331E8D0F05DA44C6A4CAB5A5A8FEED64D5B9
+- Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/75 (merge: 43c56a13349452ccc0af80e0853f1d3abb7c55d1)
+- Facts:
+  - rows_total: 200
+  - rows_ok: 60
+  - scores_coverage.rows_missing_scores_input: 0
+  - status_counts: OK=60, SKIP=140, ERROR=0
+  - top_skip_reasons: no_decoys_generated: 140
+  - share_rows_with_n_decoys_gt_0: 0.300 (30.0%)
+  - utility (scores_source=external; skip_policy=unknown_bucket; K_requested=10000; K_effective=60; N_with_truth=60):
+    - baseline_random_hit_rate: 0.066667 (ci: 0.016667..0.133333)
+    - baseline_score_only_hit_rate: 0.066667 (ci: 0.016667..0.133333)
+    - filtered_hit_rate: 0.066667 (ci: 0.016667..0.150000)
+    - uplift_vs_random: 0.000000
+    - uplift_vs_score_only: 0.000000
