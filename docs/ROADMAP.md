@@ -161,8 +161,8 @@ Proof:
 
 ---
 
-## VALUE-M6 — REAL-TRUTH-INGEST-1: external truth.csv -> cost_lift_report.json -> release/registry/lineage
-Статус: [ ] planned  [ ] in-progress  [ ] done
+## VALUE-M6 - REAL-TRUTH-INGEST-1: external truth.csv -> cost_lift_report.json -> release/registry/lineage
+Статус: [ ] planned  [ ] in-progress  [x] done
 
 Цель: считать `cost_lift.v1` на внешней “дорогой” truth (Pfizer/proxy expensive truth) без изменения форматов и без proxy_rule.
 
@@ -179,6 +179,16 @@ DoD:
 - Quality gates: `ERROR=0`, `scores_coverage.rows_missing_scores_input==0`
 - Истина: Release asset + SHA256 + registry entry + lineage entry
 - Code gates: `ci/test|ci/test-chem|ci/docker` = success на source SHA
+
+Proof:
+- Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/value-utility-realtruth-2026-01-14-r1
+- Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/value-utility-realtruth-2026-01-14-r1/value_utility_realtruth_evidence_pack.zip
+- SHA256(value_utility_realtruth_evidence_pack.zip): 65A00E8879B9B03BF558F630C85EABFC0C285C1B8DF3635D231B4A90DD7D816B
+- Publish run: https://github.com/RobertPaulig/Geometric_table/actions/runs/20983871401
+- truth_url: https://api.github.com/repos/RobertPaulig/Geometric_table/releases/assets/340297819
+- SHA256(truth.csv): 1403593FC0497E19CA2A8DD78B5BC6DEE88790F809AED0FA47F6F0744198C2A2
+- Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/71 (merge: bc7c45d771a16bc8b387e11bcdaac1c18fe79207)
+- Lineage PR: https://github.com/RobertPaulig/Geometric_table/pull/72 (merge: 207affa63f7b246b9dd5ac2a52aa8cd6b4d9b27c)
 
 ---
 
