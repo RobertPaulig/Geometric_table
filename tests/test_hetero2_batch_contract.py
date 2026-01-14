@@ -38,6 +38,10 @@ def test_hetero2_batch_creates_artifacts(tmp_path: Path) -> None:
     assert len(data) == 2
     assert data[0]["id"] == "aspirin"
     assert data[0]["status"] == "OK"
+    assert data[0]["skip_reason"] == ""
+    assert data[0]["decoy_strategy_used"]
+    assert data[0]["n_decoys_generated"]
+    assert data[0]["n_decoys_scored"] == data[0]["n_decoys_generated"]
     assert data[1]["id"] == "empty"
     assert data[1]["status"] in {"SKIP", "ERROR"}
     assert data[1]["reason"]

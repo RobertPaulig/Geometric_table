@@ -303,11 +303,15 @@ def run_batch(
         "id",
         "status",
         "reason",
+        "skip_reason",
         "verdict",
         "gate",
         "slack",
         "margin",
         "n_decoys",
+        "n_decoys_generated",
+        "n_decoys_scored",
+        "decoy_strategy_used",
         "warnings_count",
         "report_path",
         "seed_used",
@@ -399,15 +403,31 @@ def run_batch(
         spectral = {}
         if isinstance(pipeline, dict):
             spectral = pipeline.get("spectral", {}) if isinstance(pipeline.get("spectral"), dict) else {}
+        decoy_strategy_used = ""
+        n_decoys_generated = res.get("n_decoys", "")
+        n_decoys_scored = ""
+        if isinstance(pipeline, dict):
+            ds = pipeline.get("decoy_strategy", {}) if isinstance(pipeline.get("decoy_strategy"), dict) else {}
+            decoy_strategy_used = str(ds.get("strategy_id", ""))
+            n_decoys_generated = len(pipeline.get("decoys", [])) if isinstance(pipeline.get("decoys"), list) else ""
+            if pipeline.get("score_mode") == "external_scores":
+                scov = pipeline.get("scores_coverage", {}) if isinstance(pipeline.get("scores_coverage"), dict) else {}
+                n_decoys_scored = scov.get("decoys_scored", "")
+            elif pipeline.get("score_mode") == "mock":
+                n_decoys_scored = n_decoys_generated
         summary_entry = {
             "id": mol_id,
             "status": status or "ERROR",
             "reason": reason,
+            "skip_reason": reason if status == "SKIP" else "",
             "verdict": neg.get("verdict", ""),
             "gate": neg.get("gate", ""),
             "slack": neg.get("slack", ""),
             "margin": neg.get("margin", ""),
             "n_decoys": res.get("n_decoys", ""),
+            "n_decoys_generated": n_decoys_generated,
+            "n_decoys_scored": n_decoys_scored,
+            "decoy_strategy_used": decoy_strategy_used,
             "warnings_count": len(set(warnings)) if isinstance(warnings, list) else 0,
             "report_path": str(rep_path) if status == "OK" and rep_path is not None else "",
             "seed_used": res.get("seed_used", ""),

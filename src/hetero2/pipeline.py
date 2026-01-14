@@ -9,7 +9,7 @@ from typing import Dict, List, Sequence
 from hetero1a.api import run_audit
 from hetero1a.schemas import SCORES_SCHEMA
 from hetero2.chemgraph import ChemGraph
-from hetero2.decoys_rewire import generate_rewire_decoys
+from hetero2.decoy_strategy import generate_decoys_v1
 from hetero2.guardrails import MAX_ATOMS_DEFAULT, preflight_smiles
 from hetero2.spectral import compute_stability_metrics, laplacian_eigvals
 
@@ -82,7 +82,16 @@ def _require_rdkit_ds():
     return DataStructs
 
 
-def _skip_payload(smiles: str, *, warnings: List[str], seed: int, timestamp: str, reason: str) -> Dict[str, object]:
+def _skip_payload(
+    smiles: str,
+    *,
+    warnings: List[str],
+    seed: int,
+    timestamp: str,
+    reason: str,
+    decoy_strategy: Dict[str, object] | None = None,
+    decoy_stats: Dict[str, int] | None = None,
+) -> Dict[str, object]:
     ts = timestamp
     return {
         "schema_version": "hetero2_pipeline.v1",
@@ -90,7 +99,8 @@ def _skip_payload(smiles: str, *, warnings: List[str], seed: int, timestamp: str
         "ring_info": {},
         "physchem": {},
         "decoys": [],
-        "decoy_stats": {},
+        "decoy_stats": dict(decoy_stats) if decoy_stats else {},
+        "decoy_strategy": dict(decoy_strategy) if decoy_strategy else {},
         "score_mode": "skip",
         "audit": {"neg_controls": {"verdict": "SKIP", "gate": "", "slack": "", "margin": ""}},
         "warnings": sorted(set(warnings)),
@@ -146,13 +156,11 @@ def run_pipeline_v2(
     cg = ChemGraph(preflight.canonical_smiles)
     eigvals = laplacian_eigvals(cg.laplacian())
     spectral_metrics = compute_stability_metrics(eigvals)
-    decoys_result = generate_rewire_decoys(
+    decoys_result, decoy_strategy = generate_decoys_v1(
         cg.canonical_smiles,
-        k=k_decoys,
-        seed=seed,
+        k=int(k_decoys),
+        seed=int(seed),
         max_attempts=max_attempts,
-        lock_aromatic=True,
-        allow_ring_bonds=False,
     )
     decoys = decoys_result.decoys
     if len(decoys) == 0:
@@ -167,6 +175,8 @@ def run_pipeline_v2(
             seed=seed,
             timestamp=ts,
             reason="no_decoys_generated",
+            decoy_strategy=decoy_strategy.__dict__,
+            decoy_stats=decoys_result.stats,
         )
 
     if effective_score_mode == "external_scores" and scores_payload is not None:
@@ -234,6 +244,7 @@ def run_pipeline_v2(
         "physchem": cg.physchem(),
         "decoys": decoys,
         "decoy_stats": decoys_result.stats,
+        "decoy_strategy": decoy_strategy.__dict__,
         "score_mode": effective_score_mode,
         "audit": audit_result,
         "warnings": warnings,
