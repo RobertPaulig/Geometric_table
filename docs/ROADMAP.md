@@ -161,6 +161,27 @@ Proof:
 
 ---
 
+## VALUE-M6 — REAL-TRUTH-INGEST-1: external truth.csv -> cost_lift_report.json -> release/registry/lineage
+Статус: [ ] planned  [ ] in-progress  [ ] done
+
+Цель: считать `cost_lift.v1` на внешней “дорогой” truth (Pfizer/proxy expensive truth) без изменения форматов и без proxy_rule.
+
+Scope (v1):
+- truth приходит снаружи (не генерируется в workflow) и проходит строгую верификацию загрузки: truth_url + truth_sha256
+- truth.csv валиден по `customer_truth.v1`, `truth_source=external`
+- uplift/дельты не гейтим (фиксируем как факт в outcome + registry), гейтим только валидность/воспроизводимость/честность полей
+
+DoD:
+- Release tag: `value-utility-realtruth-YYYY-MM-DD(-rN)`
+- evidence_pack.zip содержит `truth.csv` и `cost_lift_report.json` (+ zip validate и обязательные файлы pack)
+- truth.csv: SHA256 совпадает с переданным `truth_sha256`; валидация `customer_truth.v1` проходит (колонки/типы/дубликаты/coverage)
+- `cost_lift_report.json` валиден по `cost_lift.v1` (schema + методы + bootstrap CI) и фиксирует `skip_policy` в отчёте
+- Quality gates: `ERROR=0`, `scores_coverage.rows_missing_scores_input==0`
+- Истина: Release asset + SHA256 + registry entry + lineage entry
+- Code gates: `ci/test|ci/test-chem|ci/docker` = success на source SHA
+
+---
+
 ## Как это превращается в реальные “вехи-факты” через ваши workflows (без нового велосипеда)
 
 Вы уже умеете делать “истину” через publish workflow:
