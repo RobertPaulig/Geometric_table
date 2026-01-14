@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Dict, List, Tuple
 
-from hetero2.decoys_rewire import generate_rewire_decoys
+from hetero2.decoy_strategy import generate_decoys_v1
 
 
 SMILES_LIST: List[Tuple[str, str]] = [
@@ -23,13 +23,13 @@ SMILES_LIST: List[Tuple[str, str]] = [
 
 
 def _scores_for_smiles(smiles: str, *, k_decoys: int, seed: int, full_coverage: bool) -> Dict[str, Dict[str, float]]:
-    decoys = generate_rewire_decoys(smiles, k=k_decoys, seed=seed, max_attempts=None, lock_aromatic=True, allow_ring_bonds=False)
-    if not decoys.decoys:
+    decoys_result, _ = generate_decoys_v1(smiles, k=k_decoys, seed=seed, max_attempts=None)
+    if not decoys_result.decoys:
         return {}
     if full_coverage:
-        return {str(d["hash"]): {"score": 0.1, "weight": 1.0} for d in decoys.decoys}
+        return {str(d["hash"]): {"score": 0.1, "weight": 1.0} for d in decoys_result.decoys}
     # Provide scores for only the first decoy to ensure partial coverage.
-    first_hash = str(decoys.decoys[0]["hash"])
+    first_hash = str(decoys_result.decoys[0]["hash"])
     return {first_hash: {"score": 0.1, "weight": 1.0}}
 
 

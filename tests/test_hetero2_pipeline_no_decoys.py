@@ -6,14 +6,18 @@ import pytest
 pytest.importorskip("rdkit")
 
 from hetero2.decoys_rewire import DecoyResult
+from hetero2.decoy_strategy import DECOY_STRATEGY_SCHEMA, DECOY_STRATEGY_STRICT, DecoyStrategy
 from hetero2.pipeline import run_pipeline_v2
 
 
 def test_pipeline_skips_when_no_decoys(monkeypatch):
-    def _fake_generate_rewire_decoys(*args, **kwargs):
-        return DecoyResult(decoys=[], warnings=["test:no_decoys"], stats={"attempts": 0})
+    def _fake_generate_decoys_v1(*args, **kwargs):
+        return (
+            DecoyResult(decoys=[], warnings=["test:no_decoys"], stats={"attempts": 0, "sanitize_fail": 0, "duplicate": 0, "no_candidate_swap": 0}),
+            DecoyStrategy(schema_version=DECOY_STRATEGY_SCHEMA, strategy_id=DECOY_STRATEGY_STRICT),
+        )
 
-    monkeypatch.setattr("hetero2.pipeline.generate_rewire_decoys", _fake_generate_rewire_decoys)
+    monkeypatch.setattr("hetero2.pipeline.generate_decoys_v1", _fake_generate_decoys_v1)
     out = run_pipeline_v2("CC", k_decoys=2, seed=0, timestamp="t0")
 
     assert out.get("skip", {}).get("reason") == "no_decoys_generated"
@@ -23,18 +27,21 @@ def test_pipeline_skips_when_no_decoys(monkeypatch):
 
 
 def test_pipeline_external_scores_missing_all_decoys_skips_audit(tmp_path: Path, monkeypatch):
-    def _fake_generate_rewire_decoys(*args, **kwargs):
-        return DecoyResult(
-            decoys=[{"smiles": "CC", "hash": "deadbeef", "ring_info": {}, "physchem": {}}],
-            warnings=[],
-            stats={"attempts": 1},
+    def _fake_generate_decoys_v1(*args, **kwargs):
+        return (
+            DecoyResult(
+                decoys=[{"smiles": "CC", "hash": "deadbeef", "ring_info": {}, "physchem": {}}],
+                warnings=[],
+                stats={"attempts": 1, "sanitize_fail": 0, "duplicate": 0, "no_candidate_swap": 0},
+            ),
+            DecoyStrategy(schema_version=DECOY_STRATEGY_SCHEMA, strategy_id=DECOY_STRATEGY_STRICT),
         )
 
     scores_path = tmp_path / "scores.json"
     scores_payload = {"schema_version": "hetero_scores.v1", "original": {"score": 1.0, "weight": 1.0}, "decoys": {}}
     scores_path.write_text(json.dumps(scores_payload), encoding="utf-8")
 
-    monkeypatch.setattr("hetero2.pipeline.generate_rewire_decoys", _fake_generate_rewire_decoys)
+    monkeypatch.setattr("hetero2.pipeline.generate_decoys_v1", _fake_generate_decoys_v1)
     out = run_pipeline_v2(
         "CC",
         k_decoys=1,
