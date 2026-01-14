@@ -459,3 +459,33 @@
     - filtered_hit_rate: 0.066667 (ci: 0.016667..0.150000)
     - uplift_vs_random: 0.000000
     - uplift_vs_score_only: 0.000000
+
+### 2026-01-14 - COVERAGE-DECoys-1: decoy fallback restored OK-coverage (utility realtruth r3)
+- What: introduced `decoy_strategy.v1` with fallback (strict -> fallback) to reduce `SKIP=no_decoys_generated` and raise OK-coverage (PR #78).
+- Decoy fallback PR: https://github.com/RobertPaulig/Geometric_table/pull/78 (merge: cdc081b4d18b3e3f1d63d7f6ac335e4fb0f8d437)
+- Scores release (external, pinned): https://github.com/RobertPaulig/Geometric_table/releases/tag/scores-external-ci-rule-v2-2026-01-14
+- Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/value-utility-realtruth-2026-01-14-r3
+- Source commit: cdc081b4d18b3e3f1d63d7f6ac335e4fb0f8d437
+- Publish run: https://github.com/RobertPaulig/Geometric_table/actions/runs/21004714316
+- scores.json (hetero_scores.v1; external):
+  - scores_url: https://api.github.com/repos/RobertPaulig/Geometric_table/releases/assets/340539600
+  - SHA256(scores.json): D22A19B51EAEBDE1A778B2FE69E10F9E78BA726F64CBF9A643ADD235D167D157
+  - score_key: external_ci_rule_v2
+- truth.csv (customer_truth.v1):
+  - truth_url: https://api.github.com/repos/RobertPaulig/Geometric_table/releases/assets/340297819
+  - SHA256(truth.csv): 1403593FC0497E19CA2A8DD78B5BC6DEE88790F809AED0FA47F6F0744198C2A2
+- Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/value-utility-realtruth-2026-01-14-r3/value_utility_realtruth_evidence_pack.zip
+- SHA256(value_utility_realtruth_evidence_pack.zip): 704B1F82933799E65F5F33D982A0D3EEBC34DA06BE8001670500B869CE3C5A00
+- Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/79 (merge: 12d6d719e7ea3f426dab072665c271f09f1853c9)
+- Facts:
+  - rows_total: 200
+  - rows_ok: 200
+  - scores_coverage.rows_missing_scores_input: 0
+  - status_counts: OK=200, SKIP=0, ERROR=0
+  - share_rows_with_n_decoys_gt_0: 1.000 (100.0%)
+  - utility (scores_source=external; skip_policy=unknown_bucket; K_requested=10000; K_effective=200; N_with_truth=200):
+    - baseline_random_hit_rate: 0.055000 (ci: 0.025000..0.085000)
+    - baseline_score_only_hit_rate: 0.055000 (ci: 0.025000..0.085000)
+    - filtered_hit_rate: 0.055000 (ci: 0.025000..0.085000)
+    - uplift_vs_random: 0.000000
+    - uplift_vs_score_only: 0.000000
