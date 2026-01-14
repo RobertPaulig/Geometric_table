@@ -179,49 +179,49 @@ jobs:
           if actual != expected:
               raise SystemExit(f"truth_sha256 mismatch: expected={expected} actual={actual}")
           
-          truth_rows = list(csv.DictReader(dest.read_text(encoding=\"utf-8\").splitlines()))
+          truth_rows = list(csv.DictReader(dest.read_text(encoding="utf-8").splitlines()))
           if not truth_rows:
               raise SystemExit("truth.csv has no rows")
           
-          required_truth_cols = {\"molecule_id\", \"expensive_label\", \"truth_source\", \"truth_version\"}
+          required_truth_cols = {"molecule_id", "expensive_label", "truth_source", "truth_version"}
           missing_cols = [c for c in sorted(required_truth_cols) if c not in truth_rows[0]]
           if missing_cols:
-              raise SystemExit(f\"truth.csv missing required columns: {missing_cols}\")
+              raise SystemExit(f"truth.csv missing required columns: {missing_cols}")
           
           seen_ids = set()
           truth_sources = set()
           truth_versions = set()
           
           for idx, row in enumerate(truth_rows, start=2):
-              molecule_id = (row.get(\"molecule_id\") or \"\").strip()
+              molecule_id = (row.get("molecule_id") or "").strip()
               if not molecule_id:
-                  raise SystemExit(f\"truth.csv: empty molecule_id at line {idx}\")
+                  raise SystemExit(f"truth.csv: empty molecule_id at line {idx}")
               if molecule_id in seen_ids:
-                  raise SystemExit(f\"truth.csv: duplicate molecule_id: {molecule_id}\")
+                  raise SystemExit(f"truth.csv: duplicate molecule_id: {molecule_id}")
               seen_ids.add(molecule_id)
           
-              expensive_label = (row.get(\"expensive_label\") or \"\").strip().upper()
-              if expensive_label not in {\"PASS\", \"FAIL\"}:
-                  raise SystemExit(f\"truth.csv: invalid expensive_label for {molecule_id}: {expensive_label!r}\")
+              expensive_label = (row.get("expensive_label") or "").strip().upper()
+              if expensive_label not in {"PASS", "FAIL"}:
+                  raise SystemExit(f"truth.csv: invalid expensive_label for {molecule_id}: {expensive_label!r}")
           
-              truth_source = (row.get(\"truth_source\") or \"\").strip()
-              truth_version = (row.get(\"truth_version\") or \"\").strip()
+              truth_source = (row.get("truth_source") or "").strip()
+              truth_version = (row.get("truth_version") or "").strip()
           
               if not truth_source:
-                  raise SystemExit(f\"truth.csv: empty truth_source for {molecule_id}\")
+                  raise SystemExit(f"truth.csv: empty truth_source for {molecule_id}")
               if not truth_version:
-                  raise SystemExit(f\"truth.csv: empty truth_version for {molecule_id}\")
+                  raise SystemExit(f"truth.csv: empty truth_version for {molecule_id}")
           
               truth_sources.add(truth_source)
               truth_versions.add(truth_version)
           
-          if truth_versions != {\"customer_truth.v1\"}:
-              raise SystemExit(f\"truth.csv: unexpected truth_version set: {sorted(truth_versions)}\")
-          if truth_sources != {\"external\"}:
-              raise SystemExit(f\"truth.csv: unexpected truth_source set: {sorted(truth_sources)}\")
+          if truth_versions != {"customer_truth.v1"}:
+              raise SystemExit(f"truth.csv: unexpected truth_version set: {sorted(truth_versions)}")
+          if truth_sources != {"external"}:
+              raise SystemExit(f"truth.csv: unexpected truth_source set: {sorted(truth_sources)}")
           
-          print(\"Gate OK: truth.csv downloaded + sha256 verified + customer_truth.v1 validated\") 
-          print(f\"truth_sha256={actual.upper()}\")
+          print("Gate OK: truth.csv downloaded + sha256 verified + customer_truth.v1 validated")
+          print(f"truth_sha256={actual.upper()}")
           PY
 
       - name: Run hetero2-batch (light; no_manifest; no zip yet)
