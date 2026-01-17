@@ -577,3 +577,25 @@
   - scores_coverage (from cost_lift_report.json):
     - rows_with_decoys_scored_gt0=60, rows_with_decoys_scored_eq0=140
     - decoys_scored_total=240, decoys_missing_total=640
+
+### 2026-01-17 - DECOY-SCORES-REQUEST-PACK-1: export missing decoy hashes/smiles for external rescoring
+- What: added a request-pack artefact `missing_decoy_scores.csv` (decoy_hash + decoy_smiles + count_rows_affected) to make external scores refresh actionable when `missing_scores_for_all_decoys` dominates.
+- Code PR: https://github.com/RobertPaulig/Geometric_table/pull/97 (merge: 8d5a38c2dcc71a25dbcab6c9e00929d679e2018a)
+- Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/value-utility-realtruth-2026-01-17-r4
+- Source commit: 8d5a38c2dcc71a25dbcab6c9e00929d679e2018a
+- Publish run: https://github.com/RobertPaulig/Geometric_table/actions/runs/21100791630
+- scores.json (hetero_scores.v1; external pinned):
+  - scores_url: https://api.github.com/repos/RobertPaulig/Geometric_table/releases/assets/340466779
+  - SHA256(scores.json): 19F08F234C438515A37B6CB0B95040C74191BC2C383EAFD6CF6EFF9B26A3F168
+  - score_key: external_ci_rule_v1
+- truth.csv (customer_truth.v1; external pinned):
+  - truth_url: https://api.github.com/repos/RobertPaulig/Geometric_table/releases/assets/340297819
+  - SHA256(truth.csv): 1403593FC0497E19CA2A8DD78B5BC6DEE88790F809AED0FA47F6F0744198C2A2
+- Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/value-utility-realtruth-2026-01-17-r4/value_utility_realtruth_evidence_pack.zip
+- SHA256(value_utility_realtruth_evidence_pack.zip): CEA2E0599355CC5A31CA4B2318EC707AF85BE4298196E2AEB672F32C9A9C29AA
+- Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/98 (merge: f5060f1638a7c46efee772c3c6cde31859903fd7)
+- CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21101010888
+- Facts:
+  - request-pack file: missing_decoy_scores.csv
+  - scores_coverage.unique_missing_decoy_hashes: 32
+  - scores_coverage.missing_decoy_hashes_top10: see `missing_decoy_hashes_top10` in `metrics.json` and the registry entry for the tag.
