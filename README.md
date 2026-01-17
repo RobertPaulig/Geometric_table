@@ -6,6 +6,20 @@
 
 CI обязателен: merge/PR считаются DONE только при зелёном GitHub Actions `pytest`.
 
+## Why this exists (Commercial North Star)
+
+Generative chemistry produces **millions** of “drug-like” molecules — but **validation is the bottleneck**.
+HETERO-2 is an **ultra-fast, reproducible first-stage filter** that helps teams decide what is worth paying for downstream
+(docking / MD / QM / wet lab) and detect when scoring is self-deceptive.
+
+**Target (order-of-magnitude, workflow-dependent):** reduce early validation for ~1,000,000 candidates from **~$500k-scale**
+workflows to **~$10k-scale** workflows by adding a fast 2D screening + matched-decoy audit layer.
+
+**Non-goals:** we do **not** replace docking/QM/wet lab and we do **not** claim clinical truth.  
+We guarantee **reproducible computation + transparent failure modes**, backed by evidence packs and registry entries.
+
+➡️ Source of truth: see `docs/ROADMAP.md` (section “1) North Star: что продаём”)
+
 This repository contains Python code and analysis scripts for the geometric–spectral model (geom-spec v4.0). The core model lives in `core/` (`geom_atoms`, `grower`, `complexity`, nuclear modules), while scans, tests and visualizations are in `analysis/`.
 
 The original documentation lives in `docs/README.md`. For full usage details (requirements, scripts, workflow, troubleshooting) see:
