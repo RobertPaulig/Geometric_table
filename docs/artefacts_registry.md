@@ -374,6 +374,12 @@ separation facts (computed on status==OK rows only):
     - filtered_hit_rate: 0.066667 (ci: 0.016667..0.150000)
     - uplift_vs_random: 0.000000
     - uplift_vs_score_only: 0.000000
+  - comparison_vs_value-utility-realtruth-2026-01-14-r2 (same pinned truth+scores; pre-coverage):
+    - status_counts: OK=60, SKIP=140, ERROR=0 -> OK=200, SKIP=0, ERROR=0
+    - top_skip_reasons: no_decoys_generated: 140 -> (none)
+    - coverage_ok_rate: 0.300000 -> 1.000000
+    - share_rows_with_n_decoys_gt_0: 0.300000 -> 1.000000
+    - selection_K_effective: 60 -> 60
 
 ## value-utility-realtruth-2026-01-14-r3
 
