@@ -69,3 +69,9 @@ checksums*.sha256
 evidence_pack*.zip
 stress_*.csv
 
+# ============================================================
+# Local scratch / download dirs (never commit)
+# ============================================================
+/tmp_*/
+*.zip.sha256
+
