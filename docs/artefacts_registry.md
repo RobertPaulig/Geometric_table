@@ -461,6 +461,16 @@ separation facts (computed on status==OK rows only):
     - filtered_hit_rate: 0.055000 (ci: 0.025000..0.085000)
     - uplift_vs_random: 0.000000
     - uplift_vs_score_only: 0.000000
+  - scores_coverage (from cost_lift_report.json):
+    - rows_with_decoys_scored_eq0: 0
+    - rows_with_decoys_scored_gt0: 200
+    - decoys_scored_total: 880
+    - decoys_missing_total: 0
+  - comparison_vs_value-utility-realtruth-2026-01-17-r4 (same pinned truth; refreshed scores):
+    - scores_coverage.unique_missing_decoy_hashes: 32 -> 0
+    - rows_with_decoys_scored_eq0: 140 -> 0
+    - decoys_missing_total: 640 -> 0
+    - selection_K_effective: 60 -> 200
 
 ## value-ring-suite-2026-01-17
 
