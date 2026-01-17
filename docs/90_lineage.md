@@ -529,3 +529,27 @@
     - coverage_ok_rate: 0.300000 -> 1.000000
     - share_rows_with_n_decoys_gt_0: 0.300000 -> 1.000000
     - selection_K_effective: 60 -> 60
+
+### 2026-01-17 - UTILITY-K-EFFECTIVE-UNLOCK-1: explain selection_K_effective via eligibility breakdown (utility realtruth r2)
+- What: added explicit `eligibility` decomposition to `cost_lift_report.json` (why `K_effective` < `K_requested`) and recorded it in registry for a pinned rerun.
+- Code PR: https://github.com/RobertPaulig/Geometric_table/pull/91 (merge: 2a37d0aab5c3f7f66ac340bfa816966d377b45d3)
+- Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/value-utility-realtruth-2026-01-17-r2
+- Source commit: 2a37d0aab5c3f7f66ac340bfa816966d377b45d3
+- Publish run: https://github.com/RobertPaulig/Geometric_table/actions/runs/21097389307
+- scores.json (hetero_scores.v1; external pinned):
+  - scores_url: https://api.github.com/repos/RobertPaulig/Geometric_table/releases/assets/340466779
+  - SHA256(scores.json): 19F08F234C438515A37B6CB0B95040C74191BC2C383EAFD6CF6EFF9B26A3F168
+  - score_key: external_ci_rule_v1
+- truth.csv (customer_truth.v1; external pinned):
+  - truth_url: https://api.github.com/repos/RobertPaulig/Geometric_table/releases/assets/340297819
+  - SHA256(truth.csv): 1403593FC0497E19CA2A8DD78B5BC6DEE88790F809AED0FA47F6F0744198C2A2
+- Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/value-utility-realtruth-2026-01-17-r2/value_utility_realtruth_evidence_pack.zip
+- SHA256(value_utility_realtruth_evidence_pack.zip): 1AE60548048E02B321FDE969B8540A88BE1B8D3B34C66CF23A125946E0D60785
+- Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/92 (merge: 6f0a073c66d1d078a13acf732f08c577151c2f06)
+- CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21097528092
+- Facts:
+  - status_counts: OK=200, SKIP=0, ERROR=0
+  - utility: selection_K_requested=10000, selection_K_effective=60
+  - eligibility (from cost_lift_report.json):
+    - rows_truth_known=200, rows_verdict_pass_fail=60, rows_eligible_for_cost_lift=60
+    - K_effective_reason_top: verdict_not_pass_fail=140 (share_total=0.700000)
