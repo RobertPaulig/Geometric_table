@@ -53,6 +53,26 @@ def test_cost_lift_report_contract(tmp_path: Path) -> None:
     for key in ["N_total", "N_ok", "N_skip", "N_error", "N_with_truth", "truth_coverage_rate", "unknown_bucket_rate"]:
         assert key in report
 
+    eligibility = report["eligibility"]
+    for key in [
+        "rows_total",
+        "rows_ok",
+        "rows_verdict_pass_fail",
+        "rows_truth_known",
+        "rows_scores_present",
+        "rows_eligible_for_cost_lift",
+        "K_effective_reason_top",
+    ]:
+        assert key in eligibility
+
+    assert eligibility["rows_total"] == report["N_total"]
+    assert eligibility["rows_ok"] == report["N_ok"]
+    assert eligibility["rows_truth_known"] == report["N_with_truth"]
+    assert eligibility["rows_verdict_pass_fail"] == eligibility["rows_eligible_for_cost_lift"]
+    assert 0 <= eligibility["rows_eligible_for_cost_lift"] <= eligibility["rows_truth_known"] <= eligibility["rows_ok"] <= eligibility["rows_total"]
+    assert 0 <= eligibility["rows_scores_present"] <= eligibility["rows_total"]
+    assert isinstance(eligibility["K_effective_reason_top"], list)
+
     methods = report["methods"]
     for name in ["baseline_random", "baseline_score_only_topk", "filtered_score_plus_audit_topk"]:
         assert name in methods
@@ -119,4 +139,15 @@ def test_cost_lift_report_ignores_ok_rows_with_verdict_skip(tmp_path: Path) -> N
     assert report["N_ok"] == 2
     assert report["N_with_truth"] == 2
     assert report["K_effective"] == 1
+
+    eligibility = report["eligibility"]
+    assert eligibility["rows_total"] == 2
+    assert eligibility["rows_ok"] == 2
+    assert eligibility["rows_truth_known"] == 2
+    assert eligibility["rows_verdict_pass_fail"] == 1
+    assert eligibility["rows_eligible_for_cost_lift"] == 1
+
+    top = eligibility["K_effective_reason_top"]
+    assert top and top[0]["reason"] == "verdict_not_pass_fail"
+    assert int(top[0]["count"]) == 1
 
