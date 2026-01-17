@@ -437,3 +437,25 @@ separation facts (computed on status==OK rows only):
     - status_counts: OK=60, SKIP=140, ERROR=0 -> OK=200, SKIP=0, ERROR=0
     - top_skip_reasons: no_decoys_generated: 140 -> (none)
     - share_rows_with_n_decoys_gt_0: 0.300 (30.0%) -> 1.000 (100.0%)
+
+## stress-10k-2026-01-17
+
+- Source commit: 7a7085e77faa8459295c625d9b413529a185e360
+- Release asset: https://github.com/RobertPaulig/Geometric_table/releases/download/stress-10k-2026-01-17/evidence_pack.zip
+- SHA256(evidence_pack.zip): A41ED16B2910A2BF58EEBDE5B9637778DA319202EBB71BBD9CBF663A98CED602
+- Command:
+  hetero2-batch --input stress.csv --out_dir out_stress --artifacts light --score_mode mock --k_decoys 2 --workers 1 --timeout_s 60 --maxtasksperchild 100 --seed_strategy per_row --seed 0 --zip_pack
+- Outcome (facts from summary.csv):
+  - rows_total: 10000
+  - status_counts: OK=1512, SKIP=8488, ERROR=0
+  - top_skip_reasons:
+    - no_decoys_generated: 7488
+    - too_many_atoms: 500
+    - disconnected: 250
+    - invalid_smiles: 208
+    - missing_smiles: 42
+  - ok_rate: 0.1512
+  - comparison_vs_stress-10k-2026-01-07 (computed from summary.csv inside evidence_pack.zip):
+    - status_counts: OK=0, SKIP=10000, ERROR=0 -> OK=1512, SKIP=8488, ERROR=0
+    - no_decoys_generated: 9000 -> 7488
+    - ok_rate: 0.0000 -> 0.1512
