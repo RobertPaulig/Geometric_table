@@ -18,7 +18,7 @@ workflows to **~$10k-scale** workflows by adding a fast 2D screening + matched-d
 **Non-goals:** we do **not** replace docking/QM/wet lab and we do **not** claim clinical truth.  
 We guarantee **reproducible computation + transparent failure modes**, backed by evidence packs and registry entries.
 
-➡️ Source of truth: see `docs/ROADMAP.md` → **North Star: Commercial Goal**
+➡️ Source of truth: see `docs/ROADMAP.md` (section “1) North Star: что продаём”)
 
 This repository contains Python code and analysis scripts for the geometric–spectral model (geom-spec v4.0). The core model lives in `core/` (`geom_atoms`, `grower`, `complexity`, nuclear modules), while scans, tests and visualizations are in `analysis/`.
 

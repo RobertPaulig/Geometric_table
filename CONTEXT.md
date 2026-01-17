@@ -2,6 +2,15 @@
 
 Этот файл — **операционный entrypoint**: что читать, как проверять “истину”, как мерджить по STOP/GO.
 
+## Commercial TL;DR (enterprise-safe)
+
+- Боль рынка: миллионы кандидатов, bottleneck — дорогая валидация (docking/MD/QM/wet lab).
+- Что продаём: ultra-fast “first truth” фильтр + audit, чтобы решить “что стоит платить дальше” и ловить самообман скоринга.
+- Что не продаём: не заменяем docking/QM/wet lab и не заявляем клиническую истинность/аффинити/“drug discovery”.
+- Гарантия: воспроизводимый расчёт + явные OK/SKIP/ERROR + failure modes (без “тихих провалов”).
+- Истина результатов: release asset (zip) + `.sha256` + запись в `docs/artefacts_registry.md`.
+- Источник формулировки и DoD: `docs/ROADMAP.md` → §1 “North Star: что продаём”.
+
 ## Быстрый старт контекста (STOP если не сделано)
 
 1) Прочитать `CONTEXT.md` (этот файл) и `docs/99_index.md` (обязательные REF-ы).  
