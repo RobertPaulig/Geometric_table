@@ -369,11 +369,24 @@ separation facts (computed on status==OK rows only):
     - skip_policy: unknown_bucket
     - selection_K_requested: 10000
     - selection_K_effective: 60
+    - eligibility (K_effective decomposition; from cost_lift_report.json):
+      - rows_total: 200
+      - rows_ok: 200
+      - rows_truth_known: 200
+      - rows_scores_present: 200
+      - rows_verdict_pass_fail: 60
+      - rows_eligible_for_cost_lift: 60
+      - K_effective_reason_top:
+        - verdict_not_pass_fail: 140 (share_total: 0.700000)
     - baseline_random_hit_rate: 0.066667 (ci: 0.016667..0.133333)
     - baseline_score_only_hit_rate: 0.066667 (ci: 0.016667..0.133333)
     - filtered_hit_rate: 0.066667 (ci: 0.016667..0.150000)
     - uplift_vs_random: 0.000000
     - uplift_vs_score_only: 0.000000
+  - comparison_vs_value-utility-realtruth-2026-01-17-r1 (from r1 summary.csv + r2 cost_lift_report.json):
+    - selection_K_requested: 10000 -> 10000
+    - selection_K_effective: 60 -> 60
+    - limiting_reason (r1/r2): verdict_not_pass_fail=140 (OK rows with verdict=SKIP => gate/slack empty)
   - comparison_vs_value-utility-realtruth-2026-01-14-r2 (same pinned truth+scores; pre-coverage):
     - status_counts: OK=60, SKIP=140, ERROR=0 -> OK=200, SKIP=0, ERROR=0
     - top_skip_reasons: no_decoys_generated: 140 -> (none)
