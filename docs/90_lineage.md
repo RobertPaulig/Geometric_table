@@ -494,3 +494,38 @@
 - What: extended `decoy_strategy.v1` chain with intermediate strategies (strict -> RELAX-A -> RELAX-B -> aromatic-as-single fallback) to reduce `SKIP:no_decoys_generated` without changing audit/contracts; added deterministic smoke tests for baseline molecules.
 - PR: https://github.com/RobertPaulig/Geometric_table/pull/82 (head: 214394681c0a139b223fbca530a6bc6c57862c1b; merge: a07d5274c00fe375eca2b4b6ea66b701cbfc8c18)
 - CI run (3/3 ci/* on merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21091698355
+
+### 2026-01-17 - LIVE-PROOF-UTILITY-REAL-SCORES-POST-COVERAGE-1: utility realtruth (external truth+scores pinned) after COVERAGE-DECOYS-2
+- Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/value-utility-realtruth-2026-01-17-r1
+- Source commit: 0673c7d44192fd591a5910c7352d1c37aa1718d4
+- Publish run: https://github.com/RobertPaulig/Geometric_table/actions/runs/21093723229
+- scores.json (hetero_scores.v1; external pinned):
+  - scores_url: https://api.github.com/repos/RobertPaulig/Geometric_table/releases/assets/340466779
+  - SHA256(scores.json): 19F08F234C438515A37B6CB0B95040C74191BC2C383EAFD6CF6EFF9B26A3F168
+  - score_key: external_ci_rule_v1
+- truth.csv (customer_truth.v1; external pinned):
+  - truth_url: https://api.github.com/repos/RobertPaulig/Geometric_table/releases/assets/340297819
+  - SHA256(truth.csv): 1403593FC0497E19CA2A8DD78B5BC6DEE88790F809AED0FA47F6F0744198C2A2
+- Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/value-utility-realtruth-2026-01-17-r1/value_utility_realtruth_evidence_pack.zip
+- SHA256(value_utility_realtruth_evidence_pack.zip): 43B489FBFBF813AB0FE5E62FC9038649A9DD3C5A75D9D038241DE6800FACFF1F
+- Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/88 (merge: 134bd6f17947327603f3425d21b67cb5da9c8cca)
+- CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21093888729
+- Facts:
+  - rows_total: 200
+  - rows_ok: 200
+  - scores_coverage.rows_missing_scores_input: 0
+  - status_counts: OK=200, SKIP=0, ERROR=0
+  - top_skip_reasons: (none)
+  - share_rows_with_n_decoys_gt_0: 1.000 (100.0%)
+  - utility (scores_source=external; skip_policy=unknown_bucket; K_requested=10000; K_effective=60):
+    - baseline_random_hit_rate: 0.066667 (ci: 0.016667..0.133333)
+    - baseline_score_only_hit_rate: 0.066667 (ci: 0.016667..0.133333)
+    - filtered_hit_rate: 0.066667 (ci: 0.016667..0.150000)
+    - uplift_vs_random: 0.000000
+    - uplift_vs_score_only: 0.000000
+  - comparison_vs_value-utility-realtruth-2026-01-14-r2 (same pinned truth+scores; pre-coverage):
+    - status_counts: OK=60, SKIP=140, ERROR=0 -> OK=200, SKIP=0, ERROR=0
+    - top_skip_reasons: no_decoys_generated: 140 -> (none)
+    - coverage_ok_rate: 0.300000 -> 1.000000
+    - share_rows_with_n_decoys_gt_0: 0.300000 -> 1.000000
+    - selection_K_effective: 60 -> 60
