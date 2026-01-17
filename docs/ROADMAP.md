@@ -314,6 +314,61 @@ HETERO-2 = “CI/CD для молекулярных ML-моделей”:
 
 ---
 
+## North Star: Commercial Goal (Ultra-fast validation of generated molecules)
+
+### The market problem
+Modern generative chemistry can produce **millions** of “drug-like” molecules, but the bottleneck is **validation**.
+Running expensive downstream evaluation (3D docking / MD / QM / wet lab) on a large candidate set is costly and slow.
+Pure ML scoring is often misleading: high headline metrics can hide dataset bias and “Clever Hans” effects.
+
+### Our commercial goal (what we sell)
+**HETERO-2 is an ultra-fast, reproducible "first truth" filter** for large generated libraries:
+it helps teams **decide what is worth paying for downstream** and **detect when scoring is self-deceptive**.
+
+Target (order-of-magnitude, workflow-dependent):
+- Reduce early validation cost for ~1,000,000 generated candidates from **~$500k-scale** workflows to **~$10k-scale** workflows,
+  by providing a fast 2D screening + audit layer *before* expensive stages.
+
+### What HETERO-2 does
+- **Ultra-fast 2D screening signal** (graph/operator-based descriptors) to rank / filter candidates at scale.
+- **Matched decoys / hard negatives** to stress-test scoring and avoid “easy negatives” that inflate metrics.
+- **Audit-grade outputs**: deterministic reports with explicit SKIP/ERROR reasons, plus negative controls to detect leakage/bias.
+- **Truth via artifacts**: results are published as evidence packs with checksums and recorded in the artefacts registry.
+
+### What HETERO-2 does NOT do (Non-Goals)
+- We do **not** replace docking / MD / QM / wet lab experiments.
+- We do **not** claim clinical validity, binding affinity truth, or “discovering drugs”.
+- We do **not** guarantee absolute accuracy; we guarantee **reproducible computation + transparent failure modes**.
+
+### Pilot DoD (2–4 weeks, one live proof)
+A pilot is successful when we can produce a single, auditable before/after report on the customer’s workflow:
+
+**Inputs**
+- A generated library (or a recent generative campaign output).
+- The customer’s current “baseline” early filter/scoring approach (whatever they use today).
+
+**Outputs**
+- A HETERO-2 run producing:
+  - ranked candidates + matched decoys,
+  - audit report with negative controls,
+  - evidence pack asset + `.sha256`,
+  - registry entry with OK/SKIP/ERROR and top SKIP reasons.
+
+**Measured outcomes**
+- Downstream efficiency:
+  - fewer candidates sent to expensive downstream stages (top-N reduction),
+  - with equal or improved downstream hit confirmation rate (as measured by the customer’s existing downstream stage).
+- Risk reduction:
+  - negative controls remain near-random (no suspicious “always-high” metrics),
+  - audit report flags failure modes clearly (no silent failures).
+- Reproducibility:
+  - rerunning on the same inputs produces the same verdict and matching checksums.
+
+Commercially, we win when the customer can say:
+> “We spend less on downstream evaluation and trust the screening decision more.”
+
+---
+
 ## 2) Референс-архитектура (минимальные компоненты)
 
 ### 2.1. Domain-модель SaaS
