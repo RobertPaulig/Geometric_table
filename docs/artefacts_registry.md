@@ -427,6 +427,15 @@ separation facts (computed on status==OK rows only):
   - top_skip_reasons: (none)
   - coverage_ok_rate: 1.000000
   - share_rows_with_n_decoys_gt_0: 1.000000
+  - scores_coverage (from cost_lift_report.json; summary.csv n_decoys_scored/n_decoys_generated):
+    - rows_total: 200
+    - rows_with_decoys_scored_gt0: 60
+    - rows_with_decoys_scored_eq0: 140
+    - decoys_scored_total: 240
+    - decoys_missing_total: 640
+  - comparison vs value-utility-realtruth-2026-01-17-r2:
+    - rows_with_decoys_scored_eq0: 140 -> 140
+    - selection_K_effective: 60 -> 60
   - utility (cost_lift.v1):
     - truth_source: external
     - truth_schema: customer_truth.v1
