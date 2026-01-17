@@ -150,6 +150,11 @@ def generate_cost_lift_report(
         if not verdict:
             raise CostLiftError(f"{summary_csv}: OK row {mol_id} has empty verdict")
 
+        if verdict not in {"PASS", "FAIL"}:
+            # OK rows may still have audit verdicts like SKIP (e.g., missing_scores_for_all_decoys),
+            # where gate/slack are intentionally empty. Such rows are not eligible for selection.
+            continue
+
         gate = _parse_float(str(r.get("gate", "")), where=f"{summary_csv}:id={mol_id}:gate")
         slack = _parse_float(str(r.get("slack", "")), where=f"{summary_csv}:id={mol_id}:slack")
 
