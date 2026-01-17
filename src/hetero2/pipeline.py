@@ -195,10 +195,12 @@ def run_pipeline_v2(
 
     items = [{"label": 1, "score": orig_score, "weight": orig_weight}]
     missing_scores = 0
+    missing_decoy_hashes: List[str] = []
     for d in decoys:
         h = str(d["hash"])
         if h not in scores:
             missing_scores += 1
+            missing_decoy_hashes.append(h)
             continue
         entry = scores[h]
         items.append({"label": 0, "score": float(entry["score"]), "weight": float(entry["weight"])})
@@ -236,6 +238,7 @@ def run_pipeline_v2(
             "decoys_total": len(decoys),
             "decoys_scored": len(decoys) - missing_scores,
             "decoys_missing": missing_scores,
+            "missing_decoy_hashes": missing_decoy_hashes,
         }
     return {
         "schema_version": "hetero2_pipeline.v1",

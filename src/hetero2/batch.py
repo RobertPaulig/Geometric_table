@@ -9,6 +9,7 @@ import subprocess
 import time
 import zlib
 import zipfile
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Iterable, List, Sequence
@@ -329,6 +330,8 @@ def run_batch(
         "decoys_scored": 0,
         "decoys_missing": 0,
     }
+    missing_decoy_hash_rows_affected: Counter[str] = Counter()
+    missing_decoy_hash_to_smiles: Dict[str, str] = {}
     done_ids: set[str] = set()
     if summary_path.exists() and resume:
         existing = list(csv.DictReader(summary_path.read_text(encoding="utf-8").splitlines()))
@@ -399,6 +402,28 @@ def run_batch(
                 scores_coverage["decoys_missing"] += decoys_missing
                 if decoys_missing > 0:
                     scores_coverage["rows_with_missing_decoys"] += 1
+
+                missing_hashes_raw = scov.get("missing_decoy_hashes", [])
+                if isinstance(missing_hashes_raw, list):
+                    missing_hashes = {str(h).strip() for h in missing_hashes_raw if str(h).strip()}
+                else:
+                    missing_hashes = set()
+
+                if missing_hashes:
+                    for h in missing_hashes:
+                        missing_decoy_hash_rows_affected[h] += 1
+
+                    decoys = pipeline.get("decoys", [])
+                    if isinstance(decoys, list):
+                        for d in decoys:
+                            if not isinstance(d, dict):
+                                continue
+                            h = str(d.get("hash", "")).strip()
+                            if not h or h not in missing_hashes or h in missing_decoy_hash_to_smiles:
+                                continue
+                            smi = str(d.get("smiles", "")).strip()
+                            if smi:
+                                missing_decoy_hash_to_smiles[h] = smi
         neg = res.get("neg", {}) if isinstance(res.get("neg"), dict) else {}
         spectral = {}
         if isinstance(pipeline, dict):
@@ -492,6 +517,32 @@ def run_batch(
                 handle_result(res)
 
     summary_file.close()
+
+    if score_mode == "external_scores":
+        missing_decoy_scores_path = out_dir / "missing_decoy_scores.csv"
+        missing_rows_sorted = sorted(missing_decoy_hash_rows_affected.items(), key=lambda kv: (-kv[1], kv[0]))
+        missing_decoy_scores_path.write_text("", encoding="utf-8")  # ensure file exists even if empty
+        with missing_decoy_scores_path.open("w", encoding="utf-8", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=["decoy_hash", "decoy_smiles", "count_rows_affected"])
+            w.writeheader()
+            for h, count in missing_rows_sorted:
+                w.writerow(
+                    {
+                        "decoy_hash": h,
+                        "decoy_smiles": missing_decoy_hash_to_smiles.get(h, ""),
+                        "count_rows_affected": int(count),
+                    }
+                )
+
+        scores_coverage["unique_missing_decoy_hashes"] = len(missing_rows_sorted)
+        scores_coverage["missing_decoy_hashes_top10"] = [
+            {
+                "decoy_hash": h,
+                "decoy_smiles": missing_decoy_hash_to_smiles.get(h, ""),
+                "count_rows_affected": int(count),
+            }
+            for h, count in missing_rows_sorted[:10]
+        ]
 
     runtime_s = max(time.time() - t_start, 1e-9)
     metrics = {
