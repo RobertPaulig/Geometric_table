@@ -419,3 +419,17 @@ separation facts (computed on status==OK rows only):
     - filtered_hit_rate: 0.055000 (ci: 0.025000..0.085000)
     - uplift_vs_random: 0.000000
     - uplift_vs_score_only: 0.000000
+
+## value-ring-suite-2026-01-17
+
+- Source commit: 7a7085e77faa8459295c625d9b413529a185e360
+- Release asset: https://github.com/RobertPaulig/Geometric_table/releases/download/value-ring-suite-2026-01-17/value_ring_suite_evidence_pack.zip
+- SHA256(value_ring_suite_evidence_pack.zip): 3F117FC323E2D727E83874EA97A6F3011181AEEDC2D041C9D0CA9B9EF2FE4B69
+- Command:
+  python scripts/pilot_generate_input.py --out_dir out_ring_suite --rows 200 --k_decoys 20 --seed 0 --full_cover_count 3
+  hetero2-batch --input out_ring_suite/input.csv --out_dir out_ring_suite --artifacts light --score_mode external_scores --scores_input out_ring_suite/scores.json --k_decoys 20 --workers 2 --timeout_s 60 --maxtasksperchild 100 --seed_strategy per_row --seed 0 --zip_pack
+- Outcome (facts from summary.csv):
+  - rows_total: 200
+  - status_counts: OK=200, SKIP=0, ERROR=0
+  - top_skip_reasons: (none)
+  - share_rows_with_n_decoys_gt_0: 1.000 (100.0%)
