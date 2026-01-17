@@ -7,6 +7,8 @@ from hetero2.decoys_rewire import DecoyResult, generate_rewire_decoys
 
 DECOY_STRATEGY_SCHEMA = "decoy_strategy.v1"
 DECOY_STRATEGY_STRICT = "rewire_strict_v1"
+DECOY_STRATEGY_RELAX_A = "rewire_relax_a_v1"
+DECOY_STRATEGY_RELAX_B = "rewire_relax_b_v1"
 DECOY_STRATEGY_FALLBACK = "rewire_fallback_aromatic_as_single_v1"
 
 
@@ -69,6 +71,17 @@ def generate_decoys_v1(
         raise ValueError("Invalid SMILES")
 
     strict_candidates = _bond_candidates_count(base, lock_aromatic=True, allow_ring_bonds=False)
+    relax_a_candidates = _bond_candidates_count(base, lock_aromatic=False, allow_ring_bonds=False)
+    relax_b_candidates = _bond_candidates_count(base, lock_aromatic=True, allow_ring_bonds=True)
+    coverage_markers = [
+        f"candidates_strict:{strict_candidates}",
+        f"candidates_relax_a:{relax_a_candidates}",
+        f"candidates_relax_b:{relax_b_candidates}",
+    ]
+
+    strict_stats: dict[str, int] | None = None
+    warnings_accum: list[str] = []
+
     if strict_candidates >= 2:
         strict = generate_rewire_decoys(
             smiles,
@@ -79,12 +92,50 @@ def generate_decoys_v1(
             allow_ring_bonds=False,
         )
         if strict.decoys:
-            return strict, DecoyStrategy(schema_version=DECOY_STRATEGY_SCHEMA, strategy_id=DECOY_STRATEGY_STRICT)
-        strict_warnings = list(strict.warnings)
+            strict_warnings = sorted(set(strict.warnings + coverage_markers + [f"decoy_strategy_used:{DECOY_STRATEGY_STRICT}"]))
+            return (
+                DecoyResult(decoys=strict.decoys, warnings=strict_warnings, stats=strict.stats),
+                DecoyStrategy(schema_version=DECOY_STRATEGY_SCHEMA, strategy_id=DECOY_STRATEGY_STRICT),
+            )
+        warnings_accum.extend(strict.warnings)
         strict_stats = dict(strict.stats)
     else:
-        strict_warnings = [f"strict_strategy_no_candidate_swap:{strict_candidates}"]
+        warnings_accum.append(f"strict_strategy_no_candidate_swap:{strict_candidates}")
         strict_stats = {"attempts": 0, "sanitize_fail": 0, "duplicate": 0, "no_candidate_swap": 0}
+
+    if relax_a_candidates >= 2:
+        relax_a = generate_rewire_decoys(
+            smiles,
+            k=int(k),
+            seed=int(seed),
+            max_attempts=max_attempts,
+            lock_aromatic=False,
+            allow_ring_bonds=False,
+        )
+        if relax_a.decoys:
+            relax_a_warnings = sorted(set(relax_a.warnings + warnings_accum + coverage_markers + [f"decoy_strategy_used:{DECOY_STRATEGY_RELAX_A}"]))
+            return (
+                DecoyResult(decoys=relax_a.decoys, warnings=relax_a_warnings, stats=relax_a.stats),
+                DecoyStrategy(schema_version=DECOY_STRATEGY_SCHEMA, strategy_id=DECOY_STRATEGY_RELAX_A),
+            )
+        warnings_accum.extend(relax_a.warnings)
+
+    if relax_b_candidates >= 2:
+        relax_b = generate_rewire_decoys(
+            smiles,
+            k=int(k),
+            seed=int(seed),
+            max_attempts=max_attempts,
+            lock_aromatic=True,
+            allow_ring_bonds=True,
+        )
+        if relax_b.decoys:
+            relax_b_warnings = sorted(set(relax_b.warnings + warnings_accum + coverage_markers + [f"decoy_strategy_used:{DECOY_STRATEGY_RELAX_B}"]))
+            return (
+                DecoyResult(decoys=relax_b.decoys, warnings=relax_b_warnings, stats=relax_b.stats),
+                DecoyStrategy(schema_version=DECOY_STRATEGY_SCHEMA, strategy_id=DECOY_STRATEGY_RELAX_B),
+            )
+        warnings_accum.extend(relax_b.warnings)
 
     fallback_warnings: list[str] = []
     fallback_smiles = smiles
@@ -104,13 +155,23 @@ def generate_decoys_v1(
         allow_ring_bonds=True,
     )
     if relaxed.decoys:
-        merged_warnings = sorted(set(strict_warnings + fallback_warnings + relaxed.warnings + ["decoy_fallback_used:1"]))
+        merged_warnings = sorted(
+            set(
+                warnings_accum
+                + fallback_warnings
+                + relaxed.warnings
+                + coverage_markers
+                + ["decoy_fallback_used:1", f"decoy_strategy_used:{DECOY_STRATEGY_FALLBACK}"]
+            )
+        )
         return (
             DecoyResult(decoys=relaxed.decoys, warnings=merged_warnings, stats=relaxed.stats),
             DecoyStrategy(schema_version=DECOY_STRATEGY_SCHEMA, strategy_id=DECOY_STRATEGY_FALLBACK),
         )
 
-    merged_warnings = sorted(set(strict_warnings + fallback_warnings + relaxed.warnings))
+    merged_warnings = sorted(
+        set(warnings_accum + fallback_warnings + relaxed.warnings + coverage_markers + [f"decoy_strategy_used:{DECOY_STRATEGY_FALLBACK}"])
+    )
     return (
         DecoyResult(decoys=[], warnings=merged_warnings, stats=strict_stats or relaxed.stats),
         DecoyStrategy(schema_version=DECOY_STRATEGY_SCHEMA, strategy_id=DECOY_STRATEGY_FALLBACK),
