@@ -414,6 +414,20 @@ separation facts (computed on status==OK rows only):
   - rows_total: 200
   - rows_ok: 200
   - scores_coverage.rows_missing_scores_input: 0
+  - request-pack (missing decoy scores):
+    - file: missing_decoy_scores.csv (decoy_hash, decoy_smiles, count_rows_affected)
+    - unique_missing_decoy_hashes: 32
+    - missing_decoy_hashes_top10 (count_rows_affected):
+      - 16838e384a1ad07ba566eb1ba546b792f81ef008cadf8ca5bd4a150eb4278e04: 20
+      - 261f06aef3a079146fbf5c640ed6255634398d2403c8f8a28cc1dceedf829701: 20
+      - 27d534891fdf401b06112f6782b5ccb19d330981222d665690788615e6ea60ff: 20
+      - 2aaa81cdce6a13e8fcb6c93aee12980032c0631a0aa903cc28fcde1b3bcd2620: 20
+      - 2e792df3a5423e877b28ed8151dfa7ec236cb31dbfa40c9fa87bd7bd0907a56d: 20
+      - 2e893b8a311f1d397c0ad45bfccaea754b3fa4f6e28408117b2f911590c7d1e7: 20
+      - 38b6ff5412a0dbf382f7d62c25f39295b686be99ccc2e454316a32258e2fd8f3: 20
+      - 39b7b2271fc96bba370e79b12892eec6a454be9ab1092def75846dc16f0c7da6: 20
+      - 41e029556ec97be0b90edd439ae810406f0b79c4657087ccfee27be8f69876b5: 20
+      - 4da1a135c98d550c0d25c7247de70a24a4516ae4a2fdb1b49941c63f54b94bdb: 20
   - truth_url: https://api.github.com/repos/RobertPaulig/Geometric_table/releases/assets/340297819
   - truth_csv_sha256: 1403593FC0497E19CA2A8DD78B5BC6DEE88790F809AED0FA47F6F0744198C2A2
   - scores_source: external
@@ -583,6 +597,51 @@ separation facts (computed on status==OK rows only):
 - Source commit: dd0af1f9c36297a196ac5df3472c07dcd6c7df6a
 - Release asset: https://github.com/RobertPaulig/Geometric_table/releases/download/value-utility-realtruth-2026-01-17-r3/value_utility_realtruth_evidence_pack.zip
 - SHA256(value_utility_realtruth_evidence_pack.zip): 815A9E3E1D8BBBE6BB16801A3BBC27C2CCD10E93D40168D10DD4A882C84B5236
+- Truth contract: docs/contracts/customer_truth.v1.md
+- Utility report contract: docs/contracts/cost_lift.v1.md
+- Command:
+  python scripts/pilot_generate_input.py --out_dir out_value_utility_realtruth --rows 200 --k_decoys 20 --seed 0 --full_cover_count 3
+  (scores input) scores_url: https://api.github.com/repos/RobertPaulig/Geometric_table/releases/assets/340466779
+  (scores input) scores_sha256: 19F08F234C438515A37B6CB0B95040C74191BC2C383EAFD6CF6EFF9B26A3F168
+  (scores input) scores_input_file: out_value_utility_realtruth/scores_external.json
+  (external truth) truth_url: https://api.github.com/repos/RobertPaulig/Geometric_table/releases/assets/340297819
+  (external truth) truth_sha256: 1403593FC0497E19CA2A8DD78B5BC6DEE88790F809AED0FA47F6F0744198C2A2
+  hetero2-batch --input out_value_utility_realtruth/input.csv --out_dir out_value_utility_realtruth --artifacts light --score_mode external_scores --scores_input out_value_utility_realtruth/scores_external.json --k_decoys 20 --workers 2 --timeout_s 60 --maxtasksperchild 100 --seed_strategy per_row --seed 0 --no_manifest
+  python scripts/cost_lift.py --summary_csv out_value_utility_realtruth/summary.csv --truth_csv out_value_utility_realtruth/truth.csv --k 10000 --seed 0 --skip_policy unknown_bucket --out out_value_utility_realtruth/cost_lift_report.json --bootstrap_n 500
+- Outcome (facts from summary.csv + cost_lift_report.json):
+  - rows_total: 200
+  - rows_ok: 200
+  - scores_coverage.rows_missing_scores_input: 0
+  - truth_url: https://api.github.com/repos/RobertPaulig/Geometric_table/releases/assets/340297819
+  - truth_csv_sha256: 1403593FC0497E19CA2A8DD78B5BC6DEE88790F809AED0FA47F6F0744198C2A2
+  - scores_source: external
+  - scores_input_file: scores_external.json
+  - scores_url: https://api.github.com/repos/RobertPaulig/Geometric_table/releases/assets/340466779
+  - scores_sha256_expected: 19F08F234C438515A37B6CB0B95040C74191BC2C383EAFD6CF6EFF9B26A3F168
+  - scores_json_sha256: 19F08F234C438515A37B6CB0B95040C74191BC2C383EAFD6CF6EFF9B26A3F168
+  - scores_schema_version: hetero_scores.v1
+  - score_key: external_ci_rule_v1
+  - status_counts: OK=200, SKIP=0, ERROR=0
+  - top_skip_reasons: (none)
+  - coverage_ok_rate: 1.000000
+  - share_rows_with_n_decoys_gt_0: 1.000000
+  - utility (cost_lift.v1):
+    - truth_source: external
+    - truth_schema: customer_truth.v1
+    - skip_policy: unknown_bucket
+    - selection_K_requested: 10000
+    - selection_K_effective: 60
+    - baseline_random_hit_rate: 0.066667 (ci: 0.016667..0.133333)
+    - baseline_score_only_hit_rate: 0.066667 (ci: 0.016667..0.133333)
+    - filtered_hit_rate: 0.066667 (ci: 0.016667..0.150000)
+    - uplift_vs_random: 0.000000
+    - uplift_vs_score_only: 0.000000
+
+## value-utility-realtruth-2026-01-17-r4
+
+- Source commit: 8d5a38c2dcc71a25dbcab6c9e00929d679e2018a
+- Release asset: https://github.com/RobertPaulig/Geometric_table/releases/download/value-utility-realtruth-2026-01-17-r4/value_utility_realtruth_evidence_pack.zip
+- SHA256(value_utility_realtruth_evidence_pack.zip): CEA2E0599355CC5A31CA4B2318EC707AF85BE4298196E2AEB672F32C9A9C29AA
 - Truth contract: docs/contracts/customer_truth.v1.md
 - Utility report contract: docs/contracts/cost_lift.v1.md
 - Command:
