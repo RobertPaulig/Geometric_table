@@ -414,6 +414,20 @@ separation facts (computed on status==OK rows only):
   - rows_total: 200
   - rows_ok: 200
   - scores_coverage.rows_missing_scores_input: 0
+  - request-pack (missing decoy scores):
+    - file: missing_decoy_scores.csv (decoy_hash, decoy_smiles, count_rows_affected)
+    - unique_missing_decoy_hashes: 32
+    - missing_decoy_hashes_top10 (count_rows_affected):
+      - 16838e384a1ad07ba566eb1ba546b792f81ef008cadf8ca5bd4a150eb4278e04: 20
+      - 261f06aef3a079146fbf5c640ed6255634398d2403c8f8a28cc1dceedf829701: 20
+      - 27d534891fdf401b06112f6782b5ccb19d330981222d665690788615e6ea60ff: 20
+      - 2aaa81cdce6a13e8fcb6c93aee12980032c0631a0aa903cc28fcde1b3bcd2620: 20
+      - 2e792df3a5423e877b28ed8151dfa7ec236cb31dbfa40c9fa87bd7bd0907a56d: 20
+      - 2e893b8a311f1d397c0ad45bfccaea754b3fa4f6e28408117b2f911590c7d1e7: 20
+      - 38b6ff5412a0dbf382f7d62c25f39295b686be99ccc2e454316a32258e2fd8f3: 20
+      - 39b7b2271fc96bba370e79b12892eec6a454be9ab1092def75846dc16f0c7da6: 20
+      - 41e029556ec97be0b90edd439ae810406f0b79c4657087ccfee27be8f69876b5: 20
+      - 4da1a135c98d550c0d25c7247de70a24a4516ae4a2fdb1b49941c63f54b94bdb: 20
   - truth_url: https://api.github.com/repos/RobertPaulig/Geometric_table/releases/assets/340297819
   - truth_csv_sha256: 1403593FC0497E19CA2A8DD78B5BC6DEE88790F809AED0FA47F6F0744198C2A2
   - scores_source: external
