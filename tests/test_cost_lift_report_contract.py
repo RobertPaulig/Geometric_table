@@ -11,12 +11,12 @@ def test_cost_lift_report_contract(tmp_path: Path) -> None:
     summary_csv = tmp_path / "summary.csv"
     summary_rows = [
         # PASS verdicts (slack >= 0), but only some are true PASS in expensive truth.
-        {"id": "m1", "status": "OK", "verdict": "PASS", "gate": "0.6", "slack": "0.4"},
-        {"id": "m2", "status": "OK", "verdict": "PASS", "gate": "0.6", "slack": "0.3"},
-        {"id": "m3", "status": "OK", "verdict": "PASS", "gate": "0.6", "slack": "0.05"},
+        {"id": "m1", "status": "OK", "verdict": "PASS", "gate": "0.6", "slack": "0.4", "n_decoys_generated": "2", "n_decoys_scored": "2"},
+        {"id": "m2", "status": "OK", "verdict": "PASS", "gate": "0.6", "slack": "0.3", "n_decoys_generated": "2", "n_decoys_scored": "2"},
+        {"id": "m3", "status": "OK", "verdict": "PASS", "gate": "0.6", "slack": "0.05", "n_decoys_generated": "2", "n_decoys_scored": "2"},
         # High AUC but FAIL due to high gate -> should be excluded by verdict filter.
-        {"id": "m4", "status": "OK", "verdict": "FAIL", "gate": "0.95", "slack": "-0.05"},
-        {"id": "m5", "status": "OK", "verdict": "FAIL", "gate": "0.95", "slack": "-0.45"},
+        {"id": "m4", "status": "OK", "verdict": "FAIL", "gate": "0.95", "slack": "-0.05", "n_decoys_generated": "2", "n_decoys_scored": "2"},
+        {"id": "m5", "status": "OK", "verdict": "FAIL", "gate": "0.95", "slack": "-0.45", "n_decoys_generated": "2", "n_decoys_scored": "2"},
     ]
     with summary_csv.open("w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=list(summary_rows[0].keys()))
@@ -73,6 +73,22 @@ def test_cost_lift_report_contract(tmp_path: Path) -> None:
     assert 0 <= eligibility["rows_scores_present"] <= eligibility["rows_total"]
     assert isinstance(eligibility["K_effective_reason_top"], list)
 
+    scores_coverage = report["scores_coverage"]
+    for key in [
+        "rows_total",
+        "rows_with_decoys_scored_gt0",
+        "rows_with_decoys_scored_eq0",
+        "decoys_scored_total",
+        "decoys_missing_total",
+    ]:
+        assert key in scores_coverage
+
+    assert scores_coverage["rows_total"] == report["N_total"] == 5
+    assert scores_coverage["rows_with_decoys_scored_gt0"] == 5
+    assert scores_coverage["rows_with_decoys_scored_eq0"] == 0
+    assert scores_coverage["decoys_scored_total"] == 10
+    assert scores_coverage["decoys_missing_total"] == 0
+
     methods = report["methods"]
     for name in ["baseline_random", "baseline_score_only_topk", "filtered_score_plus_audit_topk"]:
         assert name in methods
@@ -89,7 +105,7 @@ def test_cost_lift_report_contract(tmp_path: Path) -> None:
 
 def test_cost_lift_report_fails_without_truth(tmp_path: Path) -> None:
     summary_csv = tmp_path / "summary.csv"
-    summary_rows = [{"id": "m1", "status": "OK", "verdict": "PASS", "gate": "0.6", "slack": "0.4"}]
+    summary_rows = [{"id": "m1", "status": "OK", "verdict": "PASS", "gate": "0.6", "slack": "0.4", "n_decoys_generated": "1", "n_decoys_scored": "1"}]
     with summary_csv.open("w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=list(summary_rows[0].keys()))
         writer.writeheader()
@@ -109,8 +125,8 @@ def test_cost_lift_report_fails_without_truth(tmp_path: Path) -> None:
 def test_cost_lift_report_ignores_ok_rows_with_verdict_skip(tmp_path: Path) -> None:
     summary_csv = tmp_path / "summary.csv"
     summary_rows = [
-        {"id": "m1", "status": "OK", "verdict": "SKIP", "gate": "", "slack": ""},
-        {"id": "m2", "status": "OK", "verdict": "PASS", "gate": "0.6", "slack": "0.4"},
+        {"id": "m1", "status": "OK", "verdict": "SKIP", "gate": "", "slack": "", "n_decoys_generated": "4", "n_decoys_scored": "0"},
+        {"id": "m2", "status": "OK", "verdict": "PASS", "gate": "0.6", "slack": "0.4", "n_decoys_generated": "2", "n_decoys_scored": "2"},
     ]
     with summary_csv.open("w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=list(summary_rows[0].keys()))
@@ -150,4 +166,11 @@ def test_cost_lift_report_ignores_ok_rows_with_verdict_skip(tmp_path: Path) -> N
     top = eligibility["K_effective_reason_top"]
     assert top and top[0]["reason"] == "verdict_not_pass_fail"
     assert int(top[0]["count"]) == 1
+
+    scores_coverage = report["scores_coverage"]
+    assert scores_coverage["rows_total"] == 2
+    assert scores_coverage["rows_with_decoys_scored_gt0"] == 1
+    assert scores_coverage["rows_with_decoys_scored_eq0"] == 1
+    assert scores_coverage["decoys_scored_total"] == 2
+    assert scores_coverage["decoys_missing_total"] == 4
 

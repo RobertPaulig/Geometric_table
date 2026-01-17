@@ -64,6 +64,13 @@ def _parse_float(value: str, *, where: str) -> float:
         raise CostLiftError(f"failed to parse float at {where}: {value!r}") from exc
 
 
+def _parse_int(value: str, *, where: str) -> int:
+    try:
+        return int(float(value))
+    except Exception as exc:
+        raise CostLiftError(f"failed to parse int at {where}: {value!r}") from exc
+
+
 def _bootstrap_ci(hit_flags: list[int], *, seed: int, n_bootstrap: int) -> tuple[float, float]:
     if n_bootstrap <= 0:
         raise CostLiftError(f"n_bootstrap must be > 0, got: {n_bootstrap}")
@@ -98,7 +105,11 @@ def generate_cost_lift_report(
         raise CostLiftError(f"unsupported skip_policy: {skip_policy!r} (expected 'unknown_bucket')")
 
     summary_rows = _read_csv_dicts(summary_csv)
-    _require_columns(summary_rows, path=summary_csv, required=["id", "status", "verdict", "gate", "slack"])
+    _require_columns(
+        summary_rows,
+        path=summary_csv,
+        required=["id", "status", "verdict", "gate", "slack", "n_decoys_generated", "n_decoys_scored"],
+    )
 
     truth_rows = _read_csv_dicts(truth_csv)
     _require_columns(
@@ -144,9 +155,30 @@ def generate_cost_lift_report(
     ok_with_truth_count = 0
     ok_with_truth_and_pass_fail_verdict_count = 0
 
+    rows_with_decoys_scored_gt0 = 0
+    rows_with_decoys_scored_eq0 = 0
+    decoys_scored_total = 0
+    decoys_missing_total = 0
+
     ok_with_truth = []
     eligible: list[EligibleRow] = []
-    for r in summary_rows:
+    for idx, r in enumerate(summary_rows):
+        mol_id = (r.get("id") or "").strip()
+        where_base = f"{summary_csv}:row={idx+2}" + (f":id={mol_id}" if mol_id else "")
+
+        n_decoys_scored = _parse_int(str(r.get("n_decoys_scored", "")), where=f"{where_base}:n_decoys_scored")
+        n_decoys_generated = _parse_int(str(r.get("n_decoys_generated", "")), where=f"{where_base}:n_decoys_generated")
+        if n_decoys_scored < 0 or n_decoys_generated < 0:
+            raise CostLiftError(f"{summary_csv}: negative decoy counts at {where_base}")
+
+        if n_decoys_scored > 0:
+            rows_with_decoys_scored_gt0 += 1
+        else:
+            rows_with_decoys_scored_eq0 += 1
+
+        decoys_scored_total += n_decoys_scored
+        decoys_missing_total += max(0, n_decoys_generated - n_decoys_scored)
+
         status = (r.get("status") or "").strip().upper()
         reason_raw = (r.get("reason") or r.get("skip_reason") or "").strip().lower()
         if status == "SKIP" and reason_raw == "missing_scores_input":
@@ -157,7 +189,6 @@ def generate_cost_lift_report(
             else:
                 eligibility_reason_counts[ELIGIBILITY_REASON_STATUS_NOT_OK] += 1
             continue
-        mol_id = (r.get("id") or "").strip()
         if not mol_id:
             eligibility_reason_counts[ELIGIBILITY_REASON_STATUS_NOT_OK] += 1
             continue
@@ -222,6 +253,14 @@ def generate_cost_lift_report(
         "K_effective_reason_top": k_effective_reason_top,
     }
 
+    scores_coverage_fact = {
+        "rows_total": int(n_total),
+        "rows_with_decoys_scored_gt0": int(rows_with_decoys_scored_gt0),
+        "rows_with_decoys_scored_eq0": int(rows_with_decoys_scored_eq0),
+        "decoys_scored_total": int(decoys_scored_total),
+        "decoys_missing_total": int(decoys_missing_total),
+    }
+
     def _method_result(*, name: str, selected: list[EligibleRow]) -> dict[str, Any]:
         if not selected:
             raise CostLiftError(f"method {name}: empty selection; cannot compute hit_rate/uplift")
@@ -282,6 +321,7 @@ def generate_cost_lift_report(
         "truth_coverage_rate": truth_coverage_rate,
         "unknown_bucket_rate": unknown_bucket_rate,
         "eligibility": eligibility,
+        "scores_coverage": scores_coverage_fact,
         "methods": methods,
         "uplift_score_plus_audit_vs_score_only": uplift_vs_score_only,
         "uplift_score_plus_audit_vs_random": uplift_vs_random,
