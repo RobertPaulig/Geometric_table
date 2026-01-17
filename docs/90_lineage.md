@@ -599,3 +599,29 @@
   - request-pack file: missing_decoy_scores.csv
   - scores_coverage.unique_missing_decoy_hashes: 32
   - scores_coverage.missing_decoy_hashes_top10: see `missing_decoy_hashes_top10` in `metrics.json` and the registry entry for the tag.
+
+### 2026-01-17 - DECOY-SCORES-ASSET-REFRESH-1: refresh external scores asset to cover missing decoy_hashes and unlock K_effective
+- What: published an updated external scores asset (same `score_key=external_ci_rule_v1`, `hetero_scores.v1`) that covers the missing decoy hashes from the r4 request-pack, then reran utility realtruth to confirm `K_effective` unlock.
+- External scores asset:
+  - Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/scores-external-ci-rule-v1-2026-01-17-r1
+  - Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/scores-external-ci-rule-v1-2026-01-17-r1/hetero_scores_external_ci_rule_v1.json
+  - SHA256(hetero_scores_external_ci_rule_v1.json): E3A00B22B7419D87DE059E66045C8466F8871FBE8380D7A4EC4F3F6B4CCA87C0
+- Utility rerun:
+  - Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/value-utility-realtruth-2026-01-17-r5
+  - Source commit: d74e46ee23e98d49fbc8a37bcae32fdacbcf49ec
+  - Publish run: https://github.com/RobertPaulig/Geometric_table/actions/runs/21101681012
+  - scores.json (hetero_scores.v1; external pinned):
+    - scores_url: https://api.github.com/repos/RobertPaulig/Geometric_table/releases/assets/342035099
+    - SHA256(scores.json): E3A00B22B7419D87DE059E66045C8466F8871FBE8380D7A4EC4F3F6B4CCA87C0
+    - score_key: external_ci_rule_v1
+  - truth.csv (customer_truth.v1; external pinned):
+    - truth_url: https://api.github.com/repos/RobertPaulig/Geometric_table/releases/assets/340297819
+    - SHA256(truth.csv): 1403593FC0497E19CA2A8DD78B5BC6DEE88790F809AED0FA47F6F0744198C2A2
+  - Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/value-utility-realtruth-2026-01-17-r5/value_utility_realtruth_evidence_pack.zip
+  - SHA256(value_utility_realtruth_evidence_pack.zip): A637058199BBD523B69C95680BAF0D7D768293CBCE1FEAC7237F6478F1304BB1
+  - Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/100 (merge: 239ccee6241d92cd0f1aac19833d57e7fbc5b7ce)
+  - CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21101797258
+  - Facts:
+    - scores_coverage.unique_missing_decoy_hashes: 0
+    - scores_coverage.rows_with_decoys_scored_eq0: 0 (was 140 in r4)
+    - selection_K_effective: 200 (was 60 in r4)
