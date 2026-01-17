@@ -489,3 +489,8 @@
     - filtered_hit_rate: 0.055000 (ci: 0.025000..0.085000)
     - uplift_vs_random: 0.000000
     - uplift_vs_score_only: 0.000000
+
+### 2026-01-17 - COVERAGE-DECOYS-2: RELAX-A/RELAX-B decoy strategies + coverage smoke tests
+- What: extended `decoy_strategy.v1` chain with intermediate strategies (strict -> RELAX-A -> RELAX-B -> aromatic-as-single fallback) to reduce `SKIP:no_decoys_generated` without changing audit/contracts; added deterministic smoke tests for baseline molecules.
+- PR: https://github.com/RobertPaulig/Geometric_table/pull/82 (head: 214394681c0a139b223fbca530a6bc6c57862c1b; merge: a07d5274c00fe375eca2b4b6ea66b701cbfc8c18)
+- CI run (3/3 ci/* on merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21091698355
