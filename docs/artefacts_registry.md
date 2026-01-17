@@ -433,3 +433,7 @@ separation facts (computed on status==OK rows only):
   - status_counts: OK=200, SKIP=0, ERROR=0
   - top_skip_reasons: (none)
   - share_rows_with_n_decoys_gt_0: 1.000 (100.0%)
+  - comparison_vs_value-ring-suite-2026-01-10:
+    - status_counts: OK=60, SKIP=140, ERROR=0 -> OK=200, SKIP=0, ERROR=0
+    - top_skip_reasons: no_decoys_generated: 140 -> (none)
+    - share_rows_with_n_decoys_gt_0: 0.300 (30.0%) -> 1.000 (100.0%)
