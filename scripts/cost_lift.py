@@ -6,6 +6,7 @@ import json
 import math
 import random
 import zlib
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Mapping
@@ -13,6 +14,12 @@ from typing import Any, Iterable, Mapping
 
 class CostLiftError(ValueError):
     pass
+
+
+ELIGIBILITY_REASON_TRUTH_UNKNOWN_BUCKET_OR_MISSING = "truth_unknown_bucket_or_missing"
+ELIGIBILITY_REASON_VERDICT_NOT_PASS_FAIL = "verdict_not_pass_fail"
+ELIGIBILITY_REASON_MISSING_SCORES_INPUT = "missing_scores_input"
+ELIGIBILITY_REASON_STATUS_NOT_OK = "status_not_ok"
 
 
 @dataclass(frozen=True)
@@ -132,19 +139,34 @@ def generate_cost_lift_report(
     n_skip = sum(1 for r in summary_rows if (r.get("status") or "").strip().upper() == "SKIP")
     n_error = sum(1 for r in summary_rows if (r.get("status") or "").strip().upper() == "ERROR")
 
+    eligibility_reason_counts: Counter[str] = Counter()
+    missing_scores_input_count = 0
+    ok_with_truth_count = 0
+    ok_with_truth_and_pass_fail_verdict_count = 0
+
     ok_with_truth = []
     eligible: list[EligibleRow] = []
     for r in summary_rows:
         status = (r.get("status") or "").strip().upper()
+        reason_raw = (r.get("reason") or r.get("skip_reason") or "").strip().lower()
+        if status == "SKIP" and reason_raw == "missing_scores_input":
+            missing_scores_input_count += 1
         if status != "OK":
+            if status == "SKIP" and reason_raw == "missing_scores_input":
+                eligibility_reason_counts[ELIGIBILITY_REASON_MISSING_SCORES_INPUT] += 1
+            else:
+                eligibility_reason_counts[ELIGIBILITY_REASON_STATUS_NOT_OK] += 1
             continue
         mol_id = (r.get("id") or "").strip()
         if not mol_id:
+            eligibility_reason_counts[ELIGIBILITY_REASON_STATUS_NOT_OK] += 1
             continue
         truth = truth_by_id.get(mol_id)
         if not truth:
+            eligibility_reason_counts[ELIGIBILITY_REASON_TRUTH_UNKNOWN_BUCKET_OR_MISSING] += 1
             continue
         ok_with_truth.append(mol_id)
+        ok_with_truth_count += 1
 
         verdict = (r.get("verdict") or "").strip().upper()
         if not verdict:
@@ -153,8 +175,10 @@ def generate_cost_lift_report(
         if verdict not in {"PASS", "FAIL"}:
             # OK rows may still have audit verdicts like SKIP (e.g., missing_scores_for_all_decoys),
             # where gate/slack are intentionally empty. Such rows are not eligible for selection.
+            eligibility_reason_counts[ELIGIBILITY_REASON_VERDICT_NOT_PASS_FAIL] += 1
             continue
 
+        ok_with_truth_and_pass_fail_verdict_count += 1
         gate = _parse_float(str(r.get("gate", "")), where=f"{summary_csv}:id={mol_id}:gate")
         slack = _parse_float(str(r.get("slack", "")), where=f"{summary_csv}:id={mol_id}:slack")
 
@@ -182,6 +206,21 @@ def generate_cost_lift_report(
         raise CostLiftError("no eligible rows: need status=OK + truth label + numeric gate/slack")
 
     k_effective_common = min(int(k), len(eligible))
+
+    k_effective_reason_top: list[dict[str, Any]] = []
+    for reason, count in sorted(eligibility_reason_counts.items(), key=lambda kv: (-kv[1], kv[0]))[:3]:
+        share = (float(count) / float(n_total)) if n_total else 0.0
+        k_effective_reason_top.append({"reason": reason, "count": int(count), "share": share})
+
+    eligibility = {
+        "rows_total": int(n_total),
+        "rows_ok": int(n_ok),
+        "rows_verdict_pass_fail": int(ok_with_truth_and_pass_fail_verdict_count),
+        "rows_truth_known": int(ok_with_truth_count),
+        "rows_scores_present": int(n_total - missing_scores_input_count),
+        "rows_eligible_for_cost_lift": int(len(eligible)),
+        "K_effective_reason_top": k_effective_reason_top,
+    }
 
     def _method_result(*, name: str, selected: list[EligibleRow]) -> dict[str, Any]:
         if not selected:
@@ -242,6 +281,7 @@ def generate_cost_lift_report(
         "N_with_truth": int(n_with_truth),
         "truth_coverage_rate": truth_coverage_rate,
         "unknown_bucket_rate": unknown_bucket_rate,
+        "eligibility": eligibility,
         "methods": methods,
         "uplift_score_plus_audit_vs_score_only": uplift_vs_score_only,
         "uplift_score_plus_audit_vs_random": uplift_vs_random,
