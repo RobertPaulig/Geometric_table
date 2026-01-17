@@ -553,3 +553,27 @@
   - eligibility (from cost_lift_report.json):
     - rows_truth_known=200, rows_verdict_pass_fail=60, rows_eligible_for_cost_lift=60
     - K_effective_reason_top: verdict_not_pass_fail=140 (share_total=0.700000)
+
+### 2026-01-17 - UTILITY-K-EFFECTIVE-UNLOCK-2: decoy scores coverage sync (n_decoys_scored) to explain verdict=SKIP and K_effective
+- What: added `scores_coverage` aggregation to `cost_lift_report.json` from `summary.csv` (`n_decoys_generated`, `n_decoys_scored`) and recorded it in registry via a pinned utility realtruth rerun.
+- Code PR: https://github.com/RobertPaulig/Geometric_table/pull/94 (merge: dd0af1f9c36297a196ac5df3472c07dcd6c7df6a)
+- Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/value-utility-realtruth-2026-01-17-r3
+- Source commit: dd0af1f9c36297a196ac5df3472c07dcd6c7df6a
+- Publish run: https://github.com/RobertPaulig/Geometric_table/actions/runs/21099962560
+- scores.json (hetero_scores.v1; external pinned):
+  - scores_url: https://api.github.com/repos/RobertPaulig/Geometric_table/releases/assets/340466779
+  - SHA256(scores.json): 19F08F234C438515A37B6CB0B95040C74191BC2C383EAFD6CF6EFF9B26A3F168
+  - score_key: external_ci_rule_v1
+- truth.csv (customer_truth.v1; external pinned):
+  - truth_url: https://api.github.com/repos/RobertPaulig/Geometric_table/releases/assets/340297819
+  - SHA256(truth.csv): 1403593FC0497E19CA2A8DD78B5BC6DEE88790F809AED0FA47F6F0744198C2A2
+- Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/value-utility-realtruth-2026-01-17-r3/value_utility_realtruth_evidence_pack.zip
+- SHA256(value_utility_realtruth_evidence_pack.zip): 815A9E3E1D8BBBE6BB16801A3BBC27C2CCD10E93D40168D10DD4A882C84B5236
+- Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/95 (merge: a58bd04dff39fce00b38cb0ea510ea7f3afdc994)
+- CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21100128809
+- Facts (from summary.csv):
+  - n_decoys_scored histogram: 0=140, 1-5=40, 6-10=20
+  - verdict x (n_decoys_scored==0 vs >0): PASS(gt0)=60; SKIP(eq0)=140
+  - scores_coverage (from cost_lift_report.json):
+    - rows_with_decoys_scored_gt0=60, rows_with_decoys_scored_eq0=140
+    - decoys_scored_total=240, decoys_missing_total=640
