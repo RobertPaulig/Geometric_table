@@ -11,7 +11,7 @@ from hetero1a.schemas import SCORES_SCHEMA
 from hetero2.chemgraph import ChemGraph
 from hetero2.decoy_strategy import generate_decoys_v1
 from hetero2.guardrails import MAX_ATOMS_DEFAULT, preflight_smiles
-from hetero2.physics_operator import SPECTRAL_ENTROPY_BETA_DEFAULT, compute_physics_features
+from hetero2.physics_operator import SPECTRAL_ENTROPY_BETA_DEFAULT, compute_dos_ldos_payload, compute_physics_features
 from hetero2.spectral import compute_stability_metrics, laplacian_eigvals
 
 
@@ -170,6 +170,13 @@ def run_pipeline_v2(
         physics_mode=str(physics_mode),
         edge_weight_mode=str(edge_weight_mode),
         beta=float(SPECTRAL_ENTROPY_BETA_DEFAULT),
+    )
+    operator["dos_ldos"] = compute_dos_ldos_payload(
+        adjacency=cg.adjacency(),
+        bonds=cg.heavy_bonds_with_order(),
+        types=cg.heavy_atom_types(),
+        physics_mode=str(physics_mode),
+        edge_weight_mode=str(edge_weight_mode),
     )
     decoys_result, decoy_strategy = generate_decoys_v1(
         cg.canonical_smiles,

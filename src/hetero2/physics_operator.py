@@ -13,6 +13,10 @@ ATOMS_DB_V1_REL_PATH = Path("data") / "atoms_db_v1.json"
 PHYSICS_PARAMS_SOURCE = "atoms_db_v1_json"
 SPECTRAL_ENTROPY_BETA_DEFAULT = 1.0
 DELTA_CHI_ALPHA_DEFAULT = 1.0
+DOS_LDOS_SCHEMA = "hetero2_dos_ldos.v1"
+DOS_GRID_N_DEFAULT = 128
+DOS_ETA_DEFAULT = 0.05
+DOS_ENERGY_MARGIN_SIGMAS_DEFAULT = 3.0
 
 
 class MissingPhysicsParams(RuntimeError):
@@ -101,6 +105,12 @@ def eigvals_symmetric(m: np.ndarray) -> np.ndarray:
     return np.sort(vals)
 
 
+def eigh_symmetric(m: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    vals, vecs = np.linalg.eigh(m)
+    idx = np.argsort(vals)
+    return np.asarray(vals[idx], dtype=float), np.asarray(vecs[:, idx], dtype=float)
+
+
 def spectral_gap(eigvals: Sequence[float]) -> float:
     vals = np.array(list(eigvals), dtype=float)
     if vals.size < 2:
@@ -142,6 +152,107 @@ def _chis_for_types(types: Sequence[int], atoms_db: AtomsDbV1) -> np.ndarray:
     if missing:
         raise MissingPhysicsParams(missing_atomic_numbers=missing, source_path=atoms_db.source_path, missing_key="chi")
     return np.array([float(atoms_db.chi_by_atomic_num[int(z)]) for z in types], dtype=float)
+
+
+def _gaussian_kernel(x: np.ndarray, *, eta: float) -> np.ndarray:
+    e = float(eta)
+    if e <= 0.0:
+        raise ValueError("dos_eta must be > 0")
+    c = 1.0 / (e * math.sqrt(2.0 * math.pi))
+    return c * np.exp(-0.5 * (x / e) ** 2)
+
+
+def _auto_energy_grid(
+    *,
+    eigenvalues: Sequence[float],
+    grid_n: int,
+    eta: float,
+    margin_sigmas: float = DOS_ENERGY_MARGIN_SIGMAS_DEFAULT,
+) -> np.ndarray:
+    vals = np.array(list(eigenvalues), dtype=float)
+    vals = vals[np.isfinite(vals)]
+    if vals.size == 0:
+        return np.array([], dtype=float)
+    margin = float(margin_sigmas) * float(eta)
+    e_min = float(np.min(vals)) - margin
+    e_max = float(np.max(vals)) + margin
+    if not math.isfinite(e_min) or not math.isfinite(e_max) or e_max <= e_min:
+        return np.array([], dtype=float)
+    n = int(grid_n)
+    if n < 2:
+        raise ValueError("dos_grid_n must be >= 2")
+    return np.linspace(e_min, e_max, n, dtype=float)
+
+
+def compute_dos_curve(
+    *,
+    eigenvalues: Sequence[float],
+    energy_grid: np.ndarray,
+    eta: float,
+    normalize: bool = True,
+    chunk_size: int = 10_000,
+) -> np.ndarray:
+    grid = np.asarray(energy_grid, dtype=float)
+    if grid.size == 0:
+        return np.array([], dtype=float)
+    vals = np.array(list(eigenvalues), dtype=float)
+    vals = vals[np.isfinite(vals)]
+    if vals.size == 0:
+        return np.zeros_like(grid)
+
+    dos = np.zeros_like(grid)
+    step = int(chunk_size)
+    if step < 1:
+        step = vals.size
+    for start in range(0, vals.size, step):
+        chunk = vals[start : start + step]
+        diff = grid[None, :] - chunk[:, None]
+        dos += np.sum(_gaussian_kernel(diff, eta=float(eta)), axis=0)
+    if normalize:
+        dos = dos / float(vals.size)
+    return dos
+
+
+def compute_ldos_curve(
+    *,
+    eigenvalues: Sequence[float],
+    weights: Sequence[float],
+    energy_grid: np.ndarray,
+    eta: float,
+) -> np.ndarray:
+    grid = np.asarray(energy_grid, dtype=float)
+    vals = np.array(list(eigenvalues), dtype=float)
+    w = np.array(list(weights), dtype=float)
+    if grid.size == 0 or vals.size == 0:
+        return np.array([], dtype=float)
+    if vals.size != w.size:
+        raise ValueError("eigenvalues and weights must have same length for LDOS")
+    diff = grid[None, :] - vals[:, None]
+    g = _gaussian_kernel(diff, eta=float(eta))
+    return np.sum(w[:, None] * g, axis=0)
+
+
+def ldos_atom_record(
+    *,
+    eigenvalues: np.ndarray,
+    eigenvectors: np.ndarray,
+    types: Sequence[int],
+) -> dict[str, object]:
+    vals = np.asarray(eigenvalues, dtype=float)
+    vecs = np.asarray(eigenvectors, dtype=float)
+    if vecs.ndim != 2 or vals.ndim != 1 or vecs.shape[0] != vecs.shape[1] or vecs.shape[1] != vals.size:
+        raise ValueError("Invalid eigen-decomposition shapes for LDOS record")
+    weights_by_atom = vecs**2
+    max_w_by_atom = np.max(weights_by_atom, axis=1)
+    atom_idx = int(np.argmax(max_w_by_atom))
+    atomic_number = int(types[atom_idx])
+    weights = np.asarray(weights_by_atom[atom_idx], dtype=float)
+    return {
+        "atom_idx": atom_idx,
+        "atomic_number": atomic_number,
+        "eigvals": [float(x) for x in vals.tolist()],
+        "weights": [float(x) for x in weights.tolist()],
+    }
 
 
 def weighted_adjacency_from_bonds(
@@ -286,4 +397,69 @@ def compute_spectra(
         H = lap + np.diag(v)
         out["H"] = eigvals_symmetric(H)
     return out
+
+
+def compute_dos_ldos_payload(
+    *,
+    adjacency: np.ndarray,
+    bonds: Sequence[tuple[int, int, float]] | None,
+    types: Sequence[int],
+    physics_mode: str,
+    edge_weight_mode: str,
+    atoms_db: AtomsDbV1 | None = None,
+) -> dict[str, object]:
+    mode = str(physics_mode)
+    if mode not in {"topological", "hamiltonian", "both"}:
+        raise ValueError(f"Invalid physics_mode: {mode}")
+
+    ew_mode = str(edge_weight_mode)
+    if ew_mode not in {"unweighted", "bond_order", "bond_order_delta_chi"}:
+        raise ValueError(f"Invalid edge_weight_mode: {ew_mode}")
+
+    lap = laplacian_from_adjacency(adjacency)
+    atoms_db_obj = load_atoms_db_v1() if atoms_db is None else atoms_db
+    potentials: np.ndarray | None = None
+
+    payload: dict[str, object] = {
+        "schema_version": DOS_LDOS_SCHEMA,
+        "physics_mode_used": mode,
+        "edge_weight_mode_used": ew_mode,
+        "eigvals_L": [],
+        "eigvals_H": [],
+        "eigvals_WH": [],
+        "ldos_H": None,
+        "ldos_WH": None,
+    }
+
+    if mode in {"topological", "both"}:
+        payload["eigvals_L"] = [float(x) for x in eigvals_symmetric(lap).tolist()]
+
+    if mode in {"hamiltonian", "both"}:
+        potentials = _potentials_for_types(types, atoms_db_obj)
+        H = lap + np.diag(potentials)
+        vals_H, vecs_H = eigh_symmetric(H)
+        payload["eigvals_H"] = [float(x) for x in vals_H.tolist()]
+        payload["ldos_H"] = ldos_atom_record(eigenvalues=vals_H, eigenvectors=vecs_H, types=types)
+
+    if ew_mode != "unweighted":
+        if bonds is None:
+            raise ValueError("edge_weight_mode requires bonds to be provided")
+        w_adj = weighted_adjacency_from_bonds(
+            n=int(adjacency.shape[0]),
+            bonds=bonds,
+            types=types,
+            edge_weight_mode=ew_mode,
+            atoms_db=atoms_db_obj,
+            alpha=float(DELTA_CHI_ALPHA_DEFAULT),
+        )
+        lap_w = laplacian_from_adjacency(w_adj)
+        if mode in {"hamiltonian", "both"}:
+            if potentials is None:
+                potentials = _potentials_for_types(types, atoms_db_obj)
+            Hw = lap_w + np.diag(potentials)
+            vals_WH, vecs_WH = eigh_symmetric(Hw)
+            payload["eigvals_WH"] = [float(x) for x in vals_WH.tolist()]
+            payload["ldos_WH"] = ldos_atom_record(eigenvalues=vals_WH, eigenvectors=vecs_WH, types=types)
+
+    return payload
 
