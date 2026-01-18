@@ -758,3 +758,11 @@ separation facts (computed on status==OK rows only):
   - status_counts: OK=200, SKIP=0, ERROR=0
   - top_skip_reasons: (none)
   - share_rows_with_n_decoys_gt_0: 1.000 (100.0%)
+
+## physics-operator-rails-2026-01-18-r1
+
+- Source commit: 2a9bd703abee100d9ee0fdafe3e89acc42c1316f
+- Release asset: https://github.com/RobertPaulig/Geometric_table/releases/download/physics-operator-rails-2026-01-18-r1/evidence_pack.zip
+- SHA256(evidence_pack.zip): 20980360782EBE926F1F4E448369D8F692431059EE3863489EE3AD27805773D1
+- Command:
+  hetero2-batch --input stress.csv --out_dir out_stress --artifacts light --score_mode mock --k_decoys 2 --workers 1 --timeout_s 60 --maxtasksperchild 100 --seed_strategy per_row --seed 0 --zip_pack
