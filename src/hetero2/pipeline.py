@@ -107,6 +107,7 @@ def _skip_payload(
         "hardness": {},
         "physchem_delta_mean": {},
         "spectral": {},
+        "operator": {},
         "scores_provenance": {},
         "run": {"seed": int(seed), "timestamp": ts, "cmd": ["hetero2.pipeline.v2"]},
         "skip": {"reason": reason},
@@ -124,6 +125,10 @@ def run_pipeline_v2(
     scores_input: str | None = None,
     guardrails_max_atoms: int = MAX_ATOMS_DEFAULT,
     guardrails_require_connected: bool = True,
+    decoy_hard_mode: bool = False,
+    decoy_hard_tanimoto_min: float = 0.65,
+    decoy_hard_tanimoto_max: float = 0.95,
+    operator_mode: str = "laplacian",
 ) -> Dict[str, object]:
     ts = timestamp.strip() or _utc_now_iso()
     preflight = preflight_smiles(smiles, max_atoms=guardrails_max_atoms, require_connected=guardrails_require_connected)
@@ -156,25 +161,42 @@ def run_pipeline_v2(
     cg = ChemGraph(preflight.canonical_smiles)
     eigvals = laplacian_eigvals(cg.laplacian())
     spectral_metrics = compute_stability_metrics(eigvals)
+    laplacian_energy = float((eigvals * eigvals).mean()) if getattr(eigvals, "size", 0) else float("nan")
+    operator: Dict[str, object] = {
+        "mode": str(operator_mode),
+        "laplacian_energy": float(laplacian_energy),
+        "h_operator_energy": float("nan"),
+    }
+    if str(operator_mode) == "h_operator":
+        from hetero2.chem_operator import heavy_state_from_smiles, h_operator_energy_from_edges
+
+        n, edges, types = heavy_state_from_smiles(cg.canonical_smiles)
+        operator["h_operator_energy"] = float(h_operator_energy_from_edges(n, edges, types))
     decoys_result, decoy_strategy = generate_decoys_v1(
         cg.canonical_smiles,
         k=int(k_decoys),
         seed=int(seed),
         max_attempts=max_attempts,
+        hard_mode=bool(decoy_hard_mode),
+        hard_tanimoto_min=float(decoy_hard_tanimoto_min),
+        hard_tanimoto_max=float(decoy_hard_tanimoto_max),
     )
     decoys = decoys_result.decoys
     if len(decoys) == 0:
         warnings = []
         warnings.extend(preflight.warnings)
         warnings.extend(decoys_result.warnings)
-        warnings.append("skip:no_decoys_generated")
+        if decoy_hard_mode:
+            warnings.append("skip:no_hard_decoys_generated")
+        else:
+            warnings.append("skip:no_decoys_generated")
         warnings = sorted(set(warnings))
         return _skip_payload(
             cg.canonical_smiles,
             warnings=warnings,
             seed=seed,
             timestamp=ts,
-            reason="no_decoys_generated",
+            reason="no_hard_decoys_generated" if decoy_hard_mode else "no_decoys_generated",
             decoy_strategy=decoy_strategy.__dict__,
             decoy_stats=decoys_result.stats,
         )
@@ -254,6 +276,7 @@ def run_pipeline_v2(
         "hardness": hardness,
         "physchem_delta_mean": physchem_delta,
         "spectral": spectral_metrics,
+        "operator": operator,
         "scores_provenance": scores_provenance,
         "scores_coverage": scores_coverage,
         "run": {"seed": int(seed), "timestamp": ts, "cmd": ["hetero2.pipeline.v2"]},

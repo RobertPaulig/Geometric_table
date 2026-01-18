@@ -24,6 +24,15 @@ def _parse_pipeline_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Score mode: mock ignores any scores_input; external_scores requires scores_input to be set.",
     )
     ap.add_argument("--scores_input", default="", help="Path to hetero_scores.v1 (for external_scores).")
+    ap.add_argument("--decoy_hard_mode", action="store_true", help="Enable hard decoys accept/reject by Tanimoto.")
+    ap.add_argument("--decoy_hard_tanimoto_min", type=float, default=0.65, help="Hard decoys min Tanimoto (inclusive).")
+    ap.add_argument("--decoy_hard_tanimoto_max", type=float, default=0.95, help="Hard decoys max Tanimoto (inclusive).")
+    ap.add_argument(
+        "--operator_mode",
+        choices=["laplacian", "h_operator"],
+        default="laplacian",
+        help="Operator feature mode: laplacian (default) or h_operator (chem-sensitive).",
+    )
     ap.add_argument("--guardrails_max_atoms", type=int, default=200, help="Guardrail: max heavy atoms (skip if exceeded).")
     ap.add_argument(
         "--guardrails_require_connected",
@@ -76,6 +85,15 @@ def _parse_batch_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=True,
         help="Guardrail: require molecule to be connected (default: True).",
     )
+    ap.add_argument("--decoy_hard_mode", action="store_true", help="Enable hard decoys accept/reject by Tanimoto.")
+    ap.add_argument("--decoy_hard_tanimoto_min", type=float, default=0.65, help="Hard decoys min Tanimoto (inclusive).")
+    ap.add_argument("--decoy_hard_tanimoto_max", type=float, default=0.95, help="Hard decoys max Tanimoto (inclusive).")
+    ap.add_argument(
+        "--operator_mode",
+        choices=["laplacian", "h_operator"],
+        default="laplacian",
+        help="Operator feature mode: laplacian (default) or h_operator (chem-sensitive).",
+    )
     ap.add_argument(
         "--seed_strategy",
         choices=["global", "per_row"],
@@ -105,6 +123,10 @@ def main_pipeline(argv: list[str] | None = None) -> int:
         scores_input=str(args.scores_input) if args.scores_input else None,
         guardrails_max_atoms=int(args.guardrails_max_atoms),
         guardrails_require_connected=bool(args.guardrails_require_connected),
+        decoy_hard_mode=bool(args.decoy_hard_mode),
+        decoy_hard_tanimoto_min=float(args.decoy_hard_tanimoto_min),
+        decoy_hard_tanimoto_max=float(args.decoy_hard_tanimoto_max),
+        operator_mode=str(args.operator_mode),
     )
     text = json.dumps(out, ensure_ascii=False, sort_keys=True, indent=2)
     if args.out:
@@ -160,6 +182,10 @@ def main_batch(argv: list[str] | None = None) -> int:
         scores_input=str(args.scores_input) if args.scores_input else None,
         guardrails_max_atoms=int(args.guardrails_max_atoms),
         guardrails_require_connected=bool(args.guardrails_require_connected),
+        decoy_hard_mode=bool(args.decoy_hard_mode),
+        decoy_hard_tanimoto_min=float(args.decoy_hard_tanimoto_min),
+        decoy_hard_tanimoto_max=float(args.decoy_hard_tanimoto_max),
+        operator_mode=str(args.operator_mode),
         seed_strategy=str(args.seed_strategy),
         no_index=bool(args.no_index),
         no_manifest=bool(args.no_manifest),
