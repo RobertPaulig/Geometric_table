@@ -668,3 +668,17 @@
   - SHA256(evidence_pack.zip): 388FA597A852B0CC881136B0A45FA089CE2797E2E0E6BACDB7B3FA47D9158F4F
   - Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/115 (merge: 86ea9afcc48d138b18db8373b990612790895fc2)
   - CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21118668233
+
+### 2026-01-18 - PHYSICS-P2-LDOS-GREEN-1: DOS/LDOS artifacts (stress pack)
+- Code PR: https://github.com/RobertPaulig/Geometric_table/pull/117 (merge: 8a5a1fe2aecfee07942493bd815a4a65a7252f8e)
+- CI run (3/3 ci/* on code merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21119463290
+- Live proof (stress pack):
+  - Inputs: physics_mode=both; edge_weight_mode=unweighted
+  - Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/physics-operator-ldos-2026-01-18-r1
+  - Source commit: 8a5a1fe2aecfee07942493bd815a4a65a7252f8e
+  - Publish run: https://github.com/RobertPaulig/Geometric_table/actions/runs/21119526003
+  - Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/physics-operator-ldos-2026-01-18-r1/evidence_pack.zip
+  - SHA256(evidence_pack.zip): 6589FA29A9ABC3BA3CD65446EA45ABA2033C663F6AF61AC38B01BFEEAC00C652
+  - Evidence pack artifacts: dos_curve.csv, ldos_summary.csv, summary_metadata.json (dos_grid_n=128, dos_eta=0.05)
+  - Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/118 (merge: 1b9a67d56e2d3ca58e2877447e4de69fb58dcc1e)
+  - CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21119709311
