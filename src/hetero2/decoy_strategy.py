@@ -64,11 +64,15 @@ def generate_decoys_v1(
     k: int,
     seed: int,
     max_attempts: int | None = None,
+    hard_mode: bool = False,
+    hard_tanimoto_min: float = 0.65,
+    hard_tanimoto_max: float = 0.95,
 ) -> tuple[DecoyResult, DecoyStrategy]:
     Chem, _, _, _, _ = _require_rdkit()
     base = Chem.MolFromSmiles(smiles)
     if base is None:
         raise ValueError("Invalid SMILES")
+    canonical_ref = Chem.MolToSmiles(base)
 
     strict_candidates = _bond_candidates_count(base, lock_aromatic=True, allow_ring_bonds=False)
     relax_a_candidates = _bond_candidates_count(base, lock_aromatic=False, allow_ring_bonds=False)
@@ -90,6 +94,9 @@ def generate_decoys_v1(
             max_attempts=max_attempts,
             lock_aromatic=True,
             allow_ring_bonds=False,
+            hard_tanimoto_min=float(hard_tanimoto_min) if hard_mode else None,
+            hard_tanimoto_max=float(hard_tanimoto_max) if hard_mode else None,
+            hard_tanimoto_ref_smiles=canonical_ref if hard_mode else None,
         )
         if strict.decoys:
             strict_warnings = sorted(set(strict.warnings + coverage_markers + [f"decoy_strategy_used:{DECOY_STRATEGY_STRICT}"]))
@@ -111,6 +118,9 @@ def generate_decoys_v1(
             max_attempts=max_attempts,
             lock_aromatic=False,
             allow_ring_bonds=False,
+            hard_tanimoto_min=float(hard_tanimoto_min) if hard_mode else None,
+            hard_tanimoto_max=float(hard_tanimoto_max) if hard_mode else None,
+            hard_tanimoto_ref_smiles=canonical_ref if hard_mode else None,
         )
         if relax_a.decoys:
             relax_a_warnings = sorted(set(relax_a.warnings + warnings_accum + coverage_markers + [f"decoy_strategy_used:{DECOY_STRATEGY_RELAX_A}"]))
@@ -128,6 +138,9 @@ def generate_decoys_v1(
             max_attempts=max_attempts,
             lock_aromatic=True,
             allow_ring_bonds=True,
+            hard_tanimoto_min=float(hard_tanimoto_min) if hard_mode else None,
+            hard_tanimoto_max=float(hard_tanimoto_max) if hard_mode else None,
+            hard_tanimoto_ref_smiles=canonical_ref if hard_mode else None,
         )
         if relax_b.decoys:
             relax_b_warnings = sorted(set(relax_b.warnings + warnings_accum + coverage_markers + [f"decoy_strategy_used:{DECOY_STRATEGY_RELAX_B}"]))
@@ -153,6 +166,9 @@ def generate_decoys_v1(
         max_attempts=max_attempts,
         lock_aromatic=False,
         allow_ring_bonds=True,
+        hard_tanimoto_min=float(hard_tanimoto_min) if hard_mode else None,
+        hard_tanimoto_max=float(hard_tanimoto_max) if hard_mode else None,
+        hard_tanimoto_ref_smiles=canonical_ref if hard_mode else None,
     )
     if relaxed.decoys:
         merged_warnings = sorted(

@@ -69,12 +69,35 @@ def generate_rewire_decoys(
     max_attempts: int | None = None,
     lock_aromatic: bool = True,
     allow_ring_bonds: bool = False,
+    hard_tanimoto_min: float | None = None,
+    hard_tanimoto_max: float | None = None,
+    hard_tanimoto_ref_smiles: str | None = None,
 ) -> DecoyResult:
     Chem, _, _, _, _ = _require_rdkit()
     base = Chem.MolFromSmiles(smiles)
     if base is None:
         raise ValueError("Invalid SMILES")
     canonical_input = Chem.MolToSmiles(base)
+
+    hard_mode = hard_tanimoto_min is not None or hard_tanimoto_max is not None
+    fp_ref = None
+    tanimoto_min = float(hard_tanimoto_min) if hard_tanimoto_min is not None else None
+    tanimoto_max = float(hard_tanimoto_max) if hard_tanimoto_max is not None else None
+    if hard_mode:
+        if tanimoto_min is None or tanimoto_max is None:
+            raise ValueError("hard_tanimoto_min and hard_tanimoto_max must be both set (or both None)")
+        if tanimoto_min < 0.0 or tanimoto_max > 1.0 or tanimoto_min > tanimoto_max:
+            raise ValueError("hard_tanimoto range must satisfy 0.0 <= min <= max <= 1.0")
+        try:
+            from rdkit import DataStructs  # type: ignore
+            from rdkit.Chem import AllChem  # type: ignore
+        except Exception as exc:  # pragma: no cover
+            raise ImportError("RDKit is required for hard decoy tanimoto filtering. Install: pip install -e \".[dev,chem]\"") from exc
+        ref_smiles = str(hard_tanimoto_ref_smiles or canonical_input)
+        ref_mol = Chem.MolFromSmiles(ref_smiles)
+        if ref_mol is None:
+            raise ValueError("Invalid hard_tanimoto_ref_smiles")
+        fp_ref = AllChem.GetMorganFingerprintAsBitVect(ref_mol, 2, nBits=2048)
 
     candidates = _bond_candidates(base, lock_aromatic=lock_aromatic, allow_ring_bonds=allow_ring_bonds)
     rng = random.Random(seed)
@@ -83,7 +106,7 @@ def generate_rewire_decoys(
     seen = {canonical_input}
     decoys: List[Dict[str, object]] = []
     warnings: List[str] = []
-    stats = {"attempts": 0, "sanitize_fail": 0, "duplicate": 0, "no_candidate_swap": 0}
+    stats = {"attempts": 0, "sanitize_fail": 0, "duplicate": 0, "no_candidate_swap": 0, "hardness_reject": 0}
 
     for _ in range(max_attempts_eff):
         if len(decoys) >= k:
@@ -104,6 +127,12 @@ def generate_rewire_decoys(
             stats["duplicate"] += 1
             continue
         seen.add(new_smiles)
+        if hard_mode and fp_ref is not None:
+            fp_new = AllChem.GetMorganFingerprintAsBitVect(new_mol, 2, nBits=2048)
+            sim = float(DataStructs.FingerprintSimilarity(fp_ref, fp_new))
+            if sim < float(tanimoto_min) or sim > float(tanimoto_max):
+                stats["hardness_reject"] += 1
+                continue
         cg = ChemGraph(new_smiles)
         decoys.append(
             {
@@ -115,7 +144,13 @@ def generate_rewire_decoys(
         )
 
     if len(decoys) < k:
-        warnings.append(f"could_not_generate_k_decoys_under_constraints:{k-len(decoys)}")
+        suffix = f"{k-len(decoys)}"
+        if hard_mode:
+            warnings.append(f"could_not_generate_k_hard_decoys_under_constraints:{suffix}")
+        else:
+            warnings.append(f"could_not_generate_k_decoys_under_constraints:{suffix}")
     if stats["sanitize_fail"] > 0:
         warnings.append(f"rdkit_sanitize_failures:{stats['sanitize_fail']}")
+    if hard_mode and stats.get("hardness_reject", 0) > 0:
+        warnings.append(f"hard_decoy_rejects:{stats['hardness_reject']}")
     return DecoyResult(decoys=decoys, warnings=warnings, stats=stats)
