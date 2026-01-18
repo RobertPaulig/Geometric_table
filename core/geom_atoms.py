@@ -778,7 +778,10 @@ def _load_atoms_from_json(path: Path) -> List[AtomGraph]:
     with path.open("r", encoding="utf-8") as f:
         raw = json.load(f)
     atoms: List[AtomGraph] = []
+    allowed = set(AtomGraph.__dataclass_fields__.keys())
     for row in raw:
+        if isinstance(row, dict):
+            row = {k: v for k, v in row.items() if k in allowed}
         atoms.append(AtomGraph(**row))
     return atoms
 

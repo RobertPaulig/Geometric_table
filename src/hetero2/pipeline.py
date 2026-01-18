@@ -130,6 +130,7 @@ def run_pipeline_v2(
     decoy_hard_tanimoto_min: float = 0.65,
     decoy_hard_tanimoto_max: float = 0.95,
     physics_mode: str = "topological",
+    edge_weight_mode: str = "unweighted",
 ) -> Dict[str, object]:
     ts = timestamp.strip() or _utc_now_iso()
     preflight = preflight_smiles(smiles, max_atoms=guardrails_max_atoms, require_connected=guardrails_require_connected)
@@ -164,8 +165,10 @@ def run_pipeline_v2(
     spectral_metrics = compute_stability_metrics(eigvals)
     operator = compute_physics_features(
         adjacency=cg.adjacency(),
+        bonds=cg.heavy_bonds_with_order(),
         types=cg.heavy_atom_types(),
         physics_mode=str(physics_mode),
+        edge_weight_mode=str(edge_weight_mode),
         beta=float(SPECTRAL_ENTROPY_BETA_DEFAULT),
     )
     decoys_result, decoy_strategy = generate_decoys_v1(

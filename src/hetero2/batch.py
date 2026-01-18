@@ -251,6 +251,7 @@ def _process_row(
     decoy_hard_tanimoto_min: float,
     decoy_hard_tanimoto_max: float,
     physics_mode: str,
+    edge_weight_mode: str,
 ) -> Dict[str, object]:
     """Isolated worker to avoid RDKit leaks across tasks."""
     if not smiles:
@@ -279,6 +280,7 @@ def _process_row(
             decoy_hard_tanimoto_min=float(decoy_hard_tanimoto_min),
             decoy_hard_tanimoto_max=float(decoy_hard_tanimoto_max),
             physics_mode=str(physics_mode),
+            edge_weight_mode=str(edge_weight_mode),
         )
         warnings = pipeline.get("warnings", []) if isinstance(pipeline, dict) else []
         if score_mode == "mock" and scores_path:
@@ -306,7 +308,10 @@ def _process_row(
             "status": "ERROR",
             "reason": "missing_physics_params",
             "pipeline": None,
-            "warnings": [f"missing_physics_params_atomic_numbers:{','.join(str(z) for z in exc.missing_atomic_numbers)}"],
+            "warnings": [
+                f"missing_physics_params_key:{exc.missing_key}",
+                f"missing_physics_params_atomic_numbers:{','.join(str(z) for z in exc.missing_atomic_numbers)}",
+            ],
             "n_decoys": "",
             "neg": {},
             "seed_used": seed,
@@ -341,6 +346,7 @@ def run_batch(
     decoy_hard_tanimoto_min: float = 0.65,
     decoy_hard_tanimoto_max: float = 0.95,
     physics_mode: str = "topological",
+    edge_weight_mode: str = "unweighted",
     seed_strategy: str = "global",
     no_index: bool = False,
     no_manifest: bool = False,
@@ -357,7 +363,7 @@ def run_batch(
     rows = _read_rows(input_csv)
     out_dir.mkdir(parents=True, exist_ok=True)
     summary_path = out_dir / "summary.csv"
-    fieldnames: Sequence[str] = [
+    fieldnames: List[str] = [
         "id",
         "status",
         "reason",
@@ -386,9 +392,10 @@ def run_batch(
         "H_gap",
         "H_trace",
         "H_entropy_beta",
-        "outcome_verdict",
-        "outcome_reason",
     ]
+    if str(edge_weight_mode) != "unweighted":
+        fieldnames.extend(["W_gap", "W_entropy", "WH_gap", "WH_entropy"])
+    fieldnames.extend(["outcome_verdict", "outcome_reason"])
     summary_rows: List[Dict[str, object]] = []
     scores_coverage = {
         "rows_total": 0,
@@ -509,7 +516,9 @@ def run_batch(
         # Collect physics-operator features and decoy-realism stats for OK rows.
         if isinstance(pipeline, dict) and status == "OK":
             op = pipeline.get("operator", {}) if isinstance(pipeline.get("operator"), dict) else {}
-            operator_rows.append({"id": mol_id, **{k: op.get(k, "") for k in fieldnames if k.startswith(("physics_", "L_", "H_"))}})
+            operator_rows.append(
+                {"id": mol_id, **{k: op.get(k, "") for k in fieldnames if k.startswith(("physics_", "L_", "H_", "W_", "WH_"))}}
+            )
 
             decoys = pipeline.get("decoys", [])
             smiles_orig = str(pipeline.get("smiles", ""))
@@ -665,6 +674,15 @@ def run_batch(
             "outcome_verdict": outcome_verdict,
             "outcome_reason": "missing_physics_params" if outcome_verdict else "",
         }
+        if str(edge_weight_mode) != "unweighted":
+            summary_entry.update(
+                {
+                    "W_gap": op.get("W_gap", ""),
+                    "W_entropy": op.get("W_entropy", ""),
+                    "WH_gap": op.get("WH_gap", ""),
+                    "WH_entropy": op.get("WH_entropy", ""),
+                }
+            )
         summary_rows.append(summary_entry)
         _write_summary_row(summary_entry)
 
@@ -684,6 +702,7 @@ def run_batch(
                 decoy_hard_tanimoto_min=float(decoy_hard_tanimoto_min),
                 decoy_hard_tanimoto_max=float(decoy_hard_tanimoto_max),
                 physics_mode=str(physics_mode),
+                edge_weight_mode=str(edge_weight_mode),
             )
             handle_result(res)
     else:
@@ -710,6 +729,7 @@ def run_batch(
                         decoy_hard_tanimoto_min=float(decoy_hard_tanimoto_min),
                         decoy_hard_tanimoto_max=float(decoy_hard_tanimoto_max),
                         physics_mode=str(physics_mode),
+                        edge_weight_mode=str(edge_weight_mode),
                     ),
                 )
                 async_results.append((task["mol_id"], async_res))
@@ -748,6 +768,8 @@ def run_batch(
             "H_trace",
             "H_entropy_beta",
         ]
+        if str(edge_weight_mode) != "unweighted":
+            operator_fieldnames.extend(["W_gap", "W_entropy", "WH_gap", "WH_entropy"])
         w = csv.DictWriter(f, fieldnames=operator_fieldnames)
         w.writeheader()
         for row in operator_rows:
@@ -852,6 +874,7 @@ def run_batch(
         "pairs_scored_by_bin": {k: int(v) for k, v in pairs_scored_by_bin.items()},
         "auc_tie_aware_by_bin": {k: float(v) for k, v in auc_by_bin.items()},
         "physics_mode": str(physics_mode),
+        "edge_weight_mode": str(edge_weight_mode),
         "physics_entropy_beta": float(SPECTRAL_ENTROPY_BETA_DEFAULT),
     }
     (out_dir / "summary_metadata.json").write_text(
@@ -916,6 +939,7 @@ def run_batch(
             "decoy_hard_tanimoto_min": float(decoy_hard_tanimoto_min),
             "decoy_hard_tanimoto_max": float(decoy_hard_tanimoto_max),
             "physics_mode": str(physics_mode),
+            "edge_weight_mode": str(edge_weight_mode),
             "physics_entropy_beta": float(SPECTRAL_ENTROPY_BETA_DEFAULT),
             "guardrails_max_atoms": guardrails_max_atoms,
             "guardrails_require_connected": guardrails_require_connected,

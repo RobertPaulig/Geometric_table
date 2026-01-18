@@ -12,20 +12,29 @@ import numpy as np
 ATOMS_DB_V1_REL_PATH = Path("data") / "atoms_db_v1.json"
 PHYSICS_PARAMS_SOURCE = "atoms_db_v1_json"
 SPECTRAL_ENTROPY_BETA_DEFAULT = 1.0
+DELTA_CHI_ALPHA_DEFAULT = 1.0
 
 
 class MissingPhysicsParams(RuntimeError):
-    def __init__(self, *, missing_atomic_numbers: Sequence[int], source_path: str) -> None:
+    def __init__(
+        self,
+        *,
+        missing_atomic_numbers: Sequence[int],
+        source_path: str,
+        missing_key: str = "epsilon",
+    ) -> None:
         missing = sorted({int(z) for z in missing_atomic_numbers})
         self.missing_atomic_numbers = tuple(missing)
         self.source_path = str(source_path)
-        super().__init__(f"missing_physics_params: atomic_numbers={missing} source={source_path}")
+        self.missing_key = str(missing_key)
+        super().__init__(f"missing_physics_params: key={self.missing_key} atomic_numbers={missing} source={source_path}")
 
 
 @dataclass(frozen=True)
 class AtomsDbV1:
     source_path: str
     potential_by_atomic_num: Mapping[int, float]
+    chi_by_atomic_num: Mapping[int, float]
     symbol_by_atomic_num: Mapping[int, str]
 
 
@@ -49,6 +58,7 @@ def load_atoms_db_v1() -> AtomsDbV1:
         raise ValueError(f"atoms_db_v1.json must be a list of objects (got {type(raw).__name__})")
 
     potential_by_z: dict[int, float] = {}
+    chi_by_z: dict[int, float] = {}
     symbol_by_z: dict[int, str] = {}
     for row in raw:
         if not isinstance(row, dict):
@@ -63,6 +73,12 @@ def load_atoms_db_v1() -> AtomsDbV1:
             continue
         potential_by_z[z] = eps
         symbol_by_z[z] = sym
+        try:
+            chi_val = row.get("chi", None)
+            if chi_val is not None:
+                chi_by_z[z] = float(chi_val)
+        except Exception:
+            pass
 
     if not potential_by_z:
         raise ValueError(f"atoms_db_v1.json has no usable rows with keys Z/name/epsilon: {path}")
@@ -70,6 +86,7 @@ def load_atoms_db_v1() -> AtomsDbV1:
     return AtomsDbV1(
         source_path=str(path.as_posix()),
         potential_by_atomic_num=potential_by_z,
+        chi_by_atomic_num=chi_by_z,
         symbol_by_atomic_num=symbol_by_z,
     )
 
@@ -116,15 +133,63 @@ def spectral_entropy_beta(eigvals: Iterable[float], *, beta: float, eps: float =
 def _potentials_for_types(types: Sequence[int], atoms_db: AtomsDbV1) -> np.ndarray:
     missing = [int(z) for z in types if int(z) not in atoms_db.potential_by_atomic_num]
     if missing:
-        raise MissingPhysicsParams(missing_atomic_numbers=missing, source_path=atoms_db.source_path)
+        raise MissingPhysicsParams(missing_atomic_numbers=missing, source_path=atoms_db.source_path, missing_key="epsilon")
     return np.array([float(atoms_db.potential_by_atomic_num[int(z)]) for z in types], dtype=float)
+
+
+def _chis_for_types(types: Sequence[int], atoms_db: AtomsDbV1) -> np.ndarray:
+    missing = [int(z) for z in types if int(z) not in atoms_db.chi_by_atomic_num]
+    if missing:
+        raise MissingPhysicsParams(missing_atomic_numbers=missing, source_path=atoms_db.source_path, missing_key="chi")
+    return np.array([float(atoms_db.chi_by_atomic_num[int(z)]) for z in types], dtype=float)
+
+
+def weighted_adjacency_from_bonds(
+    *,
+    n: int,
+    bonds: Sequence[tuple[int, int, float]],
+    types: Sequence[int],
+    edge_weight_mode: str,
+    atoms_db: AtomsDbV1 | None = None,
+    alpha: float = DELTA_CHI_ALPHA_DEFAULT,
+) -> np.ndarray:
+    mode = str(edge_weight_mode)
+    if mode not in {"unweighted", "bond_order", "bond_order_delta_chi"}:
+        raise ValueError(f"Invalid edge_weight_mode: {mode}")
+
+    n_i = int(n)
+    w_adj = np.zeros((n_i, n_i), dtype=float)
+    if mode == "unweighted":
+        return w_adj
+
+    chi: np.ndarray | None = None
+    if mode == "bond_order_delta_chi":
+        atoms_db_obj = load_atoms_db_v1() if atoms_db is None else atoms_db
+        chi = _chis_for_types(types, atoms_db_obj)
+
+    for i, j, bond_order in bonds:
+        a, b = int(i), int(j)
+        if a == b:
+            continue
+        bo = float(bond_order)
+        if mode == "bond_order":
+            w = bo
+        else:
+            assert chi is not None
+            w = bo * (1.0 + float(alpha) * float(abs(float(chi[a]) - float(chi[b]))))
+        w_adj[a, b] = w
+        w_adj[b, a] = w
+
+    return w_adj
 
 
 def compute_physics_features(
     *,
     adjacency: np.ndarray,
+    bonds: Sequence[tuple[int, int, float]] | None = None,
     types: Sequence[int],
     physics_mode: str,
+    edge_weight_mode: str = "unweighted",
     beta: float = SPECTRAL_ENTROPY_BETA_DEFAULT,
     atoms_db: AtomsDbV1 | None = None,
 ) -> dict[str, object]:
@@ -139,6 +204,7 @@ def compute_physics_features(
         "physics_params_source": PHYSICS_PARAMS_SOURCE,
         "physics_entropy_beta": float(beta),
         "physics_missing_params_count": 0,
+        "edge_weight_mode_used": str(edge_weight_mode),
         "L_gap": "",
         "L_trace": "",
         "L_entropy_beta": "",
@@ -153,14 +219,48 @@ def compute_physics_features(
         out["L_trace"] = float(spectral_trace(vals_L))
         out["L_entropy_beta"] = float(spectral_entropy_beta(vals_L, beta=float(beta)))
 
+    atoms_db_obj = load_atoms_db_v1() if atoms_db is None else atoms_db
+    potentials: np.ndarray | None = None
     if mode in {"hamiltonian", "both"}:
-        atoms_db_obj = load_atoms_db_v1() if atoms_db is None else atoms_db
-        v = _potentials_for_types(types, atoms_db_obj)
-        H = lap + np.diag(v)
+        potentials = _potentials_for_types(types, atoms_db_obj)
+        H = lap + np.diag(potentials)
         vals_H = eigvals_symmetric(H)
         out["H_gap"] = float(spectral_gap(vals_H))
         out["H_trace"] = float(spectral_trace(vals_H))
         out["H_entropy_beta"] = float(spectral_entropy_beta(vals_H, beta=float(beta)))
+
+    ew_mode = str(edge_weight_mode)
+    if ew_mode != "unweighted":
+        if bonds is None:
+            raise ValueError("edge_weight_mode requires bonds to be provided")
+        out.update(
+            {
+                "W_gap": "",
+                "W_entropy": "",
+                "WH_gap": "",
+                "WH_entropy": "",
+            }
+        )
+        w_adj = weighted_adjacency_from_bonds(
+            n=int(adjacency.shape[0]),
+            bonds=bonds,
+            types=types,
+            edge_weight_mode=ew_mode,
+            atoms_db=atoms_db_obj,
+            alpha=float(DELTA_CHI_ALPHA_DEFAULT),
+        )
+        lap_w = laplacian_from_adjacency(w_adj)
+        if mode in {"topological", "both"}:
+            vals_W = eigvals_symmetric(lap_w)
+            out["W_gap"] = float(spectral_gap(vals_W))
+            out["W_entropy"] = float(spectral_entropy_beta(vals_W, beta=float(beta)))
+        if mode in {"hamiltonian", "both"}:
+            if potentials is None:
+                potentials = _potentials_for_types(types, atoms_db_obj)
+            Hw = lap_w + np.diag(potentials)
+            vals_WH = eigvals_symmetric(Hw)
+            out["WH_gap"] = float(spectral_gap(vals_WH))
+            out["WH_entropy"] = float(spectral_entropy_beta(vals_WH, beta=float(beta)))
 
     return out
 
