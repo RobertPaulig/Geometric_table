@@ -644,3 +644,10 @@
     - tanimoto_median: 0.119643
     - hardness bins (pairs_total): easy=760, medium=120, hard=0
     - auc_interpretation: INCONCLUSIVE (decoys_too_easy)
+
+### 2026-01-18 - PHYSICS-OPERATOR-RAILS-1: LOCAL_PROOF_INFRA_BYPASS evidence pack (CI billing blocked)
+- What: built a local stress evidence pack from `main@2a9bd703...` because GitHub Actions publish jobs are blocked by billing/spending limit (see issue #107). This is a local proof artefact; enterprise CI chain remains STOP until Actions are unblocked.
+- Source commit: 2a9bd703abee100d9ee0fdafe3e89acc42c1316f
+- Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/physics-operator-rails-2026-01-18-local1
+- Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/physics-operator-rails-2026-01-18-local1/evidence_pack.zip
+- SHA256(evidence_pack.zip): 6E447C87C4D2B777FAFA667070B4F2ADD2A384D6842B4D647497E12492D74AD1
