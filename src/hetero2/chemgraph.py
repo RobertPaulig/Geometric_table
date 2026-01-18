@@ -48,6 +48,13 @@ class ChemGraph:
         heavy, _ = self._heavy_atom_map()
         return int(len(heavy))
 
+    def heavy_atom_types(self) -> Tuple[int, ...]:
+        heavy, _ = self._heavy_atom_map()
+        types: List[int] = []
+        for idx in heavy:
+            types.append(int(self.mol.GetAtomWithIdx(int(idx)).GetAtomicNum()))
+        return tuple(types)
+
     def adjacency(self) -> np.ndarray:
         heavy, mapping = self._heavy_atom_map()
         n = len(heavy)

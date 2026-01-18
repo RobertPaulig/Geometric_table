@@ -267,6 +267,44 @@ Proof:
 - Automation PR #52 (live proof, merged): https://github.com/RobertPaulig/Geometric_table/commit/f089a00b235567b6af09ad09b21ee0883150ab64
 - Lineage PR #53 (запись в docs/90_lineage.md): https://github.com/RobertPaulig/Geometric_table/commit/0691248c135c11486d7c82a607386b51266bd359
 
+---
+
+## Physics Roadmap (operator + anti-иллюзия)
+
+Цель: сделать признаки/скоринг чувствительными к химии (тип атома) и запретить “красивую AUC” на лёгких ловушках.
+Все “успехи” фиксируются артефактами evidence pack + registry + lineage.
+
+### PHYSICS-P0 (текущий): `H = L + V` + hardness curve + `auc_interpretation`
+Статус: [ ] planned  [x] in-progress  [ ] done
+
+DoD (фактами):
+- В коде есть режим `physics_mode=topological|hamiltonian|both`, а `H` строится как `H = L + diag(V)`.
+- SoT параметров `V(t)` — только `data/atoms_db_v1.json` (см. `docs/contracts/PHYSICS_OPERATOR_CONTRACT.md`), missing params → строка `ERROR` (audit-grade, без “тихих” провалов).
+- В evidence pack есть `hardness_curve.csv` (пары) + `hardness_curve.md` + `summary_metadata.json` с `auc_interpretation`.
+- Тест `tests/test_physics_operator_blindness.py` зелёный: `spec(L)` слеп к типам атомов, `spec(H)` реагирует.
+- Замкнута цепочка publish→release(+sha256)→registry→lineage на main (3/3 ci/*).
+
+### PHYSICS-P1: weighted adjacency (edge weights) без поломки P0
+Статус: [ ] planned  [ ] in-progress  [ ] done
+
+DoD:
+- Добавлен `A_w`/`L_w=D_w-A_w` (включается флагом, не ломает P0).
+- Evidence pack содержит сравнение `L` vs `L_w` vs `H` и метрики на hard-bin (не только overall).
+
+### PHYSICS-P2: локальные спектральные признаки (DOS/LDOS/heat-kernel)
+Статус: [ ] planned  [ ] in-progress  [ ] done
+
+DoD:
+- Добавлены локальные спектральные фичи (например LDOS/heat-kernel) с фиксированными параметрами/seed policy.
+- Улучшение различимости на hard-ловушках без деградации hardness coverage.
+
+### PHYSICS-P3: ускорение solver (итеративный/асинхронный) с детерминизмом
+Статус: [ ] planned  [ ] in-progress  [ ] done
+
+DoD:
+- Итеративный solver логирует сходимость (итерации/остаток) и сохраняет артефакт в evidence pack.
+- Детерминизм подтверждён через rerun и совпадающие checksums.
+
 # ROADMAP — HETERO-2 как SaaS (Pfizer-ready evidence pipeline)
 
 Назначение: зафиксировать целевую картину SaaS и вести разработку через обязательные вехи (milestones).

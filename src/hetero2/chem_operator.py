@@ -2,11 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from analysis.chem.hetero_operator import build_operator_H
-
-DEFAULT_ALPHA_H = 0.5
-DEFAULT_RHO_BY_ATOMIC_NUM = {6: 0.0, 7: 0.2, 8: 0.5}
-DEFAULT_VALENCE_BY_ATOMIC_NUM = {6: 4, 7: 3, 8: 2}
+from hetero2.physics_operator import MissingPhysicsParams, load_atoms_db_v1
 
 
 def laplacian_energy_from_edges(n: int, edges: tuple[tuple[int, int], ...]) -> float:
@@ -28,21 +24,24 @@ def h_operator_energy_from_edges(
     n: int,
     edges: tuple[tuple[int, int], ...],
     types: tuple[int, ...],
-    *,
-    alpha_H: float = DEFAULT_ALPHA_H,
-    rho_by_atomic_num: dict[int, float] | None = None,
-    valence_by_atomic_num: dict[int, int] | None = None,
 ) -> float:
-    rho = dict(DEFAULT_RHO_BY_ATOMIC_NUM if rho_by_atomic_num is None else rho_by_atomic_num)
-    valence = dict(DEFAULT_VALENCE_BY_ATOMIC_NUM if valence_by_atomic_num is None else valence_by_atomic_num)
-    H = build_operator_H(
-        int(n),
-        edges,
-        types,
-        rho_by_type=rho,
-        alpha_H=float(alpha_H),
-        valence_by_type=valence,
-    )
+    atoms_db = load_atoms_db_v1()
+    missing = [int(z) for z in types if int(z) not in atoms_db.potential_by_atomic_num]
+    if missing:
+        raise MissingPhysicsParams(missing_atomic_numbers=missing, source_path=atoms_db.source_path)
+
+    n_i = int(n)
+    adj = np.zeros((n_i, n_i), dtype=float)
+    for u, v in edges:
+        a, b = int(u), int(v)
+        if a == b:
+            continue
+        adj[a, b] = 1.0
+        adj[b, a] = 1.0
+    deg = np.sum(adj, axis=1)
+    lap = np.diag(deg) - adj
+    potentials = np.array([float(atoms_db.potential_by_atomic_num[int(z)]) for z in types], dtype=float)
+    H = lap + np.diag(potentials)
     vals = np.linalg.eigvalsh(H)
     return float(np.mean(vals**2))
 

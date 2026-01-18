@@ -26,6 +26,7 @@ from hetero2.decoy_realism import (
     interpret_auc,
     tanimoto_bin,
 )
+from hetero2.physics_operator import MissingPhysicsParams, SPECTRAL_ENTROPY_BETA_DEFAULT
 from hetero2.pipeline import run_pipeline_v2
 from hetero2.report import render_report_v2
 
@@ -249,7 +250,7 @@ def _process_row(
     decoy_hard_mode: bool,
     decoy_hard_tanimoto_min: float,
     decoy_hard_tanimoto_max: float,
-    operator_mode: str,
+    physics_mode: str,
 ) -> Dict[str, object]:
     """Isolated worker to avoid RDKit leaks across tasks."""
     if not smiles:
@@ -277,7 +278,7 @@ def _process_row(
             decoy_hard_mode=bool(decoy_hard_mode),
             decoy_hard_tanimoto_min=float(decoy_hard_tanimoto_min),
             decoy_hard_tanimoto_max=float(decoy_hard_tanimoto_max),
-            operator_mode=str(operator_mode),
+            physics_mode=str(physics_mode),
         )
         warnings = pipeline.get("warnings", []) if isinstance(pipeline, dict) else []
         if score_mode == "mock" and scores_path:
@@ -296,6 +297,18 @@ def _process_row(
             "warnings": warnings,
             "n_decoys": n_decoys,
             "neg": neg,
+            "seed_used": seed,
+        }
+    except MissingPhysicsParams as exc:
+        return {
+            "id": mol_id,
+            "scores_input": scores_path,
+            "status": "ERROR",
+            "reason": "missing_physics_params",
+            "pipeline": None,
+            "warnings": [f"missing_physics_params_atomic_numbers:{','.join(str(z) for z in exc.missing_atomic_numbers)}"],
+            "n_decoys": "",
+            "neg": {},
             "seed_used": seed,
         }
     except Exception as exc:
@@ -327,7 +340,7 @@ def run_batch(
     decoy_hard_mode: bool = False,
     decoy_hard_tanimoto_min: float = 0.65,
     decoy_hard_tanimoto_max: float = 0.95,
-    operator_mode: str = "laplacian",
+    physics_mode: str = "topological",
     seed_strategy: str = "global",
     no_index: bool = False,
     no_manifest: bool = False,
@@ -363,6 +376,18 @@ def run_batch(
         "spectral_gap",
         "spectral_entropy",
         "spectral_entropy_norm",
+        "physics_mode_used",
+        "physics_params_source",
+        "physics_entropy_beta",
+        "physics_missing_params_count",
+        "L_gap",
+        "L_trace",
+        "L_entropy_beta",
+        "H_gap",
+        "H_trace",
+        "H_entropy_beta",
+        "outcome_verdict",
+        "outcome_reason",
     ]
     summary_rows: List[Dict[str, object]] = []
     scores_coverage = {
@@ -380,7 +405,8 @@ def run_batch(
     pairs_scored_by_bin: Counter[str] = Counter()
     auc_numer_by_bin: Counter[str] = Counter()
     auc_denom_by_bin: Counter[str] = Counter()
-    # Operator foundation: per-row energies (laplacian + optional H).
+    hardness_pairs_rows: List[Dict[str, object]] = []
+    # Physics operator foundation: per-row feature rows.
     operator_rows: List[Dict[str, object]] = []
     # Cache external scores payloads by resolved path.
     scores_cache: Dict[str, Dict[str, object]] = {}
@@ -480,20 +506,14 @@ def run_batch(
                             if smi:
                                 missing_decoy_hash_to_smiles[h] = smi
 
-        # Collect operator energies and decoy-realism stats for OK rows.
+        # Collect physics-operator features and decoy-realism stats for OK rows.
         if isinstance(pipeline, dict) and status == "OK":
             op = pipeline.get("operator", {}) if isinstance(pipeline.get("operator"), dict) else {}
-            operator_rows.append(
-                {
-                    "id": mol_id,
-                    "operator_mode": str(op.get("mode", "")),
-                    "laplacian_energy": op.get("laplacian_energy", ""),
-                    "h_operator_energy": op.get("h_operator_energy", ""),
-                }
-            )
+            operator_rows.append({"id": mol_id, **{k: op.get(k, "") for k in fieldnames if k.startswith(("physics_", "L_", "H_"))}})
 
             decoys = pipeline.get("decoys", [])
             smiles_orig = str(pipeline.get("smiles", ""))
+            physics_mode_used = str(op.get("physics_mode_used", ""))
             if isinstance(decoys, list) and decoys and smiles_orig:
                 try:
                     Chem, AllChem, DataStructs = _require_rdkit_fps()
@@ -524,8 +544,10 @@ def run_batch(
                             scores_payload = None
 
                 orig_score = 1.0
+                score_used = "mock"
                 if isinstance(scores_payload, dict):
                     orig_score = float((scores_payload.get("original") or {}).get("score", 1.0))
+                    score_used = str(scores_payload.get("score_key") or "external_scores").strip() or "external_scores"
 
                 decoy_scores = (scores_payload.get("decoys") or {}) if isinstance(scores_payload, dict) else {}
 
@@ -552,6 +574,21 @@ def run_batch(
                     if score_mode == "external_scores":
                         entry = decoy_scores.get(decoy_hash)
                         if not isinstance(entry, dict):
+                            hardness_pairs_rows.append(
+                                {
+                                    "molecule_id": mol_id,
+                                    "decoy_id": decoy_hash,
+                                    "tanimoto": "" if not math.isfinite(float(sim)) else f"{float(sim):.6f}",
+                                    "hardness_bin": bin_id,
+                                    "is_original_label": "",
+                                    "score_used": score_used,
+                                    "physics_mode_used": physics_mode_used,
+                                    "pos_score": "" if not math.isfinite(float(orig_score)) else f"{float(orig_score):.6f}",
+                                    "neg_score": "",
+                                    "weight": "",
+                                    "decoy_scored": 0,
+                                }
+                            )
                             continue
                         neg_score = float(entry.get("score", 0.0))
                         weight = float(entry.get("weight", 1.0))
@@ -562,6 +599,21 @@ def run_batch(
                     pairs_scored_by_bin[bin_id] += 1
                     auc_numer_by_bin[bin_id] += float(weight) * float(auc_pair_contribution(orig_score, neg_score))
                     auc_denom_by_bin[bin_id] += float(weight)
+                    hardness_pairs_rows.append(
+                        {
+                            "molecule_id": mol_id,
+                            "decoy_id": decoy_hash,
+                            "tanimoto": "" if not math.isfinite(float(sim)) else f"{float(sim):.6f}",
+                            "hardness_bin": bin_id,
+                            "is_original_label": "",
+                            "score_used": score_used,
+                            "physics_mode_used": physics_mode_used,
+                            "pos_score": "" if not math.isfinite(float(orig_score)) else f"{float(orig_score):.6f}",
+                            "neg_score": "" if not math.isfinite(float(neg_score)) else f"{float(neg_score):.6f}",
+                            "weight": "" if not math.isfinite(float(weight)) else f"{float(weight):.6f}",
+                            "decoy_scored": 1,
+                        }
+                    )
         neg = res.get("neg", {}) if isinstance(res.get("neg"), dict) else {}
         spectral = {}
         if isinstance(pipeline, dict):
@@ -578,6 +630,9 @@ def run_batch(
                 n_decoys_scored = scov.get("decoys_scored", "")
             elif pipeline.get("score_mode") == "mock":
                 n_decoys_scored = n_decoys_generated
+
+        op = pipeline.get("operator", {}) if isinstance(pipeline, dict) and isinstance(pipeline.get("operator"), dict) else {}
+        outcome_verdict = "ERROR_MISSING_PHYSICS_PARAMS" if status == "ERROR" and reason == "missing_physics_params" else ""
         summary_entry = {
             "id": mol_id,
             "status": status or "ERROR",
@@ -597,6 +652,18 @@ def run_batch(
             "spectral_gap": spectral.get("spectral_gap", ""),
             "spectral_entropy": spectral.get("spectral_entropy", ""),
             "spectral_entropy_norm": spectral.get("spectral_entropy_norm", ""),
+            "physics_mode_used": op.get("physics_mode_used", ""),
+            "physics_params_source": op.get("physics_params_source", ""),
+            "physics_entropy_beta": op.get("physics_entropy_beta", ""),
+            "physics_missing_params_count": op.get("physics_missing_params_count", ""),
+            "L_gap": op.get("L_gap", ""),
+            "L_trace": op.get("L_trace", ""),
+            "L_entropy_beta": op.get("L_entropy_beta", ""),
+            "H_gap": op.get("H_gap", ""),
+            "H_trace": op.get("H_trace", ""),
+            "H_entropy_beta": op.get("H_entropy_beta", ""),
+            "outcome_verdict": outcome_verdict,
+            "outcome_reason": "missing_physics_params" if outcome_verdict else "",
         }
         summary_rows.append(summary_entry)
         _write_summary_row(summary_entry)
@@ -616,7 +683,7 @@ def run_batch(
                 decoy_hard_mode=bool(decoy_hard_mode),
                 decoy_hard_tanimoto_min=float(decoy_hard_tanimoto_min),
                 decoy_hard_tanimoto_max=float(decoy_hard_tanimoto_max),
-                operator_mode=str(operator_mode),
+                physics_mode=str(physics_mode),
             )
             handle_result(res)
     else:
@@ -642,7 +709,7 @@ def run_batch(
                         decoy_hard_mode=bool(decoy_hard_mode),
                         decoy_hard_tanimoto_min=float(decoy_hard_tanimoto_min),
                         decoy_hard_tanimoto_max=float(decoy_hard_tanimoto_max),
-                        operator_mode=str(operator_mode),
+                        physics_mode=str(physics_mode),
                     ),
                 )
                 async_results.append((task["mol_id"], async_res))
@@ -664,11 +731,24 @@ def run_batch(
 
     summary_file.close()
 
-    # Write operator energies table (always present; H operator values may be NaN depending on operator_mode).
+    # Write operator features table (always present; columns depend on physics_mode).
     operator_features_path = out_dir / "operator_features.csv"
     operator_features_path.write_text("", encoding="utf-8")
     with operator_features_path.open("w", encoding="utf-8", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=["id", "operator_mode", "laplacian_energy", "h_operator_energy"])
+        operator_fieldnames = [
+            "id",
+            "physics_mode_used",
+            "physics_params_source",
+            "physics_entropy_beta",
+            "physics_missing_params_count",
+            "L_gap",
+            "L_trace",
+            "L_entropy_beta",
+            "H_gap",
+            "H_trace",
+            "H_entropy_beta",
+        ]
+        w = csv.DictWriter(f, fieldnames=operator_fieldnames)
         w.writeheader()
         for row in operator_rows:
             w.writerow(row)
@@ -692,6 +772,7 @@ def run_batch(
     hard_pairs = int(pairs_total_by_bin.get("hard", 0))
     auc_label, auc_reason = interpret_auc(
         median_tanimoto=float(median_tanimoto),
+        auc_easy=auc_by_bin.get("easy"),
         auc_hard=auc_by_bin.get("hard"),
         hard_pairs=hard_pairs,
         hard_pairs_min=int(AUC_HARD_MIN_PAIRS_DEFAULT),
@@ -702,38 +783,44 @@ def run_batch(
         w = csv.DictWriter(
             f,
             fieldnames=[
-                "bin",
-                "tanimoto_min_inclusive",
-                "tanimoto_max_exclusive",
-                "pairs_total",
-                "pairs_scored",
-                "auc_tie_aware",
+                "molecule_id",
+                "decoy_id",
+                "tanimoto",
+                "hardness_bin",
+                "is_original_label",
+                "score_used",
+                "physics_mode_used",
+                "pos_score",
+                "neg_score",
+                "weight",
+                "decoy_scored",
             ],
         )
         w.writeheader()
-        for bin_id, lo, hi in bins:
-            hi_str = "" if bin_id == "hard" else ("" if not math.isfinite(hi) else f"{hi:.2f}")
-            lo_str = "" if not math.isfinite(lo) else f"{lo:.2f}"
-            w.writerow(
-                {
-                    "bin": bin_id,
-                    "tanimoto_min_inclusive": lo_str,
-                    "tanimoto_max_exclusive": hi_str,
-                    "pairs_total": int(pairs_total_by_bin.get(bin_id, 0)),
-                    "pairs_scored": int(pairs_scored_by_bin.get(bin_id, 0)),
-                    "auc_tie_aware": "" if not math.isfinite(float(auc_by_bin.get(bin_id, float("nan")))) else f"{auc_by_bin[bin_id]:.6f}",
-                }
-            )
+        for row in hardness_pairs_rows:
+            w.writerow(row)
 
     hardness_lines = [
         "# Decoy Hardness Curve (AUC vs Tanimoto)",
+        "",
+        "## Fingerprint config",
+        "",
+        "- morgan_radius: 2",
+        "- morgan_nbits: 2048",
+        "",
+        "## Binning",
+        "",
+        f"- easy: tanimoto < {TANIMOTO_EASY_MAX_EXCLUSIVE:.2f}",
+        f"- medium: {TANIMOTO_EASY_MAX_EXCLUSIVE:.2f} <= tanimoto < {TANIMOTO_MEDIUM_MAX_EXCLUSIVE:.2f}",
+        f"- hard: tanimoto >= {TANIMOTO_MEDIUM_MAX_EXCLUSIVE:.2f}",
         "",
         f"- tanimoto_median: {median_tanimoto if math.isfinite(float(median_tanimoto)) else 'nan'}",
         f"- auc_interpretation_schema: {AUC_INTERPRETATION_SCHEMA}",
         f"- auc_interpretation: {auc_label}",
         f"- auc_interpretation_reason: {auc_reason}",
+        f"- auc_hard_min_pairs: {int(AUC_HARD_MIN_PAIRS_DEFAULT)}",
         "",
-        "## Bins",
+        "## AUC by bin",
         "",
         "| bin | tanimoto range | pairs_total | pairs_scored | auc_tie_aware |",
         "| --- | --- | --- | --- | --- |",
@@ -754,6 +841,22 @@ def run_batch(
         )
     hardness_lines.append("")
     hardness_curve_md.write_text("\n".join(hardness_lines) + "\n", encoding="utf-8")
+
+    # Write summary_metadata.json for audit-grade consumption (no schema bump, additive artifact).
+    summary_metadata = {
+        "auc_interpretation_schema": AUC_INTERPRETATION_SCHEMA,
+        "auc_interpretation": str(auc_label),
+        "auc_interpretation_reason": str(auc_reason),
+        "tanimoto_median": float(median_tanimoto) if math.isfinite(float(median_tanimoto)) else float("nan"),
+        "pairs_total_by_bin": {k: int(v) for k, v in pairs_total_by_bin.items()},
+        "pairs_scored_by_bin": {k: int(v) for k, v in pairs_scored_by_bin.items()},
+        "auc_tie_aware_by_bin": {k: float(v) for k, v in auc_by_bin.items()},
+        "physics_mode": str(physics_mode),
+        "physics_entropy_beta": float(SPECTRAL_ENTROPY_BETA_DEFAULT),
+    }
+    (out_dir / "summary_metadata.json").write_text(
+        json.dumps(summary_metadata, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8"
+    )
 
     if score_mode == "external_scores":
         missing_decoy_scores_path = out_dir / "missing_decoy_scores.csv"
@@ -812,7 +915,8 @@ def run_batch(
             "decoy_hard_mode": bool(decoy_hard_mode),
             "decoy_hard_tanimoto_min": float(decoy_hard_tanimoto_min),
             "decoy_hard_tanimoto_max": float(decoy_hard_tanimoto_max),
-            "operator_mode": str(operator_mode),
+            "physics_mode": str(physics_mode),
+            "physics_entropy_beta": float(SPECTRAL_ENTROPY_BETA_DEFAULT),
             "guardrails_max_atoms": guardrails_max_atoms,
             "guardrails_require_connected": guardrails_require_connected,
             "score_mode": score_mode,
