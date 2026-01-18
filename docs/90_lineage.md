@@ -653,3 +653,18 @@
 - SHA256(evidence_pack.zip): 20980360782EBE926F1F4E448369D8F692431059EE3863489EE3AD27805773D1
 - Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/110 (merge: 8314c0656ab6f6aa8eadff20c32d9cce61ca4473)
 - CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21116867958
+
+### 2026-01-18 - PHYSICS-WEIGHTED-EDGES-1: weighted edges (bond order + Δχ) live proof (stress pack)
+- Code PR: https://github.com/RobertPaulig/Geometric_table/pull/113 (merge: 7c1d14207316e8130ae734ff2c07f80ae9a6b4e9)
+- CI run (3/3 ci/* on code merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21118368856
+- Workflow PR: https://github.com/RobertPaulig/Geometric_table/pull/114 (merge: 80fbe9895609b8c43a758c301bd933c4e87ef38f)
+- CI run (3/3 ci/* on workflow merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21118477746
+- Live proof (stress pack):
+  - Inputs: physics_mode=both; edge_weight_mode=bond_order_delta_chi
+  - Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/physics-operator-weights-2026-01-18-r1
+  - Source commit: 80fbe9895609b8c43a758c301bd933c4e87ef38f
+  - Publish run: https://github.com/RobertPaulig/Geometric_table/actions/runs/21118526044
+  - Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/physics-operator-weights-2026-01-18-r1/evidence_pack.zip
+  - SHA256(evidence_pack.zip): 388FA597A852B0CC881136B0A45FA089CE2797E2E0E6BACDB7B3FA47D9158F4F
+  - Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/115 (merge: 86ea9afcc48d138b18db8373b990612790895fc2)
+  - CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21118668233
