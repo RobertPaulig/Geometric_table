@@ -644,3 +644,12 @@
     - tanimoto_median: 0.119643
     - hardness bins (pairs_total): easy=760, medium=120, hard=0
     - auc_interpretation: INCONCLUSIVE (decoys_too_easy)
+
+### 2026-01-18 - PHYSICS-OPERATOR-RAILS-1: live proof publish→release→registry (stress pack)
+- Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/physics-operator-rails-2026-01-18-r1
+- Source commit: 2a9bd703abee100d9ee0fdafe3e89acc42c1316f
+- Publish run: https://github.com/RobertPaulig/Geometric_table/actions/runs/21116814765
+- Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/physics-operator-rails-2026-01-18-r1/evidence_pack.zip
+- SHA256(evidence_pack.zip): 20980360782EBE926F1F4E448369D8F692431059EE3863489EE3AD27805773D1
+- Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/110 (merge: 8314c0656ab6f6aa8eadff20c32d9cce61ca4473)
+- CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21116867958
