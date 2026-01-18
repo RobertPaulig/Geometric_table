@@ -485,6 +485,14 @@ separation facts (computed on status==OK rows only):
   - status_counts: OK=200, SKIP=0, ERROR=0
   - top_skip_reasons: (none)
   - share_rows_with_n_decoys_gt_0: 1.000 (100.0%)
+  - decoy_realism (hardness curve, Morgan Tanimoto bins):
+    - tanimoto_median: 0.119643
+    - pairs_total: 880 (easy=760, medium=120, hard=0)
+    - share_pairs: easy=0.863636, medium=0.136364, hard=0.000000
+    - pairs_scored: 380 (easy=280, medium=100, hard=0)
+    - auc_tie_aware: easy=1.000000, medium=1.000000, hard=N/A
+    - auc_interpretation: INCONCLUSIVE (decoys_too_easy)
+    - evidence_pack_files: hardness_curve.csv, hardness_curve.md, operator_features.csv
   - comparison_vs_value-ring-suite-2026-01-10:
     - status_counts: OK=60, SKIP=140, ERROR=0 -> OK=200, SKIP=0, ERROR=0
     - top_skip_reasons: no_decoys_generated: 140 -> (none)
