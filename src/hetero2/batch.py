@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Sequence
 
 import hetero1a
+import numpy as np
 from hetero2.decoy_realism import (
     AUC_INTERPRETATION_SCHEMA,
     AUC_HARD_MIN_PAIRS_DEFAULT,
@@ -26,7 +27,15 @@ from hetero2.decoy_realism import (
     interpret_auc,
     tanimoto_bin,
 )
-from hetero2.physics_operator import MissingPhysicsParams, SPECTRAL_ENTROPY_BETA_DEFAULT
+from hetero2.physics_operator import (
+    DOS_ETA_DEFAULT,
+    DOS_GRID_N_DEFAULT,
+    DOS_LDOS_SCHEMA,
+    MissingPhysicsParams,
+    SPECTRAL_ENTROPY_BETA_DEFAULT,
+    compute_dos_curve,
+    compute_ldos_curve,
+)
 from hetero2.pipeline import run_pipeline_v2
 from hetero2.report import render_report_v2
 
@@ -438,6 +447,10 @@ def run_batch(
         os.fsync(summary_file.fileno())
 
     tasks: List[Dict[str, object]] = []
+    dos_eigs_L: list[list[float]] = []
+    dos_eigs_H: list[list[float]] = []
+    dos_eigs_WH: list[list[float]] = []
+    ldos_inputs_by_id: dict[str, dict[str, dict[str, object]]] = {}
     for idx, row in enumerate(rows):
         mol_id = row.get("id") or f"mol_{idx}"
         if resume and not overwrite and mol_id in done_ids:
@@ -519,6 +532,25 @@ def run_batch(
             operator_rows.append(
                 {"id": mol_id, **{k: op.get(k, "") for k in fieldnames if k.startswith(("physics_", "L_", "H_", "W_", "WH_"))}}
             )
+
+            dos_ldos = op.get("dos_ldos", {}) if isinstance(op.get("dos_ldos"), dict) else {}
+            if isinstance(dos_ldos, dict) and str(dos_ldos.get("schema_version", "")) == DOS_LDOS_SCHEMA:
+                eigvals_L = dos_ldos.get("eigvals_L", [])
+                eigvals_H = dos_ldos.get("eigvals_H", [])
+                eigvals_WH = dos_ldos.get("eigvals_WH", [])
+                if isinstance(eigvals_L, list) and eigvals_L:
+                    dos_eigs_L.append([float(x) for x in eigvals_L])
+                if isinstance(eigvals_H, list) and eigvals_H:
+                    dos_eigs_H.append([float(x) for x in eigvals_H])
+                if isinstance(eigvals_WH, list) and eigvals_WH:
+                    dos_eigs_WH.append([float(x) for x in eigvals_WH])
+
+                ldos_H = dos_ldos.get("ldos_H", None)
+                if isinstance(ldos_H, dict):
+                    ldos_inputs_by_id.setdefault(mol_id, {})["H"] = ldos_H
+                ldos_WH = dos_ldos.get("ldos_WH", None)
+                if isinstance(ldos_WH, dict):
+                    ldos_inputs_by_id.setdefault(mol_id, {})["WH"] = ldos_WH
 
             decoys = pipeline.get("decoys", [])
             smiles_orig = str(pipeline.get("smiles", ""))
@@ -775,6 +807,131 @@ def run_batch(
         for row in operator_rows:
             w.writerow(row)
 
+    # Write DOS/LDOS artifacts (always present; may be empty if too little data).
+    dos_grid_n = int(DOS_GRID_N_DEFAULT)
+    dos_eta = float(DOS_ETA_DEFAULT)
+    dos_curve_csv = out_dir / "dos_curve.csv"
+    ldos_summary_csv = out_dir / "ldos_summary.csv"
+
+    dos_curve_csv.write_text("", encoding="utf-8")
+    ldos_summary_csv.write_text("", encoding="utf-8")
+
+    # Global energy grid for this run (single grid for all operator variants).
+    all_eigs: list[float] = []
+    for seq in dos_eigs_L:
+        all_eigs.extend(seq)
+    for seq in dos_eigs_H:
+        all_eigs.extend(seq)
+    for seq in dos_eigs_WH:
+        all_eigs.extend(seq)
+
+    energy_grid: np.ndarray
+    dos_energy_min = float("nan")
+    dos_energy_max = float("nan")
+    if all_eigs:
+        vals = np.array(all_eigs, dtype=float)
+        vals = vals[np.isfinite(vals)]
+        if vals.size >= 1:
+            margin = 3.0 * dos_eta
+            dos_energy_min = float(np.min(vals)) - margin
+            dos_energy_max = float(np.max(vals)) + margin
+            energy_grid = np.linspace(dos_energy_min, dos_energy_max, dos_grid_n, dtype=float)
+        else:
+            energy_grid = np.array([], dtype=float)
+    else:
+        energy_grid = np.array([], dtype=float)
+
+    dos_L = compute_dos_curve(eigenvalues=[x for seq in dos_eigs_L for x in seq], energy_grid=energy_grid, eta=dos_eta) if dos_eigs_L else np.zeros_like(energy_grid)
+    dos_H = compute_dos_curve(eigenvalues=[x for seq in dos_eigs_H for x in seq], energy_grid=energy_grid, eta=dos_eta) if dos_eigs_H else np.zeros_like(energy_grid)
+    dos_WH = compute_dos_curve(eigenvalues=[x for seq in dos_eigs_WH for x in seq], energy_grid=energy_grid, eta=dos_eta) if dos_eigs_WH else np.zeros_like(energy_grid)
+
+    with dos_curve_csv.open("w", encoding="utf-8", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=["energy", "dos_L", "dos_H", "dos_WH"])
+        w.writeheader()
+        for idx in range(int(energy_grid.size)):
+            w.writerow(
+                {
+                    "energy": f"{float(energy_grid[idx]):.10g}",
+                    "dos_L": f"{float(dos_L[idx]):.10g}" if energy_grid.size else "",
+                    "dos_H": f"{float(dos_H[idx]):.10g}" if energy_grid.size else "",
+                    "dos_WH": f"{float(dos_WH[idx]):.10g}" if energy_grid.size else "",
+                }
+            )
+
+    def _ldos_peak_entropy(eigvals: list[float], weights: list[float]) -> tuple[float, float, float]:
+        if energy_grid.size == 0:
+            return float("nan"), float("nan"), float("nan")
+        curve = compute_ldos_curve(eigenvalues=eigvals, weights=weights, energy_grid=energy_grid, eta=dos_eta)
+        if curve.size == 0:
+            return float("nan"), float("nan"), float("nan")
+        peak_idx = int(np.argmax(curve))
+        peak_energy = float(energy_grid[peak_idx])
+        peak_value = float(curve[peak_idx])
+        total = float(np.sum(curve))
+        if total <= 0.0 or not math.isfinite(total):
+            ent = float("nan")
+        else:
+            p = curve / total
+            ent = float(-np.sum(p * np.log(p + 1e-12)))
+        return peak_energy, peak_value, ent
+
+    ldos_summary_rows: list[dict[str, object]] = []
+    for mol_id in sorted(ldos_inputs_by_id.keys()):
+        payload = ldos_inputs_by_id[mol_id]
+        row: dict[str, object] = {"id": mol_id}
+        for op_id in ["H", "WH"]:
+            rec = payload.get(op_id, None)
+            if not isinstance(rec, dict):
+                row.update(
+                    {
+                        f"{op_id}_atom_idx": "",
+                        f"{op_id}_atomic_number": "",
+                        f"{op_id}_ldos_peak_energy": "",
+                        f"{op_id}_ldos_peak_value": "",
+                        f"{op_id}_ldos_entropy": "",
+                    }
+                )
+                continue
+            atom_idx = rec.get("atom_idx", "")
+            atomic_number = rec.get("atomic_number", "")
+            eigvals = rec.get("eigvals", [])
+            weights = rec.get("weights", [])
+            if not isinstance(eigvals, list) or not isinstance(weights, list):
+                peak_energy = peak_value = ent = float("nan")
+            else:
+                peak_energy, peak_value, ent = _ldos_peak_entropy([float(x) for x in eigvals], [float(x) for x in weights])
+            row.update(
+                {
+                    f"{op_id}_atom_idx": int(atom_idx) if str(atom_idx).isdigit() else atom_idx,
+                    f"{op_id}_atomic_number": int(atomic_number) if str(atomic_number).isdigit() else atomic_number,
+                    f"{op_id}_ldos_peak_energy": "" if not math.isfinite(float(peak_energy)) else f"{float(peak_energy):.10g}",
+                    f"{op_id}_ldos_peak_value": "" if not math.isfinite(float(peak_value)) else f"{float(peak_value):.10g}",
+                    f"{op_id}_ldos_entropy": "" if not math.isfinite(float(ent)) else f"{float(ent):.10g}",
+                }
+            )
+        ldos_summary_rows.append(row)
+
+    with ldos_summary_csv.open("w", encoding="utf-8", newline="") as f:
+        w = csv.DictWriter(
+            f,
+            fieldnames=[
+                "id",
+                "H_atom_idx",
+                "H_atomic_number",
+                "H_ldos_peak_energy",
+                "H_ldos_peak_value",
+                "H_ldos_entropy",
+                "WH_atom_idx",
+                "WH_atomic_number",
+                "WH_ldos_peak_energy",
+                "WH_ldos_peak_value",
+                "WH_ldos_entropy",
+            ],
+        )
+        w.writeheader()
+        for row in ldos_summary_rows:
+            w.writerow(row)
+
     # Write hardness curve artifacts (always present; may be inconclusive if too few pairs).
     hardness_curve_csv = out_dir / "hardness_curve.csv"
     hardness_curve_md = out_dir / "hardness_curve.md"
@@ -876,6 +1033,11 @@ def run_batch(
         "physics_mode": str(physics_mode),
         "edge_weight_mode": str(edge_weight_mode),
         "physics_entropy_beta": float(SPECTRAL_ENTROPY_BETA_DEFAULT),
+        "dos_ldos_schema": str(DOS_LDOS_SCHEMA),
+        "dos_grid_n": int(dos_grid_n),
+        "dos_eta": float(dos_eta),
+        "dos_energy_min": float(dos_energy_min),
+        "dos_energy_max": float(dos_energy_max),
     }
     (out_dir / "summary_metadata.json").write_text(
         json.dumps(summary_metadata, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8"
