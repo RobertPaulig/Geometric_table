@@ -35,6 +35,14 @@ on:
         description: "seed for hetero2-batch"
         required: true
         default: "0"
+      physics_mode:
+        description: "physics_mode for hetero2-batch (topological|hamiltonian|both)"
+        required: true
+        default: "topological"
+      edge_weight_mode:
+        description: "edge_weight_mode for hetero2-batch (unweighted|bond_order|bond_order_delta_chi)"
+        required: true
+        default: "unweighted"
       prerelease:
         description: "Mark GitHub release as pre-release"
         required: true
@@ -82,6 +90,8 @@ jobs:
             --maxtasksperchild 100 \
             --seed_strategy per_row \
             --seed ${{ inputs.seed }} \
+            --physics_mode ${{ inputs.physics_mode }} \
+            --edge_weight_mode ${{ inputs.edge_weight_mode }} \
             --zip_pack
 
       - name: Validate zip (no unpack)
@@ -103,7 +113,7 @@ jobs:
 
           - Source ref: ${{ inputs.ref }}
           - Batch (repro):
-            hetero2-batch --input stress.csv --out_dir out_stress --artifacts light --score_mode mock --k_decoys ${{ inputs.k_decoys }} --workers ${{ inputs.workers }} --timeout_s ${{ inputs.timeout_s }} --maxtasksperchild 100 --seed_strategy per_row --seed ${{ inputs.seed }} --zip_pack
+            hetero2-batch --input stress.csv --out_dir out_stress --artifacts light --score_mode mock --k_decoys ${{ inputs.k_decoys }} --workers ${{ inputs.workers }} --timeout_s ${{ inputs.timeout_s }} --maxtasksperchild 100 --seed_strategy per_row --seed ${{ inputs.seed }} --physics_mode ${{ inputs.physics_mode }} --edge_weight_mode ${{ inputs.edge_weight_mode }} --zip_pack
           - Pack: summary.csv, metrics.json, index.md, manifest.json, checksums.sha256, evidence_pack.zip
           - SHA256(evidence_pack.zip): ${{ steps.hash.outputs.sha256 }}
           EOF
@@ -186,7 +196,7 @@ jobs:
           - Release asset: ${{ needs.build-pack.outputs.asset_url }}
           - SHA256(evidence_pack.zip): ${{ needs.build-pack.outputs.sha256 }}
           - Command:
-            hetero2-batch --input stress.csv --out_dir out_stress --artifacts light --score_mode mock --k_decoys ${{ inputs.k_decoys }} --workers ${{ inputs.workers }} --timeout_s ${{ inputs.timeout_s }} --maxtasksperchild 100 --seed_strategy per_row --seed ${{ inputs.seed }} --zip_pack
+            hetero2-batch --input stress.csv --out_dir out_stress --artifacts light --score_mode mock --k_decoys ${{ inputs.k_decoys }} --workers ${{ inputs.workers }} --timeout_s ${{ inputs.timeout_s }} --maxtasksperchild 100 --seed_strategy per_row --seed ${{ inputs.seed }} --physics_mode ${{ inputs.physics_mode }} --edge_weight_mode ${{ inputs.edge_weight_mode }} --zip_pack
           EOF
 
       - name: Create PR with registry update
