@@ -625,3 +625,22 @@
     - scores_coverage.unique_missing_decoy_hashes: 0
     - scores_coverage.rows_with_decoys_scored_eq0: 0 (was 140 in r4)
     - selection_K_effective: 200 (was 60 in r4)
+
+### 2026-01-18 - DECOY-REALISM + CHEM-OPERATOR FOUNDATION-1: hard decoys mode, hardness curve, and opt-in H-operator
+- What:
+  - Added a hard-decoys accept/reject mode based on Morgan Tanimoto (`--decoy_hard_mode`) to prevent "too-easy decoys" from inflating AUC.
+  - Added "hardness curve" artefacts (`hardness_curve.csv`, `hardness_curve.md`) and `metrics.json.decoy_realism` with `auc_interpretation`.
+  - Added opt-in chemistry-aware operator features (`--operator_mode h_operator`) and exported `operator_features.csv`.
+- Code PR: https://github.com/RobertPaulig/Geometric_table/pull/102 (merge: 64ab419118e85229760a0935a43ec2f05ac4a839)
+- CI run (3/3 ci/* on code merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21103259389
+- Live proof (ring-suite):
+  - Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/value-ring-suite-2026-01-18
+  - Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/value-ring-suite-2026-01-18/value_ring_suite_evidence_pack.zip
+  - SHA256(value_ring_suite_evidence_pack.zip): 3BFB1865AE6C6A0163F8F729E7B9BBFAF61B96D8099BC7E9F8B35C0A6B3D0030
+  - Publish run: https://github.com/RobertPaulig/Geometric_table/actions/runs/21103307012
+  - Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/103 (merge: 039a23734df91dc946fed35ffa6983eefbb82fba)
+  - CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21103438952
+  - Facts (from `metrics.json.decoy_realism`):
+    - tanimoto_median: 0.119643
+    - hardness bins (pairs_total): easy=760, medium=120, hard=0
+    - auc_interpretation: INCONCLUSIVE (decoys_too_easy)
