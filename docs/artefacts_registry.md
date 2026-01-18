@@ -766,3 +766,11 @@ separation facts (computed on status==OK rows only):
 - SHA256(evidence_pack.zip): 20980360782EBE926F1F4E448369D8F692431059EE3863489EE3AD27805773D1
 - Command:
   hetero2-batch --input stress.csv --out_dir out_stress --artifacts light --score_mode mock --k_decoys 2 --workers 1 --timeout_s 60 --maxtasksperchild 100 --seed_strategy per_row --seed 0 --zip_pack
+
+## physics-operator-weights-2026-01-18-r1
+
+- Source commit: 80fbe9895609b8c43a758c301bd933c4e87ef38f
+- Release asset: https://github.com/RobertPaulig/Geometric_table/releases/download/physics-operator-weights-2026-01-18-r1/evidence_pack.zip
+- SHA256(evidence_pack.zip): 388FA597A852B0CC881136B0A45FA089CE2797E2E0E6BACDB7B3FA47D9158F4F
+- Command:
+  hetero2-batch --input stress.csv --out_dir out_stress --artifacts light --score_mode mock --k_decoys 2 --workers 1 --timeout_s 60 --maxtasksperchild 100 --seed_strategy per_row --seed 0 --physics_mode both --edge_weight_mode bond_order_delta_chi --zip_pack
