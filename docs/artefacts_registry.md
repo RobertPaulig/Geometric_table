@@ -485,6 +485,14 @@ separation facts (computed on status==OK rows only):
   - status_counts: OK=200, SKIP=0, ERROR=0
   - top_skip_reasons: (none)
   - share_rows_with_n_decoys_gt_0: 1.000 (100.0%)
+  - decoy_realism (hardness curve, Morgan Tanimoto bins):
+    - tanimoto_median: 0.119643
+    - pairs_total: 880 (easy=760, medium=120, hard=0)
+    - share_pairs: easy=0.863636, medium=0.136364, hard=0.000000
+    - pairs_scored: 380 (easy=280, medium=100, hard=0)
+    - auc_tie_aware: easy=1.000000, medium=1.000000, hard=N/A
+    - auc_interpretation: INCONCLUSIVE (decoys_too_easy)
+    - evidence_pack_files: hardness_curve.csv, hardness_curve.md, operator_features.csv
   - comparison_vs_value-ring-suite-2026-01-10:
     - status_counts: OK=60, SKIP=140, ERROR=0 -> OK=200, SKIP=0, ERROR=0
     - top_skip_reasons: no_decoys_generated: 140 -> (none)
@@ -736,3 +744,17 @@ separation facts (computed on status==OK rows only):
     - filtered_hit_rate: 0.055000 (ci: 0.025000..0.085000)
     - uplift_vs_random: 0.000000
     - uplift_vs_score_only: 0.000000
+
+## value-ring-suite-2026-01-18
+
+- Source commit: 64ab419118e85229760a0935a43ec2f05ac4a839
+- Release asset: https://github.com/RobertPaulig/Geometric_table/releases/download/value-ring-suite-2026-01-18/value_ring_suite_evidence_pack.zip
+- SHA256(value_ring_suite_evidence_pack.zip): 3BFB1865AE6C6A0163F8F729E7B9BBFAF61B96D8099BC7E9F8B35C0A6B3D0030
+- Command:
+  python scripts/pilot_generate_input.py --out_dir out_ring_suite --rows 200 --k_decoys 20 --seed 0 --full_cover_count 3
+  hetero2-batch --input out_ring_suite/input.csv --out_dir out_ring_suite --artifacts light --score_mode external_scores --scores_input out_ring_suite/scores.json --k_decoys 20 --workers 2 --timeout_s 60 --maxtasksperchild 100 --seed_strategy per_row --seed 0 --zip_pack
+- Outcome (facts from summary.csv):
+  - rows_total: 200
+  - status_counts: OK=200, SKIP=0, ERROR=0
+  - top_skip_reasons: (none)
+  - share_rows_with_n_decoys_gt_0: 1.000 (100.0%)
