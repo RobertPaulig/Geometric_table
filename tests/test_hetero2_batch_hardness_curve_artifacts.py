@@ -23,7 +23,7 @@ def test_batch_emits_hardness_curve_and_operator_features(tmp_path: Path) -> Non
         seed=0,
         k_decoys=5,
         score_mode="mock",
-        operator_mode="h_operator",
+        physics_mode="hamiltonian",
         workers=1,
         zip_pack=True,
     )

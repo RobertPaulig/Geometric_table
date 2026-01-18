@@ -11,6 +11,7 @@ from hetero1a.schemas import SCORES_SCHEMA
 from hetero2.chemgraph import ChemGraph
 from hetero2.decoy_strategy import generate_decoys_v1
 from hetero2.guardrails import MAX_ATOMS_DEFAULT, preflight_smiles
+from hetero2.physics_operator import SPECTRAL_ENTROPY_BETA_DEFAULT, compute_physics_features
 from hetero2.spectral import compute_stability_metrics, laplacian_eigvals
 
 
@@ -128,7 +129,7 @@ def run_pipeline_v2(
     decoy_hard_mode: bool = False,
     decoy_hard_tanimoto_min: float = 0.65,
     decoy_hard_tanimoto_max: float = 0.95,
-    operator_mode: str = "laplacian",
+    physics_mode: str = "topological",
 ) -> Dict[str, object]:
     ts = timestamp.strip() or _utc_now_iso()
     preflight = preflight_smiles(smiles, max_atoms=guardrails_max_atoms, require_connected=guardrails_require_connected)
@@ -161,17 +162,12 @@ def run_pipeline_v2(
     cg = ChemGraph(preflight.canonical_smiles)
     eigvals = laplacian_eigvals(cg.laplacian())
     spectral_metrics = compute_stability_metrics(eigvals)
-    laplacian_energy = float((eigvals * eigvals).mean()) if getattr(eigvals, "size", 0) else float("nan")
-    operator: Dict[str, object] = {
-        "mode": str(operator_mode),
-        "laplacian_energy": float(laplacian_energy),
-        "h_operator_energy": float("nan"),
-    }
-    if str(operator_mode) == "h_operator":
-        from hetero2.chem_operator import heavy_state_from_smiles, h_operator_energy_from_edges
-
-        n, edges, types = heavy_state_from_smiles(cg.canonical_smiles)
-        operator["h_operator_energy"] = float(h_operator_energy_from_edges(n, edges, types))
+    operator = compute_physics_features(
+        adjacency=cg.adjacency(),
+        types=cg.heavy_atom_types(),
+        physics_mode=str(physics_mode),
+        beta=float(SPECTRAL_ENTROPY_BETA_DEFAULT),
+    )
     decoys_result, decoy_strategy = generate_decoys_v1(
         cg.canonical_smiles,
         k=int(k_decoys),

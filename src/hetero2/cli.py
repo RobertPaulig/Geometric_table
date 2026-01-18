@@ -28,10 +28,16 @@ def _parse_pipeline_args(argv: list[str] | None = None) -> argparse.Namespace:
     ap.add_argument("--decoy_hard_tanimoto_min", type=float, default=0.65, help="Hard decoys min Tanimoto (inclusive).")
     ap.add_argument("--decoy_hard_tanimoto_max", type=float, default=0.95, help="Hard decoys max Tanimoto (inclusive).")
     ap.add_argument(
+        "--physics_mode",
+        choices=["topological", "hamiltonian", "both"],
+        default="topological",
+        help="Physics operator mode: topological (L), hamiltonian (H=L+V), or both.",
+    )
+    ap.add_argument(
         "--operator_mode",
         choices=["laplacian", "h_operator"],
-        default="laplacian",
-        help="Operator feature mode: laplacian (default) or h_operator (chem-sensitive).",
+        default=None,
+        help="DEPRECATED: use --physics_mode. laplacian -> topological, h_operator -> hamiltonian.",
     )
     ap.add_argument("--guardrails_max_atoms", type=int, default=200, help="Guardrail: max heavy atoms (skip if exceeded).")
     ap.add_argument(
@@ -89,10 +95,16 @@ def _parse_batch_args(argv: list[str] | None = None) -> argparse.Namespace:
     ap.add_argument("--decoy_hard_tanimoto_min", type=float, default=0.65, help="Hard decoys min Tanimoto (inclusive).")
     ap.add_argument("--decoy_hard_tanimoto_max", type=float, default=0.95, help="Hard decoys max Tanimoto (inclusive).")
     ap.add_argument(
+        "--physics_mode",
+        choices=["topological", "hamiltonian", "both"],
+        default="topological",
+        help="Physics operator mode: topological (L), hamiltonian (H=L+V), or both.",
+    )
+    ap.add_argument(
         "--operator_mode",
         choices=["laplacian", "h_operator"],
-        default="laplacian",
-        help="Operator feature mode: laplacian (default) or h_operator (chem-sensitive).",
+        default=None,
+        help="DEPRECATED: use --physics_mode. laplacian -> topological, h_operator -> hamiltonian.",
     )
     ap.add_argument(
         "--seed_strategy",
@@ -113,6 +125,12 @@ def _parse_batch_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main_pipeline(argv: list[str] | None = None) -> int:
     args = _parse_pipeline_args(argv)
+    if args.operator_mode is not None and args.physics_mode != "topological":
+        raise SystemExit("Do not mix --operator_mode and --physics_mode; use --physics_mode only.")
+    physics_mode = str(args.physics_mode)
+    if args.operator_mode is not None:
+        sys.stderr.write("WARNING: --operator_mode is deprecated; use --physics_mode instead.\n")
+        physics_mode = "hamiltonian" if str(args.operator_mode) == "h_operator" else "topological"
     score_mode = "external_scores" if args.score_mode == "external_scores" else "mock"
     out = run_pipeline_v2(
         args.smiles,
@@ -126,7 +144,7 @@ def main_pipeline(argv: list[str] | None = None) -> int:
         decoy_hard_mode=bool(args.decoy_hard_mode),
         decoy_hard_tanimoto_min=float(args.decoy_hard_tanimoto_min),
         decoy_hard_tanimoto_max=float(args.decoy_hard_tanimoto_max),
-        operator_mode=str(args.operator_mode),
+        physics_mode=physics_mode,
     )
     text = json.dumps(out, ensure_ascii=False, sort_keys=True, indent=2)
     if args.out:
@@ -159,6 +177,7 @@ def main_demo_aspirin(argv: list[str] | None = None) -> int:
         timestamp="2026-01-02T00:00:00+00:00",
         score_mode="mock",
         scores_input=None,
+        physics_mode="topological",
     )
     pipeline_out.write_text(json.dumps(pipeline, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
     render_report_v2(pipeline, out_path=str(report_out), assets_dir=out_dir / f"{stem}_assets")
@@ -169,6 +188,12 @@ def main_demo_aspirin(argv: list[str] | None = None) -> int:
 
 def main_batch(argv: list[str] | None = None) -> int:
     args = _parse_batch_args(argv)
+    if args.operator_mode is not None and args.physics_mode != "topological":
+        raise SystemExit("Do not mix --operator_mode and --physics_mode; use --physics_mode only.")
+    physics_mode = str(args.physics_mode)
+    if args.operator_mode is not None:
+        sys.stderr.write("WARNING: --operator_mode is deprecated; use --physics_mode instead.\n")
+        physics_mode = "hamiltonian" if str(args.operator_mode) == "h_operator" else "topological"
     input_csv = Path(args.input).resolve()
     out_dir = Path(args.out_dir).resolve()
     run_batch(
@@ -185,7 +210,7 @@ def main_batch(argv: list[str] | None = None) -> int:
         decoy_hard_mode=bool(args.decoy_hard_mode),
         decoy_hard_tanimoto_min=float(args.decoy_hard_tanimoto_min),
         decoy_hard_tanimoto_max=float(args.decoy_hard_tanimoto_max),
-        operator_mode=str(args.operator_mode),
+        physics_mode=physics_mode,
         seed_strategy=str(args.seed_strategy),
         no_index=bool(args.no_index),
         no_manifest=bool(args.no_manifest),
