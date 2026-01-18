@@ -758,3 +758,15 @@ separation facts (computed on status==OK rows only):
   - status_counts: OK=200, SKIP=0, ERROR=0
   - top_skip_reasons: (none)
   - share_rows_with_n_decoys_gt_0: 1.000 (100.0%)
+
+## physics-operator-rails-2026-01-18-local1
+
+- Source commit: 2a9bd703abee100d9ee0fdafe3e89acc42c1316f
+- Release asset: https://github.com/RobertPaulig/Geometric_table/releases/download/physics-operator-rails-2026-01-18-local1/evidence_pack.zip
+- SHA256(evidence_pack.zip): 6E447C87C4D2B777FAFA667070B4F2ADD2A384D6842B4D647497E12492D74AD1
+- Command:
+  python scripts/generate_stress_csv.py --out out_local/stress.csv --rows 200
+  hetero2-batch --input out_local/stress.csv --out_dir out_local --artifacts light --score_mode mock --physics_mode both --k_decoys 2 --workers 1 --timeout_s 60 --maxtasksperchild 100 --seed_strategy per_row --seed 0 --zip_pack
+- Outcome (facts from metrics.json):
+  - status_counts: OK=28, SKIP=172, ERROR=0
+  - pipeline_verdict: LOCAL_PROOF_INFRA_BYPASS (Actions billing/spending limit; enterprise chain blocked; see issue #107)
