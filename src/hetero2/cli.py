@@ -34,6 +34,12 @@ def _parse_pipeline_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Physics operator mode: topological (L), hamiltonian (H=L+V), or both.",
     )
     ap.add_argument(
+        "--edge_weight_mode",
+        choices=["unweighted", "bond_order", "bond_order_delta_chi"],
+        default="unweighted",
+        help="Edge weights for weighted operators: unweighted (binary), bond_order (1/2/3/1.5), or bond_order_delta_chi (bond_order*(1+alpha*|Δchi|)).",
+    )
+    ap.add_argument(
         "--operator_mode",
         choices=["laplacian", "h_operator"],
         default=None,
@@ -101,6 +107,12 @@ def _parse_batch_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Physics operator mode: topological (L), hamiltonian (H=L+V), or both.",
     )
     ap.add_argument(
+        "--edge_weight_mode",
+        choices=["unweighted", "bond_order", "bond_order_delta_chi"],
+        default="unweighted",
+        help="Edge weights for weighted operators: unweighted (binary), bond_order (1/2/3/1.5), or bond_order_delta_chi (bond_order*(1+alpha*|Δchi|)).",
+    )
+    ap.add_argument(
         "--operator_mode",
         choices=["laplacian", "h_operator"],
         default=None,
@@ -145,6 +157,7 @@ def main_pipeline(argv: list[str] | None = None) -> int:
         decoy_hard_tanimoto_min=float(args.decoy_hard_tanimoto_min),
         decoy_hard_tanimoto_max=float(args.decoy_hard_tanimoto_max),
         physics_mode=physics_mode,
+        edge_weight_mode=str(args.edge_weight_mode),
     )
     text = json.dumps(out, ensure_ascii=False, sort_keys=True, indent=2)
     if args.out:
@@ -211,6 +224,7 @@ def main_batch(argv: list[str] | None = None) -> int:
         decoy_hard_tanimoto_min=float(args.decoy_hard_tanimoto_min),
         decoy_hard_tanimoto_max=float(args.decoy_hard_tanimoto_max),
         physics_mode=physics_mode,
+        edge_weight_mode=str(args.edge_weight_mode),
         seed_strategy=str(args.seed_strategy),
         no_index=bool(args.no_index),
         no_manifest=bool(args.no_manifest),

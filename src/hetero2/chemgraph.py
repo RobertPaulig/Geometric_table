@@ -69,6 +69,23 @@ class ChemGraph:
                 adj[j, i] = 1.0
         return adj
 
+    def heavy_bonds_with_order(self) -> Tuple[Tuple[int, int, float], ...]:
+        _, mapping = self._heavy_atom_map()
+        edges: set[Tuple[int, int, float]] = set()
+        for bond in self.mol.GetBonds():
+            u = int(bond.GetBeginAtomIdx())
+            v = int(bond.GetEndAtomIdx())
+            if u in mapping and v in mapping:
+                i = int(mapping[u])
+                j = int(mapping[v])
+                if i == j:
+                    continue
+                if i > j:
+                    i, j = j, i
+                bo = float(bond.GetBondTypeAsDouble())
+                edges.add((i, j, bo))
+        return tuple(sorted(edges))
+
     def laplacian(self) -> np.ndarray:
         adj = self.adjacency()
         deg = np.diag(adj.sum(axis=1))

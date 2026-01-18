@@ -9,6 +9,7 @@
     "port_geometry": "single",
     "role": "terminator",
     "epsilon": -0.2,
+    "chi": 2.2,
     "notes": "Базовый тороид с одним портом",
     "softness": 0.0
   },
@@ -22,6 +23,7 @@
     "port_geometry": "none",
     "role": "inert",
     "epsilon": -3.0,
+    "chi": null,
     "notes": "Два сцепленных тора, портов нет (инертный газ)",
     "softness": 0.0
   },
@@ -35,6 +37,7 @@
     "port_geometry": "single",
     "role": "terminator",
     "epsilon": 2.0,
+    "chi": 0.98,
     "notes": "Один внешний 'лепесток' над He-ядром",
     "softness": 0.0
   },
@@ -48,6 +51,7 @@
     "port_geometry": "linear",
     "role": "bridge",
     "epsilon": 1.0,
+    "chi": 1.57,
     "notes": "Два порта, стремление к линейной/плоской геометрии",
     "softness": 0.0
   },
@@ -61,6 +65,7 @@
     "port_geometry": "trigonal",
     "role": "hub",
     "epsilon": -0.1,
+    "chi": 2.04,
     "notes": "Три порта, тригональная конфигурация",
     "softness": 0.0
   },
@@ -74,6 +79,7 @@
     "port_geometry": "tetra",
     "role": "hub",
     "epsilon": 0.0,
+    "chi": 2.55,
     "notes": "Четыре порта, тетраэдрический прототип",
     "softness": 0.0
   },
@@ -87,6 +93,7 @@
     "port_geometry": "pyramidal",
     "role": "hub",
     "epsilon": -0.5,
+    "chi": 3.04,
     "notes": "Три порта + одна пара, аналог lone pair",
     "softness": 0.0
   },
@@ -100,6 +107,7 @@
     "port_geometry": "bent",
     "role": "bridge",
     "epsilon": -1.0,
+    "chi": 3.44,
     "notes": "Два порта, две неспаренные пары (угол ~104–110°)",
     "softness": 0.0
   },
@@ -113,6 +121,7 @@
     "port_geometry": "single",
     "role": "terminator",
     "epsilon": -1.5,
+    "chi": 3.98,
     "notes": "Один сильный порт, почти замкнутая оболочка",
     "softness": 0.0
   },
@@ -126,6 +135,7 @@
     "port_geometry": "none",
     "role": "inert",
     "epsilon": -3.0,
+    "chi": null,
     "notes": "Замкнутая конфигурация, инертный газ",
     "softness": 0.0
   },
@@ -139,6 +149,7 @@
     "port_geometry": "single",
     "role": "terminator",
     "epsilon": 2.0,
+    "chi": 0.93,
     "notes": "Геометрический аналог Li: один внешний порт, донор",
     "softness": 0.0
   },
@@ -152,6 +163,7 @@
     "port_geometry": "linear",
     "role": "bridge",
     "epsilon": 1.0,
+    "chi": 1.31,
     "notes": "Геометрический аналог Be: два линейных порта",
     "softness": 0.0
   },
@@ -165,6 +177,7 @@
     "port_geometry": "trigonal",
     "role": "hub",
     "epsilon": -0.1,
+    "chi": 1.61,
     "notes": "Геометрический аналог B: тригональный плоский хаб",
     "softness": 0.0
   },
@@ -178,6 +191,7 @@
     "port_geometry": "tetra",
     "role": "hub",
     "epsilon": 0.0,
+    "chi": 1.9,
     "notes": "Геометрический аналог C: тетраэдрический 3D-хаб",
     "softness": 0.3
   },
@@ -191,6 +205,7 @@
     "port_geometry": "pyramidal",
     "role": "hub",
     "epsilon": -0.5,
+    "chi": 2.19,
     "notes": "Геометрический аналог N: три порта + виртуальный",
     "softness": 0.0
   },
@@ -204,6 +219,7 @@
     "port_geometry": "bent",
     "role": "bridge",
     "epsilon": -1.0,
+    "chi": 2.58,
     "notes": "Геометрический аналог O: два изогнутых порта",
     "softness": 0.0
   },
@@ -217,6 +233,7 @@
     "port_geometry": "single",
     "role": "terminator",
     "epsilon": -1.5,
+    "chi": 3.16,
     "notes": "Геометрический аналог F: сильный одиночный порт",
     "softness": 0.0
   },
@@ -230,6 +247,7 @@
     "port_geometry": "none",
     "role": "inert",
     "epsilon": -3.0,
+    "chi": null,
     "notes": "Геометрический аналог Ne: инертная замкнутая конфигурация",
     "softness": 0.0
   },
@@ -243,6 +261,7 @@
     "port_geometry": "single",
     "role": "terminator",
     "epsilon": 2.0,
+    "chi": 0.82,
     "notes": "Геометрический аналог Li/Na: щёлочной донор 4-го периода",
     "softness": 0.0
   },
@@ -256,6 +275,7 @@
     "port_geometry": "linear",
     "role": "bridge",
     "epsilon": 1.0,
+    "chi": 1.0,
     "notes": "Геометрический аналог Be/Mg: двухпортовый донор 4-го периода",
     "softness": 0.0
   },
@@ -269,6 +289,7 @@
     "port_geometry": "octa",
     "role": "inert",
     "epsilon": -0.1,
+    "chi": 1.36,
     "notes": "Прототип раннего d-металла: октаэдрическая 6‑портовая конфигурация",
     "softness": 0.0
   },
@@ -282,6 +303,7 @@
     "port_geometry": "octa",
     "role": "inert",
     "epsilon": 0.26,
+    "chi": 1.54,
     "notes": "Ранний d-металл: октаэдрическая 6‑портовая конфигурация",
     "softness": 0.0
   },
@@ -295,6 +317,7 @@
     "port_geometry": "octa",
     "role": "hub",
     "epsilon": 0.44,
+    "chi": 1.63,
     "notes": "Ранний d-hub: октаэдрический металлический центр",
     "softness": 0.0
   },
@@ -308,6 +331,7 @@
     "port_geometry": "octa",
     "role": "hub",
     "epsilon": 0.5,
+    "chi": 1.66,
     "notes": "Cr: октаэдрический d-hub, χ_spec ~ 0.5",
     "softness": 0.0
   },
@@ -321,6 +345,7 @@
     "port_geometry": "octa",
     "role": "inert",
     "epsilon": 0.28,
+    "chi": 1.55,
     "notes": "Mn: геометрически похож на Sc/Ti, слабый акцептор",
     "softness": 0.0
   },
@@ -334,6 +359,7 @@
     "port_geometry": "octa",
     "role": "hub",
     "epsilon": 0.84,
+    "chi": 1.83,
     "notes": "Fe: классический d-hub (металлический центр)",
     "softness": 0.0
   },
@@ -347,6 +373,7 @@
     "port_geometry": "octa",
     "role": "hub",
     "epsilon": 0.94,
+    "chi": 1.88,
     "notes": "Co: поздний d-hub с увеличенной χ_spec",
     "softness": 0.0
   },
@@ -360,6 +387,7 @@
     "port_geometry": "octa",
     "role": "hub",
     "epsilon": 1.0,
+    "chi": 1.91,
     "notes": "Ni: поздний d-hub, χ_spec ~ 1.0",
     "softness": 0.0
   },
@@ -373,6 +401,7 @@
     "port_geometry": "octa",
     "role": "hub",
     "epsilon": 0.98,
+    "chi": 1.9,
     "notes": "Cu: мягкий d-hub, близок к низкоакцепторному плато",
     "softness": 0.0
   },
@@ -386,6 +415,7 @@
     "port_geometry": "octa",
     "role": "hub",
     "epsilon": 0.48,
+    "chi": 1.65,
     "notes": "Zn: замыкающий d-hub, χ_spec ~ 0.48",
     "softness": 0.0
   },
@@ -399,6 +429,7 @@
     "port_geometry": "trigonal",
     "role": "hub",
     "epsilon": -0.1,
+    "chi": 1.81,
     "notes": "Геометрический аналог B/Al: тригональный слабый акцептор",
     "softness": 0.0
   },
@@ -412,6 +443,7 @@
     "port_geometry": "tetra",
     "role": "hub",
     "epsilon": 0.0,
+    "chi": 2.01,
     "notes": "Геометрический аналог C/Si: слабый акцепторный центр 4-го периода",
     "softness": 0.0
   },
@@ -425,6 +457,7 @@
     "port_geometry": "pyramidal",
     "role": "hub",
     "epsilon": -0.5,
+    "chi": 2.18,
     "notes": "Геометрический аналог N/P: трёхпортовый акцептор 4-го периода",
     "softness": 0.0
   },
@@ -438,6 +471,7 @@
     "port_geometry": "bent",
     "role": "bridge",
     "epsilon": -1.0,
+    "chi": 2.55,
     "notes": "Геометрический аналог O/S: двухпортовый акцепторный мост",
     "softness": 0.0
   },
@@ -451,6 +485,7 @@
     "port_geometry": "single",
     "role": "terminator",
     "epsilon": -1.5,
+    "chi": 2.96,
     "notes": "Геометрический аналог F/Cl: сильный одиночный порт 4-го периода",
     "softness": 0.0
   },
@@ -464,6 +499,7 @@
     "port_geometry": "none",
     "role": "inert",
     "epsilon": -3.0,
+    "chi": 3.0,
     "notes": "Геометрический аналог Ne/Ar: инертный газ 4-го периода",
     "softness": 0.0
   },
@@ -477,6 +513,7 @@
     "port_geometry": "single",
     "role": "terminator",
     "epsilon": 2.0,
+    "chi": 0.82,
     "notes": "Клон K (5-й период): щёлочной терминатор",
     "softness": 0.0
   },
@@ -490,6 +527,7 @@
     "port_geometry": "linear",
     "role": "bridge",
     "epsilon": 1.0,
+    "chi": 0.95,
     "notes": "Клон Ca (5-й период): щёлочноземельный мост",
     "softness": 0.0
   },
@@ -503,6 +541,7 @@
     "port_geometry": "trigonal",
     "role": "hub",
     "epsilon": -0.1,
+    "chi": 1.78,
     "notes": "Клон Ga (5-й период): мягкий p-hub",
     "softness": 0.0
   },
@@ -516,6 +555,7 @@
     "port_geometry": "tetra",
     "role": "hub",
     "epsilon": 0.0,
+    "chi": 1.96,
     "notes": "Клон Ge (5-й период): четырёхпортовый hub",
     "softness": 0.0
   },
@@ -529,6 +569,7 @@
     "port_geometry": "pyramidal",
     "role": "hub",
     "epsilon": -0.5,
+    "chi": 2.05,
     "notes": "Клон As (5-й период): трёхпортовый hub",
     "softness": 0.0
   },
@@ -542,6 +583,7 @@
     "port_geometry": "bent",
     "role": "bridge",
     "epsilon": -1.0,
+    "chi": 2.1,
     "notes": "Клон Se (5-й период): мост-акцептор",
     "softness": 0.0
   },
@@ -555,6 +597,7 @@
     "port_geometry": "single",
     "role": "terminator",
     "epsilon": -1.5,
+    "chi": 2.66,
     "notes": "Клон Br (5-й период): терминатор",
     "softness": 0.0
   },
@@ -568,6 +611,7 @@
     "port_geometry": "none",
     "role": "inert",
     "epsilon": -3.0,
+    "chi": null,
     "notes": "Клон Kr (5-й период): инертный газ",
     "softness": 0.0
   },
@@ -581,6 +625,7 @@
     "port_geometry": "single",
     "role": "terminator",
     "epsilon": 2.0,
+    "chi": 0.79,
     "notes": "Клон Rb (6-й период): щелочной терминатор",
     "softness": 0.0
   },
@@ -594,6 +639,7 @@
     "port_geometry": "linear",
     "role": "bridge",
     "epsilon": 1.0,
+    "chi": 0.89,
     "notes": "Клон Sr (6-й период): щелочноземельный мост",
     "softness": 0.0
   },
@@ -607,6 +653,7 @@
     "port_geometry": "trigonal",
     "role": "hub",
     "epsilon": -0.1,
+    "chi": 1.62,
     "notes": "Клон In (6-й период): мягкий p-hub",
     "softness": 0.0
   },
@@ -620,6 +667,7 @@
     "port_geometry": "tetra",
     "role": "hub",
     "epsilon": 0.0,
+    "chi": 2.33,
     "notes": "Клон Sn (6-й период): четырехпортовый hub",
     "softness": 0.0
   }
