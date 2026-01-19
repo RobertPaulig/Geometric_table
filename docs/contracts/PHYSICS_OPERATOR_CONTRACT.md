@@ -95,6 +95,87 @@ V_scaled = gamma * V0
 Где `V0` берётся **только** из SoT (`data/atoms_db_v1.json`), а `gamma` по умолчанию `1.0`.
 До калибровки `gamma=1.0`, модель остаётся dimensionless; калибровка фиксируется отдельной процедурой/артефактами.
 
+### 3.5 SCF / v4.0 protocol (self-tuning operator)
+
+SCF (self-consistent field) — итеративный протокол, который строит самосогласованный потенциал `V` поверх базового `V0`
+(SoT) и фиксирует трассу сходимости как audit-grade артефакт.
+
+#### Включение протокола
+
+SCF считается включённым, если одновременно:
+
+- `potential_mode ∈ {"self_consistent","both"}`
+- `physics_mode ∈ {"hamiltonian","both"}`
+
+#### Оператор на итерации
+
+Пусть `A` — (взвешенная или невзвешенная) матрица смежности, `D = diag(sum_j A_ij)`, `L = D - A`.
+Базовый потенциал `V0` берётся **строго** из SoT (`data/atoms_db_v1.json`) и масштабируется:
+
+```
+V0_scaled = potential_scale_gamma * V0
+```
+
+На итерации `t` оператор имеет вид:
+
+```
+H(t) = L + diag(V(t))
+```
+
+Важно: все величины в этом протоколе **dimensionless** до отдельной калибровки.
+
+#### Спектральная “плотность” ρ (детерминированный P3-minimal)
+
+На шаге `t` вычисляем eigenpairs `(λ_k, u_k)` для `H(t)` и берём нижние `K = scf_occ_k` состояний.
+Веса задаём softmax-правилом:
+
+```
+w_k = exp(-λ_k / scf_tau) / sum_j exp(-λ_j / scf_tau)
+```
+
+Локальная “плотность”:
+
+```
+ρ_i = sum_k w_k * |u_{ik}|^2
+ρ_tilde_i = ρ_i - mean(ρ)
+```
+
+#### Обновление потенциала + смешивание
+
+Обновление (P3-minimal, без химических claims):
+
+```
+V_proposed = V0_scaled + scf_gamma * ρ_tilde
+V(t+1) = (1 - scf_damping) * V(t) + scf_damping * V_proposed
+```
+
+#### Критерий остановки
+
+Сходимость:
+
+```
+residual_inf = max_i |V(t+1)_i - V(t)_i| <= scf_tol
+```
+
+Стоп по лимиту итераций: `t <= scf_max_iter`.
+
+#### Артефакты (evidence pack)
+
+При включённом SCF evidence pack обязан содержать:
+
+- `scf_trace.csv` — трасса итераций (минимум: `iter`, `residual_inf`, `residual_mean`, `status`, `converged`)
+- `potential_vectors.csv` — векторы потенциала по узлам (минимум: `V0`, `V_scaled`, `gamma`, `V_scf`, `rho_final`)
+- `scf_summary.json` — run-level summary (`scf_status`, `scf_iters`, `scf_residual_final` и параметры SCF)
+- `summary_metadata.json` — ключи `scf_enabled`, `scf_status`, `potential_unit_model="dimensionless"`, `potential_scale_gamma`
+
+`scf_status` (run-level) фиксируется как строка из:
+`CONVERGED | MAX_ITER | ERROR_MISSING_PARAMS | ERROR_NUMERICAL`.
+
+#### Verdict-правило (audit-grade, без fail-fast)
+
+Если SCF включён, но не сошёлся (`scf_status=MAX_ITER`), пайплайн **не падает**,
+а помечает результат как `outcome_verdict=INCONCLUSIVE_SCF_NOT_CONVERGED` с `outcome_reason=scf_not_converged`.
+
 ## 4) Hardness curve + запрет самообмана AUC
 
 Декои могут быть “лёгкими” (слишком непохожими), и тогда высокая AUC может быть самообманом.

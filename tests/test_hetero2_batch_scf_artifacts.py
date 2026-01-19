@@ -46,11 +46,13 @@ def test_batch_emits_scf_artifacts_and_includes_them_in_zip(tmp_path: Path) -> N
 
     scf_trace_csv = out_dir / "scf_trace.csv"
     potential_vectors_csv = out_dir / "potential_vectors.csv"
+    scf_summary_json = out_dir / "scf_summary.json"
     summary_metadata_json = out_dir / "summary_metadata.json"
     zip_path = out_dir / "evidence_pack.zip"
 
     assert scf_trace_csv.exists()
     assert potential_vectors_csv.exists()
+    assert scf_summary_json.exists()
     assert summary_metadata_json.exists()
     assert zip_path.exists()
 
@@ -58,6 +60,8 @@ def test_batch_emits_scf_artifacts_and_includes_them_in_zip(tmp_path: Path) -> N
     assert len(trace_rows) >= 1
     assert trace_rows[0]["id"] == "m0"
     assert "residual_inf" in trace_rows[0]
+    assert "residual_mean" in trace_rows[0]
+    assert "status" in trace_rows[0]
 
     vec_rows = list(csv.DictReader(potential_vectors_csv.read_text(encoding="utf-8").splitlines()))
     assert len(vec_rows) >= 1
@@ -72,12 +76,21 @@ def test_batch_emits_scf_artifacts_and_includes_them_in_zip(tmp_path: Path) -> N
     assert meta["potential_unit_model"] == "dimensionless"
     assert float(meta["potential_scale_gamma"]) == 1.0
     assert meta["scf_schema"] == SCF_SCHEMA
+    assert bool(meta["scf_enabled"]) is True
+    assert meta["scf_status"] in {"CONVERGED", "MAX_ITER"}
     assert int(meta["scf_rows_total"]) == 1
+
+    scf_sum = json.loads(scf_summary_json.read_text(encoding="utf-8"))
+    assert scf_sum["schema_version"] == "hetero2_scf_summary.v1"
+    assert bool(scf_sum["scf_enabled"]) is True
+    assert scf_sum["scf_status"] in {"CONVERGED", "MAX_ITER"}
+    assert int(scf_sum["rows_total"]) == 1
 
     with zipfile.ZipFile(zip_path, "r") as zf:
         names = set(zf.namelist())
         assert "scf_trace.csv" in names
         assert "potential_vectors.csv" in names
+        assert "scf_summary.json" in names
 
 
 def test_batch_marks_inconclusive_when_scf_does_not_converge(tmp_path: Path) -> None:
@@ -111,4 +124,11 @@ def test_batch_marks_inconclusive_when_scf_does_not_converge(tmp_path: Path) -> 
     assert summary_rows[0]["status"] == "OK"
     assert summary_rows[0]["outcome_verdict"] == "INCONCLUSIVE_SCF_NOT_CONVERGED"
     assert summary_rows[0]["outcome_reason"] == "scf_not_converged"
+
+    meta = json.loads((out_dir / "summary_metadata.json").read_text(encoding="utf-8"))
+    assert meta["scf_status"] == "MAX_ITER"
+
+    scf_sum = json.loads((out_dir / "scf_summary.json").read_text(encoding="utf-8"))
+    assert bool(scf_sum["scf_enabled"]) is True
+    assert scf_sum["scf_status"] == "MAX_ITER"
 

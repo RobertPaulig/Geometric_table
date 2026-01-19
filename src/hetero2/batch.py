@@ -624,17 +624,22 @@ def run_batch(
                         if not isinstance(t, dict):
                             continue
                         residual_inf = float(t.get("residual_inf", float("nan")))
+                        residual_mean = float(t.get("residual_mean", float("nan")))
                         min_v = float(t.get("min_V", float("nan")))
                         max_v = float(t.get("max_V", float("nan")))
                         mean_v = float(t.get("mean_V", float("nan")))
                         min_rho = float(t.get("min_rho", float("nan")))
                         max_rho = float(t.get("max_rho", float("nan")))
                         mean_rho = float(t.get("mean_rho", float("nan")))
+                        trace_status = str(t.get("status", "") or "")
+                        if not trace_status:
+                            trace_status = "CONVERGED" if bool(t.get("converged", False)) else "ITERATING"
                         scf_trace_rows.append(
                             {
                                 "id": mol_id,
                                 "iter": int(t.get("iter", 0) or 0),
                                 "residual_inf": "" if not math.isfinite(float(residual_inf)) else f"{float(residual_inf):.10g}",
+                                "residual_mean": "" if not math.isfinite(float(residual_mean)) else f"{float(residual_mean):.10g}",
                                 "damping": "" if not math.isfinite(float(t.get("damping", float('nan')))) else f"{float(t.get('damping')):.10g}",
                                 "min_V": "" if not math.isfinite(float(min_v)) else f"{float(min_v):.10g}",
                                 "max_V": "" if not math.isfinite(float(max_v)) else f"{float(max_v):.10g}",
@@ -643,6 +648,7 @@ def run_batch(
                                 "max_rho": "" if not math.isfinite(float(max_rho)) else f"{float(max_rho):.10g}",
                                 "mean_rho": "" if not math.isfinite(float(mean_rho)) else f"{float(mean_rho):.10g}",
                                 "converged": bool(t.get("converged", False)),
+                                "status": trace_status,
                             }
                         )
 
@@ -959,6 +965,7 @@ def run_batch(
                 "id",
                 "iter",
                 "residual_inf",
+                "residual_mean",
                 "damping",
                 "min_V",
                 "max_V",
@@ -967,6 +974,7 @@ def run_batch(
                 "max_rho",
                 "mean_rho",
                 "converged",
+                "status",
             ],
         )
         w.writeheader()
@@ -1206,6 +1214,25 @@ def run_batch(
 
     # Write summary_metadata.json for audit-grade consumption (no schema bump, additive artifact).
     scf_converged_all = bool(scf_rows_total > 0 and scf_rows_converged == scf_rows_total)
+    scf_enabled = bool(str(potential_mode) in {"self_consistent", "both"} and str(physics_mode) in {"hamiltonian", "both"})
+    error_rows_missing_params = sum(
+        1 for r in summary_rows if r.get("status") == "ERROR" and r.get("reason") == "missing_physics_params"
+    )
+    error_rows_other = sum(
+        1 for r in summary_rows if r.get("status") == "ERROR" and r.get("reason") != "missing_physics_params"
+    )
+
+    scf_status: str | None = None
+    if scf_enabled:
+        if error_rows_missing_params > 0:
+            scf_status = "ERROR_MISSING_PARAMS"
+        elif error_rows_other > 0:
+            scf_status = "ERROR_NUMERICAL"
+        elif scf_rows_total <= 0:
+            scf_status = "ERROR_NUMERICAL"
+        else:
+            scf_status = "CONVERGED" if bool(scf_converged_all) else "MAX_ITER"
+
     summary_metadata = {
         "auc_interpretation_schema": AUC_INTERPRETATION_SCHEMA,
         "auc_interpretation": str(auc_label),
@@ -1220,6 +1247,8 @@ def run_batch(
         "potential_unit_model": str(POTENTIAL_UNIT_MODEL),
         "potential_scale_gamma": float(potential_scale_gamma),
         "scf_schema": str(SCF_SCHEMA),
+        "scf_enabled": bool(scf_enabled),
+        "scf_status": scf_status,
         "scf_max_iter": int(scf_max_iter),
         "scf_tol": float(scf_tol),
         "scf_damping": float(scf_damping),
@@ -1240,6 +1269,34 @@ def run_batch(
     }
     (out_dir / "summary_metadata.json").write_text(
         json.dumps(summary_metadata, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8"
+    )
+
+    scf_summary = {
+        "schema_version": "hetero2_scf_summary.v1",
+        "scf_schema": str(SCF_SCHEMA),
+        "physics_mode": str(physics_mode),
+        "edge_weight_mode": str(edge_weight_mode),
+        "potential_mode": str(potential_mode),
+        "potential_unit_model": str(POTENTIAL_UNIT_MODEL),
+        "potential_scale_gamma": float(potential_scale_gamma),
+        "scf_enabled": bool(scf_enabled),
+        "scf_status": scf_status,
+        "scf_max_iter": int(scf_max_iter),
+        "scf_tol": float(scf_tol),
+        "scf_damping": float(scf_damping),
+        "scf_occ_k": int(scf_occ_k),
+        "scf_tau": float(scf_tau),
+        "scf_gamma": float(SCF_GAMMA_DEFAULT),
+        "rows_total": int(scf_rows_total),
+        "rows_converged": int(scf_rows_converged),
+        "converged": bool(scf_converged_all),
+        "iters_max": int(scf_iters_max),
+        "residual_final_max": float(scf_residual_final_max),
+        "error_rows_missing_params": int(error_rows_missing_params),
+        "error_rows_other": int(error_rows_other),
+    }
+    (out_dir / "scf_summary.json").write_text(
+        json.dumps(scf_summary, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8"
     )
 
     if score_mode == "external_scores":
