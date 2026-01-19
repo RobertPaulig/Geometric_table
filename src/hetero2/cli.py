@@ -15,6 +15,8 @@ from hetero2.physics_operator import (
     SCF_OCC_K_DEFAULT,
     SCF_TAU_DEFAULT,
     SCF_TOL_DEFAULT,
+    DOS_GRID_N_DEFAULT,
+    DOS_ETA_DEFAULT,
 )
 
 
@@ -161,6 +163,17 @@ def _parse_batch_args(argv: list[str] | None = None) -> argparse.Namespace:
     ap.add_argument("--scf_occ_k", type=int, default=SCF_OCC_K_DEFAULT, help="SCF number of lowest eigenstates to use.")
     ap.add_argument("--scf_tau", type=float, default=SCF_TAU_DEFAULT, help="SCF temperature for soft weights.")
     ap.add_argument(
+        "--integrator_mode",
+        choices=["baseline"],
+        default="baseline",
+        help="Integration mode for DOS/LDOS/Green artifacts (baseline fixed grid only in P4.0).",
+    )
+    ap.add_argument("--integrator_energy_min", type=float, default=None, help="Optional fixed energy range min (requires max).")
+    ap.add_argument("--integrator_energy_max", type=float, default=None, help="Optional fixed energy range max (requires min).")
+    ap.add_argument("--integrator_energy_points", type=int, default=DOS_GRID_N_DEFAULT, help="Energy grid points for baseline integrator.")
+    ap.add_argument("--integrator_eta", type=float, default=DOS_ETA_DEFAULT, help="Kernel width eta for DOS/LDOS/Green artifacts.")
+    ap.add_argument("--integrator_eps", type=float, default=1e-6, help="Target eps for adaptive integration (unused for baseline).")
+    ap.add_argument(
         "--seed_strategy",
         choices=["global", "per_row"],
         default="global",
@@ -281,6 +294,12 @@ def main_batch(argv: list[str] | None = None) -> int:
         scf_damping=float(args.scf_damping),
         scf_occ_k=int(args.scf_occ_k),
         scf_tau=float(args.scf_tau),
+        integrator_mode=str(args.integrator_mode),
+        integrator_energy_min=float(args.integrator_energy_min) if args.integrator_energy_min is not None else None,
+        integrator_energy_max=float(args.integrator_energy_max) if args.integrator_energy_max is not None else None,
+        integrator_energy_points=int(args.integrator_energy_points),
+        integrator_eta=float(args.integrator_eta),
+        integrator_eps=float(args.integrator_eps),
         seed_strategy=str(args.seed_strategy),
         no_index=bool(args.no_index),
         no_manifest=bool(args.no_manifest),
