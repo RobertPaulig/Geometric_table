@@ -45,6 +45,7 @@ from hetero2.physics_operator import (
     compute_dos_curve,
     compute_ldos_curve,
 )
+from hetero2.integration.baseline_grid import build_benchmark_row_baseline_grid
 from hetero2.pipeline import run_pipeline_v2
 from hetero2.report import render_report_v2
 
@@ -390,6 +391,12 @@ def run_batch(
     scf_damping: float = SCF_DAMPING_DEFAULT,
     scf_occ_k: int = SCF_OCC_K_DEFAULT,
     scf_tau: float = SCF_TAU_DEFAULT,
+    integrator_mode: str = "baseline",
+    integrator_energy_min: float | None = None,
+    integrator_energy_max: float | None = None,
+    integrator_energy_points: int = DOS_GRID_N_DEFAULT,
+    integrator_eta: float = DOS_ETA_DEFAULT,
+    integrator_eps: float = 1e-6,
     seed_strategy: str = "global",
     no_index: bool = False,
     no_manifest: bool = False,
@@ -1077,8 +1084,10 @@ def run_batch(
             w.writerow(row)
 
     # Write DOS/LDOS artifacts (always present; may be empty if too little data).
-    dos_grid_n = int(DOS_GRID_N_DEFAULT)
-    dos_eta = float(DOS_ETA_DEFAULT)
+    if str(integrator_mode) != "baseline":
+        integrator_mode = "baseline"
+    dos_grid_n = int(integrator_energy_points)
+    dos_eta = float(integrator_eta)
     dos_curve_csv = out_dir / "dos_curve.csv"
     ldos_summary_csv = out_dir / "ldos_summary.csv"
 
@@ -1101,18 +1110,49 @@ def run_batch(
         vals = np.array(all_eigs, dtype=float)
         vals = vals[np.isfinite(vals)]
         if vals.size >= 1:
-            margin = 3.0 * dos_eta
-            dos_energy_min = float(np.min(vals)) - margin
-            dos_energy_max = float(np.max(vals)) + margin
-            energy_grid = np.linspace(dos_energy_min, dos_energy_max, dos_grid_n, dtype=float)
+            if integrator_energy_min is not None or integrator_energy_max is not None:
+                if integrator_energy_min is None or integrator_energy_max is None:
+                    raise ValueError("integrator_energy_min and integrator_energy_max must be set together")
+                dos_energy_min = float(integrator_energy_min)
+                dos_energy_max = float(integrator_energy_max)
+                energy_grid = np.linspace(dos_energy_min, dos_energy_max, dos_grid_n, dtype=float)
+            else:
+                margin = 3.0 * dos_eta
+                dos_energy_min = float(np.min(vals)) - margin
+                dos_energy_max = float(np.max(vals)) + margin
+                energy_grid = np.linspace(dos_energy_min, dos_energy_max, dos_grid_n, dtype=float)
         else:
             energy_grid = np.array([], dtype=float)
     else:
         energy_grid = np.array([], dtype=float)
 
-    dos_L = compute_dos_curve(eigenvalues=[x for seq in dos_eigs_L for x in seq], energy_grid=energy_grid, eta=dos_eta) if dos_eigs_L else np.zeros_like(energy_grid)
-    dos_H = compute_dos_curve(eigenvalues=[x for seq in dos_eigs_H for x in seq], energy_grid=energy_grid, eta=dos_eta) if dos_eigs_H else np.zeros_like(energy_grid)
-    dos_WH = compute_dos_curve(eigenvalues=[x for seq in dos_eigs_WH for x in seq], energy_grid=energy_grid, eta=dos_eta) if dos_eigs_WH else np.zeros_like(energy_grid)
+    dos_eigs_count_L = sum(len(seq) for seq in dos_eigs_L)
+    dos_eigs_count_H = sum(len(seq) for seq in dos_eigs_H)
+    dos_eigs_count_WH = sum(len(seq) for seq in dos_eigs_WH)
+
+    t0 = time.perf_counter()
+    dos_L = (
+        compute_dos_curve(eigenvalues=[x for seq in dos_eigs_L for x in seq], energy_grid=energy_grid, eta=dos_eta)
+        if dos_eigs_L
+        else np.zeros_like(energy_grid)
+    )
+    dos_L_ms = (time.perf_counter() - t0) * 1000.0
+
+    t0 = time.perf_counter()
+    dos_H = (
+        compute_dos_curve(eigenvalues=[x for seq in dos_eigs_H for x in seq], energy_grid=energy_grid, eta=dos_eta)
+        if dos_eigs_H
+        else np.zeros_like(energy_grid)
+    )
+    dos_H_ms = (time.perf_counter() - t0) * 1000.0
+
+    t0 = time.perf_counter()
+    dos_WH = (
+        compute_dos_curve(eigenvalues=[x for seq in dos_eigs_WH for x in seq], energy_grid=energy_grid, eta=dos_eta)
+        if dos_eigs_WH
+        else np.zeros_like(energy_grid)
+    )
+    dos_WH_ms = (time.perf_counter() - t0) * 1000.0
 
     with dos_curve_csv.open("w", encoding="utf-8", newline="") as f:
         w = csv.DictWriter(f, fieldnames=["energy", "dos_L", "dos_H", "dos_WH"])
@@ -1126,6 +1166,98 @@ def run_batch(
                     "dos_WH": f"{float(dos_WH[idx]):.10g}" if energy_grid.size else "",
                 }
             )
+
+    # Integration benchmark (P4.0 baseline rails): capture grid config + walltime + determinism checksum.
+    integration_benchmark_csv = out_dir / "integration_benchmark.csv"
+    integration_benchmark_md = out_dir / "integration_benchmark.md"
+
+    integration_rows = [
+        build_benchmark_row_baseline_grid(
+            molecule_id="__run__",
+            curve_id="dos_L",
+            energy_grid=[float(x) for x in energy_grid.tolist()],
+            values=[float(x) for x in dos_L.tolist()],
+            eigenvalues_count=int(dos_eigs_count_L),
+            energy_points=int(energy_grid.size),
+            walltime_ms_total=float(dos_L_ms),
+            integrator_mode=str(integrator_mode),
+        ),
+        build_benchmark_row_baseline_grid(
+            molecule_id="__run__",
+            curve_id="dos_H",
+            energy_grid=[float(x) for x in energy_grid.tolist()],
+            values=[float(x) for x in dos_H.tolist()],
+            eigenvalues_count=int(dos_eigs_count_H),
+            energy_points=int(energy_grid.size),
+            walltime_ms_total=float(dos_H_ms),
+            integrator_mode=str(integrator_mode),
+        ),
+        build_benchmark_row_baseline_grid(
+            molecule_id="__run__",
+            curve_id="dos_WH",
+            energy_grid=[float(x) for x in energy_grid.tolist()],
+            values=[float(x) for x in dos_WH.tolist()],
+            eigenvalues_count=int(dos_eigs_count_WH),
+            energy_points=int(energy_grid.size),
+            walltime_ms_total=float(dos_WH_ms),
+            integrator_mode=str(integrator_mode),
+        ),
+    ]
+
+    integration_benchmark_csv.write_text("", encoding="utf-8")
+    with integration_benchmark_csv.open("w", encoding="utf-8", newline="") as f:
+        w = csv.DictWriter(
+            f,
+            fieldnames=[
+                "molecule_id",
+                "integrator_mode",
+                "curve_id",
+                "energy_points",
+                "n_function_evals",
+                "walltime_ms_total",
+                "walltime_ms_per_point",
+                "result_checksum",
+                "eigenvalues_count",
+            ],
+        )
+        w.writeheader()
+        for r in integration_rows:
+            w.writerow(
+                {
+                    "molecule_id": r.molecule_id,
+                    "integrator_mode": r.integrator_mode,
+                    "curve_id": r.curve_id,
+                    "energy_points": str(int(r.energy_points)),
+                    "n_function_evals": str(int(r.n_function_evals)),
+                    "walltime_ms_total": "" if not math.isfinite(float(r.walltime_ms_total)) else f"{float(r.walltime_ms_total):.10g}",
+                    "walltime_ms_per_point": "" if not math.isfinite(float(r.walltime_ms_per_point)) else f"{float(r.walltime_ms_per_point):.10g}",
+                    "result_checksum": str(r.result_checksum),
+                    "eigenvalues_count": str(int(r.eigenvalues_count)),
+                }
+            )
+
+    integration_benchmark_lines = [
+        "# Integration Benchmark (baseline rails)",
+        "",
+        "This artifact captures fixed-grid evaluation cost and determinism signatures for spectral curves.",
+        "",
+        "## Config",
+        "",
+        f"- integrator_mode: {str(integrator_mode)}",
+        f"- energy_points: {int(energy_grid.size)}",
+        f"- energy_min: {dos_energy_min if math.isfinite(float(dos_energy_min)) else 'nan'}",
+        f"- energy_max: {dos_energy_max if math.isfinite(float(dos_energy_max)) else 'nan'}",
+        f"- eta: {float(dos_eta)}",
+        f"- integrator_eps: {float(integrator_eps)}  # unused for baseline, reserved for adaptive",
+        "",
+        "## Metrics",
+        "",
+        "- n_function_evals: energy_points (baseline fixed grid)",
+        "- walltime_ms_total: measured wall-clock time to compute the curve",
+        "- result_checksum: SHA256 signature over (energy,value) pairs (stable formatting)",
+        "",
+    ]
+    integration_benchmark_md.write_text("\n".join(integration_benchmark_lines) + "\n", encoding="utf-8")
 
     def _ldos_peak_entropy(eigvals: list[float], weights: list[float]) -> tuple[float, float, float]:
         if energy_grid.size == 0:
@@ -1521,6 +1653,17 @@ def run_batch(
         "dos_eta": float(dos_eta),
         "dos_energy_min": float(dos_energy_min),
         "dos_energy_max": float(dos_energy_max),
+        "integrator_mode": str(integrator_mode),
+        "integrator_eps": float(integrator_eps),
+        "integrator_energy_points": int(energy_grid.size),
+        "integrator_energy_min": float(dos_energy_min),
+        "integrator_energy_max": float(dos_energy_max),
+        "integrator_eta": float(dos_eta),
+        "integration_walltime_ms_median": float(
+            statistics.median([float(dos_L_ms), float(dos_H_ms), float(dos_WH_ms)])
+        )
+        if energy_grid.size
+        else float("nan"),
     }
     (out_dir / "summary_metadata.json").write_text(
         json.dumps(summary_metadata, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8"
