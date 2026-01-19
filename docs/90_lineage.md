@@ -793,3 +793,18 @@
 - CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21145777488
 - Registry PR r1 (historical r1 facts): https://github.com/RobertPaulig/Geometric_table/pull/142 (merge: 1fcfdaaa7f04e0c344670102c3ee39177a8b278d)
 - CI run (3/3 ci/* on registry r1 merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21146286010
+
+### 2026-01-19 - P4.2 ADAPTIVE-INTEGRATION-SPEEDUP-1: prefer-split heuristic + live proof r2 (speedup still not achieved)
+- Code PR (prefer split for wide baseline-aware segments): https://github.com/RobertPaulig/Geometric_table/pull/148 (merge: 31babd0f08fd62f731bb2af3de2750c2ae8b9e57)
+- CI run (3/3 ci/* on code merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21150551480
+- Live proof r2 (stress pack; integrator_mode=both):
+  - Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/physics-operator-integration-adaptive-speedup-2026-01-19-r2
+  - Source commit: 31babd0f08fd62f731bb2af3de2750c2ae8b9e57
+  - Publish run: https://github.com/RobertPaulig/Geometric_table/actions/runs/21150618113
+  - Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/physics-operator-integration-adaptive-speedup-2026-01-19-r2/evidence_pack.zip
+  - SHA256(evidence_pack.zip): 46E9F6088A06002D767D36E39F585F5763230A1CB5FD41976DE647D84327C1B4
+  - Evidence pack artifacts: integration_speed_profile.csv, integration_compare.csv, adaptive_integration_trace.csv, adaptive_integration_summary.json, summary_metadata.json
+  - integrator_correctness_pass_rate=1.0; integrator_speedup_median=0.237091; integrator_speedup_verdict=NO_SPEEDUP_YET
+  - dos_L: adaptive_evals_total=223 (eval_ratio=1.7422); segments_used=20; cache_hit_rate=0.4802; speedup=0.2371
+- Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/149 (merge: 8ac10f0b9da8089fe34098782be78123c1b25f15)
+- CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21150874235
