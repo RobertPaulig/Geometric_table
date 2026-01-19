@@ -164,15 +164,22 @@ def _parse_batch_args(argv: list[str] | None = None) -> argparse.Namespace:
     ap.add_argument("--scf_tau", type=float, default=SCF_TAU_DEFAULT, help="SCF temperature for soft weights.")
     ap.add_argument(
         "--integrator_mode",
-        choices=["baseline"],
+        choices=["baseline", "adaptive", "both"],
         default="baseline",
-        help="Integration mode for DOS/LDOS/Green artifacts (baseline fixed grid only in P4.0).",
+        help="Integration mode for DOS/LDOS/Green artifacts: baseline fixed grid (P4.0), adaptive (P4.1), or both (baseline+adaptive comparison).",
     )
     ap.add_argument("--integrator_energy_min", type=float, default=None, help="Optional fixed energy range min (requires max).")
     ap.add_argument("--integrator_energy_max", type=float, default=None, help="Optional fixed energy range max (requires min).")
     ap.add_argument("--integrator_energy_points", type=int, default=DOS_GRID_N_DEFAULT, help="Energy grid points for baseline integrator.")
     ap.add_argument("--integrator_eta", type=float, default=DOS_ETA_DEFAULT, help="Kernel width eta for DOS/LDOS/Green artifacts.")
-    ap.add_argument("--integrator_eps", type=float, default=1e-6, help="Target eps for adaptive integration (unused for baseline).")
+    ap.add_argument("--integrator_eps", type=float, default=1e-6, help="DEPRECATED: use --integrator_eps_abs/--integrator_eps_rel (unused for baseline).")
+    ap.add_argument("--integrator_eps_abs", type=float, default=1e-6, help="Adaptive integrator absolute tolerance (P4.1).")
+    ap.add_argument("--integrator_eps_rel", type=float, default=1e-4, help="Adaptive integrator relative tolerance (P4.1).")
+    ap.add_argument("--integrator_subdomains_max", type=int, default=64, help="Adaptive integrator max subdomains (P4.1).")
+    ap.add_argument("--integrator_poly_degree_max", type=int, default=8, help="Adaptive integrator max polynomial degree per subdomain (P4.1).")
+    ap.add_argument("--integrator_quad_order_max", type=int, default=16, help="Adaptive integrator max Gauss quadrature order for error probing (P4.1).")
+    ap.add_argument("--integrator_eval_budget_max", type=int, default=4096, help="Adaptive integrator max function evaluations (P4.1).")
+    ap.add_argument("--integrator_split_criterion", default="max_abs_error", help="Adaptive integrator split criterion label (audit/logging) (P4.1).")
     ap.add_argument(
         "--seed_strategy",
         choices=["global", "per_row"],
@@ -300,6 +307,13 @@ def main_batch(argv: list[str] | None = None) -> int:
         integrator_energy_points=int(args.integrator_energy_points),
         integrator_eta=float(args.integrator_eta),
         integrator_eps=float(args.integrator_eps),
+        integrator_eps_abs=float(args.integrator_eps_abs),
+        integrator_eps_rel=float(args.integrator_eps_rel),
+        integrator_subdomains_max=int(args.integrator_subdomains_max),
+        integrator_poly_degree_max=int(args.integrator_poly_degree_max),
+        integrator_quad_order_max=int(args.integrator_quad_order_max),
+        integrator_eval_budget_max=int(args.integrator_eval_budget_max),
+        integrator_split_criterion=str(args.integrator_split_criterion),
         seed_strategy=str(args.seed_strategy),
         no_index=bool(args.no_index),
         no_manifest=bool(args.no_manifest),

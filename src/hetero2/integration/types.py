@@ -6,7 +6,7 @@ from typing import Literal
 
 @dataclass(frozen=True, slots=True)
 class IntegrationConfig:
-    integrator_mode: Literal["baseline"]
+    integrator_mode: Literal["baseline", "adaptive", "both"]
     energy_min: float | None
     energy_max: float | None
     energy_points: int
@@ -25,4 +25,15 @@ class IntegrationBenchmarkRow:
     walltime_ms_per_point: float
     result_checksum: str
     eigenvalues_count: int
+
+
+@dataclass(frozen=True, slots=True)
+class AdaptiveIntegrationConfig:
+    eps_abs: float
+    eps_rel: float
+    subdomains_max: int
+    poly_degree_max: int
+    quad_order_max: int
+    eval_budget_max: int
+    split_criterion: str
 
