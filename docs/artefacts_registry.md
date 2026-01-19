@@ -812,5 +812,7 @@ separation facts (computed on status==OK rows only):
 - Source commit: 587fd8f816d4e66cc2569815f4210ca972bc3525
 - Release asset: https://github.com/RobertPaulig/Geometric_table/releases/download/physics-operator-units-gamma-2026-01-19-r1/evidence_pack.zip
 - SHA256(evidence_pack.zip): 6529B5356345576F858D333F71737332D049EB745A6191AD6AD10775A93FA4BD
+- potential_unit_model: dimensionless
+- potential_scale_gamma: 1.0
 - Command:
   hetero2-batch --input stress.csv --out_dir out_stress --artifacts light --score_mode mock --k_decoys 2 --workers 1 --timeout_s 60 --maxtasksperchild 100 --seed_strategy per_row --seed 0 --physics_mode both --edge_weight_mode unweighted --potential_mode both --scf_max_iter 50 --scf_tol 1e-6 --scf_damping 0.5 --scf_occ_k 5 --scf_tau 1.0 --zip_pack
