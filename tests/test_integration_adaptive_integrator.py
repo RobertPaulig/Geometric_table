@@ -36,6 +36,41 @@ def test_adaptive_integrator_smooth_matches_baseline() -> None:
     assert max_err <= tol * 5.0
 
 
+def test_adaptive_integrator_gaussian_mixture_splits_and_matches_baseline() -> None:
+    grid = np.linspace(-1.0, 1.0, 128, dtype=float)
+    centers = np.array([-0.7, -0.1, 0.3, 0.9], dtype=float)
+    eta = 0.05
+
+    def f(x: np.ndarray) -> np.ndarray:
+        x = np.asarray(x, dtype=float)
+        out = np.zeros_like(x)
+        for c in centers.tolist():
+            out += np.exp(-0.5 * ((x - float(c)) / float(eta)) ** 2)
+        return out
+
+    baseline = f(grid)
+    tol_scale = float(np.max(np.abs(baseline)))
+    cfg = AdaptiveIntegrationConfig(
+        eps_abs=1e-3,
+        eps_rel=1e-3,
+        subdomains_max=64,
+        poly_degree_max=8,
+        quad_order_max=16,
+        eval_budget_max=4096,
+        split_criterion="max_abs_error",
+    )
+
+    res = adaptive_approximate_on_grid(f=f, energy_grid=grid, cfg=cfg, tol_scale=tol_scale)
+    assert str(res.summary.get("verdict", "")) in {"SUCCESS", "INCONCLUSIVE_LIMIT_HIT"}
+    assert int(res.summary.get("segments_used", 0) or 0) > 1
+
+    values = np.asarray(res.values, dtype=float)
+    max_err = float(np.max(np.abs(values - baseline))) if values.size else float("nan")
+    tol = float(cfg.eps_abs) + float(cfg.eps_rel) * abs(float(tol_scale))
+    assert math.isfinite(max_err)
+    assert max_err <= tol * 10.0
+
+
 def test_adaptive_integrator_oscillatory_splits_and_is_deterministic() -> None:
     grid = np.linspace(-1.0, 1.0, 128, dtype=float)
 
