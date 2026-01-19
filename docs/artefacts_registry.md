@@ -888,3 +888,27 @@ separation facts (computed on status==OK rows only):
   - integrator_eps: 1e-06
   - integration_walltime_ms_median: 2.3876529999995455
   - evidence_pack_files: integration_benchmark.csv, integration_benchmark.md, summary_metadata.json
+
+## physics-operator-integration-adaptive-2026-01-19-r2
+
+- Source commit: 5600faa7debce8647e574ee2f858b3ddd534a9c3
+- Release asset: https://github.com/RobertPaulig/Geometric_table/releases/download/physics-operator-integration-adaptive-2026-01-19-r2/evidence_pack.zip
+- SHA256(evidence_pack.zip): C76F584884E28CA04EF792D19D5BE2A0B13F3B67FAD526EEA36DD21CED09028C
+- Command:
+  hetero2-batch --input stress.csv --out_dir out_stress --artifacts light --score_mode mock --k_decoys 2 --workers 1 --timeout_s 60 --maxtasksperchild 100 --seed_strategy per_row --seed 0 --physics_mode topological --edge_weight_mode unweighted --potential_mode static --scf_max_iter 50 --scf_tol 1e-6 --scf_damping 0.5 --scf_occ_k 5 --scf_tau 1.0 --integrator_mode both --integrator_eps_abs 1e-6 --integrator_eps_rel 1e-4 --integrator_subdomains_max 64 --integrator_poly_degree_max 8 --integrator_quad_order_max 16 --integrator_eval_budget_max 4096 --integrator_split_criterion max_abs_error --zip_pack
+- Adaptive integration audit (from summary_metadata.json + adaptive_integration_summary.json in evidence_pack.zip):
+  - integrator_mode: both
+  - integrator_verdict: SUCCESS
+  - integrator_correctness_pass_rate: 1.000000
+  - integrator_speedup_target: 1.5
+  - integrator_speedup_median: 0.231419
+  - integrator_speedup_verdict: NO_SPEEDUP_YET
+  - dos_L_segments_used: 20
+  - dos_L_evals_total: 975
+  - dos_L_error_est_total: 0.0000946613
+  - energy_range: [-0.15, 4.15]
+  - energy_points: 128
+  - eta: 0.05
+  - integrator_eps_abs: 1e-06
+  - integrator_eps_rel: 1e-04
+  - evidence_pack_files: integration_benchmark.csv, integration_benchmark.md, adaptive_integration_trace.csv, adaptive_integration_summary.json, integration_compare.csv
