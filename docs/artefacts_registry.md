@@ -797,3 +797,12 @@ separation facts (computed on status==OK rows only):
 - SHA256(evidence_pack.zip): ADFFF664035F103661E011FE5EF8FB490D4A48449BCC8BA101B9D71BB17061A4
 - Command:
   hetero2-batch --input stress.csv --out_dir out_stress --artifacts light --score_mode mock --k_decoys 2 --workers 1 --timeout_s 60 --maxtasksperchild 100 --seed_strategy per_row --seed 0 --physics_mode both --edge_weight_mode bond_order_delta_chi --potential_mode both --scf_max_iter 50 --scf_tol 1e-6 --scf_damping 0.5 --scf_occ_k 5 --scf_tau 1.0 --zip_pack
+- SCF artifacts (from summary_metadata.json in evidence_pack.zip):
+  - scf_schema: hetero2_scf.v1
+  - potential_mode: both
+  - scf_converged: true
+  - scf_rows_total: 1512
+  - scf_rows_converged: 1512
+  - scf_iters: 1
+  - scf_residual_final: 3.469446951953614e-17
+  - evidence_pack_files: scf_trace.csv, potential_vectors.csv, summary_metadata.json
