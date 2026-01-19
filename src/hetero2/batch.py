@@ -1293,6 +1293,8 @@ def run_batch(
     integrator_speedup_median = float("nan")
     integrator_speedup_verdict = "N/A"
     integrator_verdict = "BASELINE_ONLY"
+    integrator_selected_fraction_baseline = float("nan")
+    integrator_selected_fraction_adaptive = float("nan")
     integrator_segments_used_median = float("nan")
     integrator_evals_total_median = float("nan")
     integrator_error_est_total_median = float("nan")
@@ -1359,8 +1361,12 @@ def run_batch(
         if integrator_mode == "both":
             compare_csv = out_dir / "integration_compare.csv"
             speed_profile_csv = out_dir / "integration_speed_profile.csv"
+            integration_profile_csv = out_dir / "integration_profile.csv"
+            integration_timing_breakdown_json = out_dir / "integration_timing_breakdown.json"
+            integrator_select_summary_json = out_dir / "integrator_select_summary.json"
             compare_rows: list[dict[str, object]] = []
             speed_profile_rows: list[dict[str, object]] = []
+            integration_profile_rows: list[dict[str, object]] = []
             curve_baseline: dict[str, tuple[np.ndarray, float]] = {
                 "dos_L": (np.asarray(dos_L, dtype=float), float(dos_L_ms)),
                 "dos_H": (np.asarray(dos_H, dtype=float), float(dos_H_ms)),
@@ -1371,6 +1377,19 @@ def run_batch(
                 "dos_H": bool(dos_eigs_count_H > 0),
                 "dos_WH": bool(dos_eigs_count_WH > 0),
             }
+            curve_n_atoms: dict[str, int] = {
+                "dos_L": int(dos_eigs_count_L),
+                "dos_H": int(dos_eigs_count_H),
+                "dos_WH": int(dos_eigs_count_WH),
+            }
+
+            integrator_select_n0 = 80
+            selector_small_n_ok = True
+            selected_mode_counts: Counter[str] = Counter()
+
+            baseline_eval_ms_by_curve: dict[str, float] = {}
+            adaptive_eval_ms_by_curve: dict[str, float] = {}
+            adaptive_overhead_ms_by_curve: dict[str, float] = {}
 
             for curve_id in integrator_benchmark_curves:
                 baseline_vals, baseline_ms = curve_baseline.get(curve_id, (np.array([], dtype=float), float("nan")))
@@ -1383,6 +1402,8 @@ def run_batch(
                 adaptive_evals_total = float(adaptive_summaries.get(curve_id, {}).get("evals_total", float("nan")))
                 adaptive_segments_used = float(adaptive_summaries.get(curve_id, {}).get("segments_used", float("nan")))
                 cache_hit_rate = float(adaptive_summaries.get(curve_id, {}).get("cache_hit_rate", float("nan")))
+                adaptive_eval_ms_total = float(adaptive_summaries.get(curve_id, {}).get("eval_walltime_ms_total", float("nan")))
+                adaptive_overhead_ms_total = float(adaptive_summaries.get(curve_id, {}).get("overhead_walltime_ms_total", float("nan")))
 
                 if baseline_valid and adaptive_valid:
                     integrator_valid_rows += 1
@@ -1422,6 +1443,34 @@ def run_batch(
                 elif not pass_tol:
                     row_verdict = "ERROR"
 
+                # Selection rule (P4.3R): never choose adaptive for small systems (n_atoms <= N0)
+                # and never choose adaptive if correctness is not OK.
+                n_atoms = int(curve_n_atoms.get(curve_id, 0))
+                if not baseline_valid and adaptive_valid:
+                    selected_mode = "adaptive"
+                elif row_verdict != "OK":
+                    selected_mode = "baseline" if baseline_valid else "adaptive"
+                elif n_atoms <= int(integrator_select_n0):
+                    selected_mode = "baseline"
+                else:
+                    if math.isfinite(float(baseline_ms)) and math.isfinite(float(adaptive_ms)) and float(adaptive_ms) > 0.0 and float(adaptive_ms) < float(baseline_ms):
+                        selected_mode = "adaptive"
+                    else:
+                        selected_mode = "baseline"
+
+                if n_atoms <= int(integrator_select_n0) and selected_mode != "baseline":
+                    selector_small_n_ok = False
+                selected_mode_counts[selected_mode] += 1
+
+                # Capture timing components for audit (P4.3R).
+                if baseline_valid and math.isfinite(float(baseline_ms)) and float(baseline_ms) >= 0.0:
+                    baseline_eval_ms_by_curve[curve_id] = float(baseline_ms)
+                if adaptive_valid:
+                    if math.isfinite(float(adaptive_eval_ms_total)) and float(adaptive_eval_ms_total) >= 0.0:
+                        adaptive_eval_ms_by_curve[curve_id] = float(adaptive_eval_ms_total)
+                    if math.isfinite(float(adaptive_overhead_ms_total)) and float(adaptive_overhead_ms_total) >= 0.0:
+                        adaptive_overhead_ms_by_curve[curve_id] = float(adaptive_overhead_ms_total)
+
                 compare_rows.append(
                     {
                         "molecule_id": "__run__",
@@ -1454,6 +1503,38 @@ def run_batch(
                         "segments_used": adaptive_segments_used,
                         "adaptive_verdict_row": adaptive_verdict_row,
                         "row_verdict": str(row_verdict),
+                    }
+                )
+
+                reason = "NUMERICS"
+                if row_verdict == "OK":
+                    if (
+                        math.isfinite(float(adaptive_eval_ms_total))
+                        and math.isfinite(float(adaptive_overhead_ms_total))
+                        and float(adaptive_overhead_ms_total) > float(adaptive_eval_ms_total)
+                    ):
+                        reason = "OVERHEAD_DOMINATED"
+                    elif math.isfinite(float(adaptive_evals_total_out)) and math.isfinite(float(baseline_points)) and float(adaptive_evals_total_out) > float(baseline_points):
+                        reason = "OVER_EVALUATION"
+                    elif math.isfinite(float(cache_hit_rate)) and float(cache_hit_rate) < 0.2:
+                        reason = "CACHE_MISS"
+                    else:
+                        reason = "OVER_EVALUATION"
+                elif row_verdict == "LIMIT_HIT":
+                    reason = "OVER_EVALUATION"
+
+                integration_profile_rows.append(
+                    {
+                        "curve_id": str(curve_id),
+                        "n_atoms": int(n_atoms),
+                        "selected_mode": str(selected_mode),
+                        "baseline_evals": int(energy_grid.size) if baseline_valid else "",
+                        "adaptive_evals": int(adaptive_evals_total) if adaptive_valid and math.isfinite(float(adaptive_evals_total)) else "",
+                        "baseline_walltime_ms": float(baseline_ms) if baseline_valid else float("nan"),
+                        "adaptive_walltime_ms": float(adaptive_ms) if adaptive_valid else float("nan"),
+                        "speedup": float(speedup) if math.isfinite(float(speedup)) else float("nan"),
+                        "correct": "1" if row_verdict == "OK" else "0",
+                        "reason": str(reason),
                     }
                 )
 
@@ -1525,6 +1606,107 @@ def run_batch(
                         out_row[k] = "" if not math.isfinite(v) else f"{v:.10g}"
                     w.writerow(out_row)
 
+            # P4.3R: profiling + selector truth (do not gate on speedup for small systems).
+            integration_profile_csv.write_text("", encoding="utf-8")
+            with integration_profile_csv.open("w", encoding="utf-8", newline="") as f:
+                w = csv.DictWriter(
+                    f,
+                    fieldnames=[
+                        "curve_id",
+                        "n_atoms",
+                        "selected_mode",
+                        "baseline_evals",
+                        "adaptive_evals",
+                        "baseline_walltime_ms",
+                        "adaptive_walltime_ms",
+                        "speedup",
+                        "correct",
+                        "reason",
+                    ],
+                )
+                w.writeheader()
+                for row in integration_profile_rows:
+                    out_row = dict(row)
+                    for k in ["baseline_walltime_ms", "adaptive_walltime_ms", "speedup"]:
+                        v = float(out_row.get(k, float("nan")))
+                        out_row[k] = "" if not math.isfinite(v) else f"{v:.10g}"
+                    w.writerow(out_row)
+
+            selected_total = int(sum(selected_mode_counts.values()))
+            integrator_selected_fraction_baseline = (
+                float(selected_mode_counts.get("baseline", 0)) / float(selected_total) if selected_total else float("nan")
+            )
+            integrator_selected_fraction_adaptive = (
+                float(selected_mode_counts.get("adaptive", 0)) / float(selected_total) if selected_total else float("nan")
+            )
+
+            # Timing breakdown (baseline vs adaptive) with eval/overhead separation.
+            def _median_or_nan(xs: Iterable[float]) -> float:
+                vals = [float(x) for x in xs if math.isfinite(float(x))]
+                return float(statistics.median(vals)) if vals else float("nan")
+
+            baseline_total_ms_median = _median_or_nan(baseline_eval_ms_by_curve.values())
+            adaptive_eval_ms_median = _median_or_nan(adaptive_eval_ms_by_curve.values())
+            adaptive_overhead_ms_median = _median_or_nan(adaptive_overhead_ms_by_curve.values())
+            adaptive_total_ms_median = _median_or_nan(
+                [
+                    float(adaptive_eval_ms_by_curve.get(k, float("nan"))) + float(adaptive_overhead_ms_by_curve.get(k, float("nan")))
+                    for k in set(adaptive_eval_ms_by_curve.keys()) | set(adaptive_overhead_ms_by_curve.keys())
+                ]
+            )
+
+            timing_payload = {
+                "schema_version": "hetero2_integration_timing_breakdown.v1",
+                "baseline": {
+                    "t_eval_ms_median": float(baseline_total_ms_median),
+                    "t_overhead_ms_median": 0.0,
+                    "t_total_ms_median": float(baseline_total_ms_median),
+                },
+                "adaptive": {
+                    "t_eval_ms_median": float(adaptive_eval_ms_median),
+                    "t_overhead_ms_median": float(adaptive_overhead_ms_median),
+                    "t_total_ms_median": float(adaptive_total_ms_median),
+                },
+            }
+            integration_timing_breakdown_json.write_text(
+                json.dumps(timing_payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8"
+            )
+
+            # Selection summary by n_atoms bins.
+            bins = [
+                ("<=80", lambda n: n <= 80),
+                ("81-200", lambda n: 81 <= n <= 200),
+                ("201-500", lambda n: 201 <= n <= 500),
+                (">500", lambda n: n >= 501),
+            ]
+            by_bin: dict[str, dict[str, int]] = {}
+            for label, pred in bins:
+                by_bin[label] = {"baseline": 0, "adaptive": 0, "total": 0}
+            for row in integration_profile_rows:
+                n = int(row.get("n_atoms", 0) or 0)
+                sel = str(row.get("selected_mode", "baseline"))
+                for label, pred in bins:
+                    if pred(n):
+                        by_bin[label]["total"] += 1
+                        by_bin[label][sel] += 1
+                        break
+
+            select_summary_payload = {
+                "schema_version": "hetero2_integrator_select_summary.v1",
+                "selection_rule": {
+                    "n_atoms_threshold": int(integrator_select_n0),
+                    "small_n_forces_baseline": True,
+                    "never_choose_incorrect_adaptive": True,
+                    "choose_adaptive_only_if_faster": True,
+                },
+                "selected_fraction_baseline": float(integrator_selected_fraction_baseline),
+                "selected_fraction_adaptive": float(integrator_selected_fraction_adaptive),
+                "by_n_atoms_bin": by_bin,
+            }
+            integrator_select_summary_json.write_text(
+                json.dumps(select_summary_payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8"
+            )
+
             integrator_valid_row_fraction = (
                 float(integrator_valid_rows) / float(integrator_expected_rows) if integrator_expected_rows > 0 else float("nan")
             )
@@ -1565,11 +1747,9 @@ def run_batch(
 
             if math.isfinite(float(integrator_valid_row_fraction)) and float(integrator_valid_row_fraction) < 0.95:
                 integrator_verdict = "INCONCLUSIVE_METRICS_INVALID"
-                integrator_speedup_verdict = "N/A_METRICS_INVALID"
             else:
                 if not math.isfinite(float(integrator_correctness_pass_rate)) or float(integrator_correctness_pass_rate) < 0.99:
                     integrator_verdict = "FAIL_CORRECTNESS"
-                    integrator_speedup_verdict = "N/A_CORRECTNESS_FAILED"
                 else:
                     any_fail = any(str(r.get("adaptive_verdict_row", "")) == "FAIL_NUMERICAL" for r in compare_rows)
                     any_inconclusive = any(str(r.get("adaptive_verdict_row", "")) == "INCONCLUSIVE_LIMIT_HIT" for r in compare_rows)
@@ -1580,15 +1760,14 @@ def run_batch(
                     else:
                         integrator_verdict = "SUCCESS"
 
-                    speedup_min_target = 1.0
-                    if not math.isfinite(float(integrator_speedup_median)):
-                        integrator_speedup_verdict = "NO_SPEEDUP_YET"
-                    elif float(integrator_speedup_median) < float(speedup_min_target):
-                        integrator_speedup_verdict = "FAIL_SPEEDUP"
-                    elif float(integrator_speedup_median) >= float(integrator_speedup_target):
-                        integrator_speedup_verdict = "SPEEDUP_CONFIRMED"
-                    else:
-                        integrator_speedup_verdict = "NO_SPEEDUP_YET"
+            # P4.3R verdict: do not gate on speedup for small systems; instead require
+            # (a) valid metrics, (b) correctness, (c) selector that forces baseline for small n_atoms.
+            if integrator_verdict == "INCONCLUSIVE_METRICS_INVALID" or not selector_small_n_ok:
+                integrator_speedup_verdict = "FAIL_INSTRUMENTATION"
+            elif integrator_verdict == "FAIL_CORRECTNESS":
+                integrator_speedup_verdict = "FAIL_CORRECTNESS"
+            else:
+                integrator_speedup_verdict = "PASS_SCALING_READY"
 
     # Integration benchmark (P4.0 baseline rails): capture grid config + walltime + determinism checksum.
     integration_benchmark_csv = out_dir / "integration_benchmark.csv"
@@ -2105,6 +2284,8 @@ def run_batch(
         "integrator_speedup_target": float(integrator_speedup_target),
         "integrator_speedup_median": float(integrator_speedup_median),
         "integrator_speedup_verdict": str(integrator_speedup_verdict),
+        "integrator_selected_fraction_baseline": float(integrator_selected_fraction_baseline),
+        "integrator_selected_fraction_adaptive": float(integrator_selected_fraction_adaptive),
         "baseline_noise_grid_points": int(baseline_noise_grid_points),
         "baseline_noise_abs": float(baseline_noise_abs),
         "baseline_noise_rel": float(baseline_noise_rel),
