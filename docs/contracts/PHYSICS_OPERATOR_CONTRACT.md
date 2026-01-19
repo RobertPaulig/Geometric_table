@@ -163,13 +163,48 @@ residual_inf = max_i |V(t+1)_i - V(t)_i| <= scf_tol
 
 При включённом SCF evidence pack обязан содержать:
 
-- `scf_trace.csv` — трасса итераций (минимум: `iter`, `residual_inf`, `residual_mean`, `status`, `converged`)
-- `potential_vectors.csv` — векторы потенциала по узлам (минимум: `V0`, `V_scaled`, `gamma`, `V_scf`, `rho_final`)
-- `scf_summary.json` — run-level summary (`scf_status`, `scf_iters`, `scf_residual_final` и параметры SCF)
-- `summary_metadata.json` — ключи `scf_enabled`, `scf_status`, `potential_unit_model="dimensionless"`, `potential_scale_gamma`
+- `scf_trace.csv` - трасса итераций (минимум: `iter`, `residual_inf`, `residual_mean`, `status`, `converged`)
+- `potential_vectors.csv` - векторы потенциала по узлам (минимум: `V0`, `V_scaled`, `gamma`, `V_scf`, `rho_final`)
+- `scf_summary.json` - run-level summary (`scf_status`, `scf_iters`, `scf_residual_final` и параметры SCF)
+- `scf_audit_metrics.csv` - per-molecule audit таблица (минимум: `mol_id`, `scf_converged`, `scf_iters`, `residual_init`, `residual_final`, `deltaV_max`, `deltaV_p95`, `potential_gamma`, `operator_mode`)
+- `summary_metadata.json` - ключи `scf_enabled`, `scf_status`, `potential_unit_model="dimensionless"`, `potential_scale_gamma`
 
 `scf_status` (run-level) фиксируется как строка из:
 `CONVERGED | MAX_ITER | ERROR_MISSING_PARAMS | ERROR_NUMERICAL`.
+
+#### SCF Audit Requirements (P3.6)
+
+SCF считается **доказанным как нетривиальный** только если это видно в артефактах и метаданных, а не по факту "код не упал".
+
+Требования к `summary_metadata.json` (additive, без ломания других схем):
+
+- агрегаты: `scf_iters_mean`, `scf_iters_p95`, `scf_iters_max`, `scf_converged_rate`
+- residual: `residual_final_p95`, `residual_final_max`
+- обновление поля (по узлам): `deltaV_max_max`, `deltaV_p95_max`
+- `scf_nontrivial_rate`
+- вердикт: `scf_audit_verdict`, `scf_audit_reason`
+
+Определение `deltaV` (для SCF-audit):
+
+- `deltaV_max` на молекулу = `max_node |V_scf - V_scaled|`
+- `deltaV_p95` на молекулу = p95 по узлам `|V_scf - V_scaled|`
+
+Критерий **nontrivial** (на молекулу):
+
+- `scf_converged = True`
+- `scf_iters >= 2`
+- `deltaV_max >= eps_V`, где `eps_V = 1e-6` (dimensionless)
+
+Вердикт прогона `scf_audit_verdict` (audit-grade, без fail-fast):
+
+- `TRIVIAL_FIXED_POINT` если `scf_iters_max <= 1` или `deltaV_max_max < eps_V`
+- `NONCONVERGED` если `scf_converged_rate < 0.95`
+- `INCONCLUSIVE_INSUFFICIENT_ASYM` если в прогоне недостаточно асимметричных кейсов (по протоколу асимметрии)
+- `SUCCESS` если `scf_nontrivial_rate >= 0.50` и `scf_converged_rate >= 0.95`
+
+Жёсткое правило интерпретации:
+
+- Если `scf_audit_verdict != SUCCESS`, SCF **запрещено** трактовать как "работает/влияет", даже если CI зелёный.
 
 #### Verdict-правило (audit-grade, без fail-fast)
 
