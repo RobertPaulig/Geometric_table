@@ -319,13 +319,16 @@ def solve_self_consistent_potential(
 
         v_proposed = v0_vec + float(gamma) * rho_tilde
         v_next = (1.0 - float(damping)) * v + float(damping) * v_proposed
-        residual = float(np.max(np.abs(v_next - v)))
-        residual_final = residual
+        dv = np.asarray(v_next - v, dtype=float)
+        residual_inf = float(np.max(np.abs(dv)))
+        residual_mean = float(np.mean(np.abs(dv)))
+        residual_final = residual_inf
 
         trace.append(
             {
                 "iter": int(t + 1),
-                "residual_inf": residual,
+                "residual_inf": residual_inf,
+                "residual_mean": residual_mean,
                 "damping": float(damping),
                 "min_V": float(np.min(v_next)),
                 "max_V": float(np.max(v_next)),
@@ -333,12 +336,13 @@ def solve_self_consistent_potential(
                 "min_rho": float(np.min(rho)),
                 "max_rho": float(np.max(rho)),
                 "mean_rho": float(np.mean(rho)),
-                "converged": bool(residual < float(tol)),
+                "converged": bool(residual_inf < float(tol)),
+                "status": "CONVERGED" if residual_inf < float(tol) else "ITERATING",
             }
         )
 
         v = v_next
-        if residual < float(tol):
+        if residual_inf < float(tol):
             converged = True
             break
 
@@ -652,8 +656,10 @@ def compute_operator_payload(
     scf_converged = False
     scf_iters = 0
     scf_residual_final = float("nan")
+    scf_enabled = bool(pot_mode in {"self_consistent", "both"} and mode in {"hamiltonian", "both"})
+    scf_status: str | None = None
 
-    if pot_mode in {"self_consistent", "both"} and mode in {"hamiltonian", "both"}:
+    if scf_enabled:
         base_lap = lap_w if lap_w is not None else lap
         _, v_scf, rho_final, trace, scf_converged, scf_iters, scf_residual_final = solve_self_consistent_potential(
             laplacian=base_lap,
@@ -665,11 +671,14 @@ def compute_operator_payload(
             scf_tau=float(scf_tau),
             scf_gamma=float(scf_gamma),
         )
+        scf_status = "CONVERGED" if bool(scf_converged) else "MAX_ITER"
         scf_payload = {
             "schema_version": SCF_SCHEMA,
             "potential_mode_used": pot_mode,
             "potential_unit_model": POTENTIAL_UNIT_MODEL,
             "potential_scale_gamma": float(gamma_scale),
+            "scf_enabled": bool(scf_enabled),
+            "scf_status": str(scf_status),
             "scf_max_iter": int(scf_max_iter),
             "scf_tol": float(scf_tol),
             "scf_damping": float(scf_damping),
@@ -707,6 +716,7 @@ def compute_operator_payload(
         "potential_mode_used": pot_mode,
         "potential_unit_model": POTENTIAL_UNIT_MODEL,
         "potential_scale_gamma": float(gamma_scale),
+        "scf_enabled": bool(scf_enabled),
         "L_gap": "",
         "L_trace": "",
         "L_entropy_beta": "",
@@ -737,6 +747,7 @@ def compute_operator_payload(
             out["scf_converged"] = bool(scf_converged)
             out["scf_iters"] = int(scf_iters)
             out["scf_residual_final"] = float(scf_residual_final)
+            out["scf_status"] = str(scf_status or ("CONVERGED" if bool(scf_converged) else "MAX_ITER"))
 
     if ew_mode != "unweighted" and lap_w is not None:
         out.update({"W_gap": "", "W_entropy": "", "WH_gap": "", "WH_entropy": ""})
