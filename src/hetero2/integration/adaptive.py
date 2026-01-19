@@ -227,7 +227,26 @@ def adaptive_approximate_on_grid(
             can_eval_more = int(cache.evals_total) < int(eval_budget_max)
             can_refine = int(n_probe) < int(max_n_probe)
             scheduled = False
-            if can_eval_more and can_refine:
+
+            # Prefer splitting over aggressive p-refinement for very wide segments in baseline-aware mode.
+            # This avoids wasting many evaluations on parent segments that will be split anyway.
+            prefer_split = False
+            if baseline_arr is not None:
+                mask = (grid >= float(left)) & (grid <= float(right))
+                grid_points = int(np.count_nonzero(mask))
+                if grid_points > int(max_n_probe) * 2:
+                    prefer_split = True
+
+            if prefer_split and can_split and can_eval_more:
+                mid = 0.5 * (left + right)
+                # Deterministic depth-first: push right then left.
+                pending.append((mid, right, int(start_n_probe)))
+                pending.append((left, mid, int(start_n_probe)))
+                split_reason = "split_error_gt_tol"
+                accept_segment = False
+                scheduled = True
+
+            if not scheduled and can_eval_more and can_refine:
                 # Deterministic p-refinement using nested n -> (2n-1) nodes (clipped to max).
                 n_probe_next = min(int(max_n_probe), int(2 * int(n_probe) - 1))
                 if n_probe_next > int(n_probe):
