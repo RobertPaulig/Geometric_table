@@ -872,3 +872,11 @@ separation facts (computed on status==OK rows only):
   - deltaV_max_max: 0.1567902269999999
   - residual_final_p95: 9.73477578228299e-07
   - evidence_pack_files: scf_audit_metrics.csv, scf_trace.csv, scf_summary.json, potential_vectors.csv, summary_metadata.json
+
+## physics-operator-integration-baseline-2026-01-19-r1
+
+- Source commit: eb0fa851d685f79d561f92f439fac7c3000cd1c9
+- Release asset: https://github.com/RobertPaulig/Geometric_table/releases/download/physics-operator-integration-baseline-2026-01-19-r1/evidence_pack.zip
+- SHA256(evidence_pack.zip): C07DC02484C1EB75751A6CEE3BE83C82664E51980DAC9192DA25BEEC95F6140B
+- Command:
+  hetero2-batch --input stress.csv --out_dir out_stress --artifacts light --score_mode mock --k_decoys 2 --workers 2 --timeout_s 60 --maxtasksperchild 100 --seed_strategy per_row --seed 0 --physics_mode both --edge_weight_mode unweighted --potential_mode static --scf_max_iter 50 --scf_tol 1e-6 --scf_damping 0.5 --scf_occ_k 5 --scf_tau 1.0 --zip_pack
