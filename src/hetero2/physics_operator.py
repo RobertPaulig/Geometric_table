@@ -17,6 +17,13 @@ DOS_LDOS_SCHEMA = "hetero2_dos_ldos.v1"
 DOS_GRID_N_DEFAULT = 128
 DOS_ETA_DEFAULT = 0.05
 DOS_ENERGY_MARGIN_SIGMAS_DEFAULT = 3.0
+SCF_SCHEMA = "hetero2_scf.v1"
+SCF_MAX_ITER_DEFAULT = 50
+SCF_TOL_DEFAULT = 1e-6
+SCF_DAMPING_DEFAULT = 0.5
+SCF_OCC_K_DEFAULT = 5
+SCF_TAU_DEFAULT = 1.0
+SCF_GAMMA_DEFAULT = 0.5
 
 
 class MissingPhysicsParams(RuntimeError):
@@ -232,6 +239,103 @@ def compute_ldos_curve(
     return np.sum(w[:, None] * g, axis=0)
 
 
+def _softmax(x: np.ndarray) -> np.ndarray:
+    vals = np.asarray(x, dtype=float)
+    if vals.size == 0:
+        return np.array([], dtype=float)
+    z = vals - float(np.max(vals))
+    w = np.exp(z)
+    s = float(np.sum(w))
+    if s <= 0.0 or not math.isfinite(s):
+        return np.zeros_like(vals)
+    return w / s
+
+
+def solve_self_consistent_potential(
+    *,
+    laplacian: np.ndarray,
+    v0: np.ndarray,
+    scf_max_iter: int,
+    scf_tol: float,
+    scf_damping: float,
+    scf_occ_k: int,
+    scf_tau: float,
+    scf_gamma: float,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, list[dict[str, object]], bool, int, float]:
+    max_iter = int(scf_max_iter)
+    if max_iter < 1:
+        raise ValueError("scf_max_iter must be >= 1")
+    tol = float(scf_tol)
+    if not math.isfinite(tol) or tol <= 0.0:
+        raise ValueError("scf_tol must be > 0")
+    damping = float(scf_damping)
+    if not math.isfinite(damping) or not (0.0 < damping <= 1.0):
+        raise ValueError("scf_damping must be in (0, 1]")
+    occ_k = int(scf_occ_k)
+    if occ_k < 1:
+        raise ValueError("scf_occ_k must be >= 1")
+    tau = float(scf_tau)
+    if not math.isfinite(tau) or tau <= 0.0:
+        raise ValueError("scf_tau must be > 0")
+    gamma = float(scf_gamma)
+    if not math.isfinite(gamma):
+        raise ValueError("scf_gamma must be finite")
+
+    lap = np.asarray(laplacian, dtype=float)
+    v0_vec = np.asarray(v0, dtype=float)
+    if lap.ndim != 2 or lap.shape[0] != lap.shape[1]:
+        raise ValueError("laplacian must be a square matrix")
+    n = int(lap.shape[0])
+    if v0_vec.ndim != 1 or v0_vec.size != n:
+        raise ValueError("v0 must be a vector of length n")
+
+    v = v0_vec.copy()
+    trace: list[dict[str, object]] = []
+    converged = False
+    residual_final = float("nan")
+    iters = 0
+    rho = np.zeros((n,), dtype=float)
+
+    for t in range(max_iter):
+        iters = t + 1
+        H = lap + np.diag(v)
+        eigvals, eigvecs = eigh_symmetric(H)
+        k = int(min(int(occ_k), int(eigvals.size)))
+        vals_k = np.asarray(eigvals[:k], dtype=float)
+        vecs_k = np.asarray(eigvecs[:, :k], dtype=float)
+
+        weights = _softmax(-vals_k / float(tau))
+        rho = (vecs_k**2) @ weights
+        rho_tilde = rho - float(np.mean(rho))
+
+        v_proposed = v0_vec + float(gamma) * rho_tilde
+        v_next = (1.0 - float(damping)) * v + float(damping) * v_proposed
+        residual = float(np.max(np.abs(v_next - v)))
+        residual_final = residual
+
+        trace.append(
+            {
+                "iter": int(t + 1),
+                "residual_inf": residual,
+                "damping": float(damping),
+                "min_V": float(np.min(v_next)),
+                "max_V": float(np.max(v_next)),
+                "mean_V": float(np.mean(v_next)),
+                "min_rho": float(np.min(rho)),
+                "max_rho": float(np.max(rho)),
+                "mean_rho": float(np.mean(rho)),
+                "converged": bool(residual < float(tol)),
+            }
+        )
+
+        v = v_next
+        if residual < float(tol):
+            converged = True
+            break
+
+    return v0_vec, v, rho, trace, converged, int(iters), float(residual_final)
+
+
 def ldos_atom_record(
     *,
     eigenvalues: np.ndarray,
@@ -406,6 +510,7 @@ def compute_dos_ldos_payload(
     types: Sequence[int],
     physics_mode: str,
     edge_weight_mode: str,
+    potentials_override: np.ndarray | None = None,
     atoms_db: AtomsDbV1 | None = None,
 ) -> dict[str, object]:
     mode = str(physics_mode)
@@ -435,7 +540,7 @@ def compute_dos_ldos_payload(
         payload["eigvals_L"] = [float(x) for x in eigvals_symmetric(lap).tolist()]
 
     if mode in {"hamiltonian", "both"}:
-        potentials = _potentials_for_types(types, atoms_db_obj)
+        potentials = np.asarray(potentials_override, dtype=float) if potentials_override is not None else _potentials_for_types(types, atoms_db_obj)
         H = lap + np.diag(potentials)
         vals_H, vecs_H = eigh_symmetric(H)
         payload["eigvals_H"] = [float(x) for x in vals_H.tolist()]
@@ -455,11 +560,177 @@ def compute_dos_ldos_payload(
         lap_w = laplacian_from_adjacency(w_adj)
         if mode in {"hamiltonian", "both"}:
             if potentials is None:
-                potentials = _potentials_for_types(types, atoms_db_obj)
+                potentials = np.asarray(potentials_override, dtype=float) if potentials_override is not None else _potentials_for_types(types, atoms_db_obj)
             Hw = lap_w + np.diag(potentials)
             vals_WH, vecs_WH = eigh_symmetric(Hw)
             payload["eigvals_WH"] = [float(x) for x in vals_WH.tolist()]
             payload["ldos_WH"] = ldos_atom_record(eigenvalues=vals_WH, eigenvectors=vecs_WH, types=types)
 
     return payload
+
+
+def compute_operator_payload(
+    *,
+    adjacency: np.ndarray,
+    bonds: Sequence[tuple[int, int, float]] | None,
+    types: Sequence[int],
+    physics_mode: str,
+    edge_weight_mode: str,
+    potential_mode: str = "static",
+    scf_max_iter: int = SCF_MAX_ITER_DEFAULT,
+    scf_tol: float = SCF_TOL_DEFAULT,
+    scf_damping: float = SCF_DAMPING_DEFAULT,
+    scf_occ_k: int = SCF_OCC_K_DEFAULT,
+    scf_tau: float = SCF_TAU_DEFAULT,
+    scf_gamma: float = SCF_GAMMA_DEFAULT,
+    beta: float = SPECTRAL_ENTROPY_BETA_DEFAULT,
+    atoms_db: AtomsDbV1 | None = None,
+) -> dict[str, object]:
+    mode = str(physics_mode)
+    if mode not in {"topological", "hamiltonian", "both"}:
+        raise ValueError(f"Invalid physics_mode: {mode}")
+
+    ew_mode = str(edge_weight_mode)
+    if ew_mode not in {"unweighted", "bond_order", "bond_order_delta_chi"}:
+        raise ValueError(f"Invalid edge_weight_mode: {ew_mode}")
+
+    pot_mode = str(potential_mode)
+    if pot_mode not in {"static", "self_consistent", "both"}:
+        raise ValueError(f"Invalid potential_mode: {pot_mode}")
+
+    lap = laplacian_from_adjacency(adjacency)
+    atoms_db_obj = load_atoms_db_v1() if atoms_db is None else atoms_db
+    v0 = _potentials_for_types(types, atoms_db_obj)
+
+    lap_w: np.ndarray | None = None
+    if ew_mode != "unweighted":
+        if bonds is None:
+            raise ValueError("edge_weight_mode requires bonds to be provided")
+        w_adj = weighted_adjacency_from_bonds(
+            n=int(adjacency.shape[0]),
+            bonds=bonds,
+            types=types,
+            edge_weight_mode=ew_mode,
+            atoms_db=atoms_db_obj,
+            alpha=float(DELTA_CHI_ALPHA_DEFAULT),
+        )
+        lap_w = laplacian_from_adjacency(w_adj)
+
+    scf_payload: dict[str, object] | None = None
+    v_scf: np.ndarray | None = None
+    rho_final: np.ndarray | None = None
+    scf_converged = False
+    scf_iters = 0
+    scf_residual_final = float("nan")
+
+    if pot_mode in {"self_consistent", "both"} and mode in {"hamiltonian", "both"}:
+        base_lap = lap_w if lap_w is not None else lap
+        v0_vec, v_scf, rho_final, trace, scf_converged, scf_iters, scf_residual_final = solve_self_consistent_potential(
+            laplacian=base_lap,
+            v0=v0,
+            scf_max_iter=int(scf_max_iter),
+            scf_tol=float(scf_tol),
+            scf_damping=float(scf_damping),
+            scf_occ_k=int(scf_occ_k),
+            scf_tau=float(scf_tau),
+            scf_gamma=float(scf_gamma),
+        )
+        scf_payload = {
+            "schema_version": SCF_SCHEMA,
+            "potential_mode_used": pot_mode,
+            "scf_max_iter": int(scf_max_iter),
+            "scf_tol": float(scf_tol),
+            "scf_damping": float(scf_damping),
+            "scf_occ_k": int(scf_occ_k),
+            "scf_tau": float(scf_tau),
+            "scf_gamma": float(scf_gamma),
+            "scf_converged": bool(scf_converged),
+            "scf_iters": int(scf_iters),
+            "scf_residual_final": float(scf_residual_final),
+            "trace": trace,
+            "vectors": [
+                {
+                    "node_index": int(i),
+                    "atom_Z": int(types[i]),
+                    "V0": float(v0_vec[i]),
+                    "V_scf": float(v_scf[i]),
+                    "rho_final": float(rho_final[i]) if rho_final is not None else float("nan"),
+                }
+                for i in range(int(v0_vec.size))
+            ],
+        }
+
+    potentials_effective = v0
+    if pot_mode in {"self_consistent", "both"} and v_scf is not None:
+        potentials_effective = v_scf
+
+    out: dict[str, object] = {
+        "physics_mode_used": mode,
+        "physics_params_source": PHYSICS_PARAMS_SOURCE,
+        "physics_entropy_beta": float(beta),
+        "physics_missing_params_count": 0,
+        "edge_weight_mode_used": ew_mode,
+        "potential_mode_used": pot_mode,
+        "L_gap": "",
+        "L_trace": "",
+        "L_entropy_beta": "",
+        "H_gap": "",
+        "H_trace": "",
+        "H_entropy_beta": "",
+    }
+
+    if mode in {"topological", "both"}:
+        vals_L = eigvals_symmetric(lap)
+        out["L_gap"] = float(spectral_gap(vals_L))
+        out["L_trace"] = float(spectral_trace(vals_L))
+        out["L_entropy_beta"] = float(spectral_entropy_beta(vals_L, beta=float(beta)))
+
+    if mode in {"hamiltonian", "both"}:
+        H_static = lap + np.diag(v0)
+        vals_H_static = eigvals_symmetric(H_static)
+        out["H_gap"] = float(spectral_gap(vals_H_static))
+        out["H_trace"] = float(spectral_trace(vals_H_static))
+        out["H_entropy_beta"] = float(spectral_entropy_beta(vals_H_static, beta=float(beta)))
+
+        if pot_mode in {"self_consistent", "both"} and v_scf is not None:
+            H_scf = lap + np.diag(potentials_effective)
+            vals_H_scf = eigvals_symmetric(H_scf)
+            out["H_scf_gap"] = float(spectral_gap(vals_H_scf))
+            out["H_scf_trace"] = float(spectral_trace(vals_H_scf))
+            out["H_scf_entropy_beta"] = float(spectral_entropy_beta(vals_H_scf, beta=float(beta)))
+            out["scf_converged"] = bool(scf_converged)
+            out["scf_iters"] = int(scf_iters)
+            out["scf_residual_final"] = float(scf_residual_final)
+
+    if ew_mode != "unweighted" and lap_w is not None:
+        out.update({"W_gap": "", "W_entropy": "", "WH_gap": "", "WH_entropy": ""})
+        if mode in {"topological", "both"}:
+            vals_W = eigvals_symmetric(lap_w)
+            out["W_gap"] = float(spectral_gap(vals_W))
+            out["W_entropy"] = float(spectral_entropy_beta(vals_W, beta=float(beta)))
+        if mode in {"hamiltonian", "both"}:
+            Hw_static = lap_w + np.diag(v0)
+            vals_WH_static = eigvals_symmetric(Hw_static)
+            out["WH_gap"] = float(spectral_gap(vals_WH_static))
+            out["WH_entropy"] = float(spectral_entropy_beta(vals_WH_static, beta=float(beta)))
+            if pot_mode in {"self_consistent", "both"} and v_scf is not None:
+                Hw_scf = lap_w + np.diag(potentials_effective)
+                vals_WH_scf = eigvals_symmetric(Hw_scf)
+                out["WH_scf_gap"] = float(spectral_gap(vals_WH_scf))
+                out["WH_scf_entropy"] = float(spectral_entropy_beta(vals_WH_scf, beta=float(beta)))
+
+    out["dos_ldos"] = compute_dos_ldos_payload(
+        adjacency=adjacency,
+        bonds=bonds,
+        types=types,
+        physics_mode=mode,
+        edge_weight_mode=ew_mode,
+        potentials_override=potentials_effective if mode in {"hamiltonian", "both"} else None,
+        atoms_db=atoms_db_obj,
+    )
+
+    if scf_payload is not None:
+        out["scf"] = scf_payload
+
+    return out
 

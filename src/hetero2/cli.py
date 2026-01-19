@@ -8,6 +8,13 @@ from pathlib import Path
 from hetero2.pipeline import run_pipeline_v2
 from hetero2.report import render_report_v2
 from hetero2.batch import run_batch
+from hetero2.physics_operator import (
+    SCF_DAMPING_DEFAULT,
+    SCF_MAX_ITER_DEFAULT,
+    SCF_OCC_K_DEFAULT,
+    SCF_TAU_DEFAULT,
+    SCF_TOL_DEFAULT,
+)
 
 
 def _parse_pipeline_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -39,6 +46,17 @@ def _parse_pipeline_args(argv: list[str] | None = None) -> argparse.Namespace:
         default="unweighted",
         help="Edge weights for weighted operators: unweighted (binary), bond_order (1/2/3/1.5), or bond_order_delta_chi (bond_order*(1+alpha*|Δchi|)).",
     )
+    ap.add_argument(
+        "--potential_mode",
+        choices=["static", "self_consistent", "both"],
+        default="static",
+        help="Potential mode for H=L+V: static uses V0; self_consistent runs SCF; both computes both and stores SCF artifacts.",
+    )
+    ap.add_argument("--scf_max_iter", type=int, default=SCF_MAX_ITER_DEFAULT, help="SCF max iterations (self_consistent/both).")
+    ap.add_argument("--scf_tol", type=float, default=SCF_TOL_DEFAULT, help="SCF convergence tolerance (inf-norm of dV).")
+    ap.add_argument("--scf_damping", type=float, default=SCF_DAMPING_DEFAULT, help="SCF damping in (0,1].")
+    ap.add_argument("--scf_occ_k", type=int, default=SCF_OCC_K_DEFAULT, help="SCF number of lowest eigenstates to use.")
+    ap.add_argument("--scf_tau", type=float, default=SCF_TAU_DEFAULT, help="SCF temperature for soft weights.")
     ap.add_argument(
         "--operator_mode",
         choices=["laplacian", "h_operator"],
@@ -119,6 +137,17 @@ def _parse_batch_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="DEPRECATED: use --physics_mode. laplacian -> topological, h_operator -> hamiltonian.",
     )
     ap.add_argument(
+        "--potential_mode",
+        choices=["static", "self_consistent", "both"],
+        default="static",
+        help="Potential mode for H=L+V: static uses V0; self_consistent runs SCF; both computes both and stores SCF artifacts.",
+    )
+    ap.add_argument("--scf_max_iter", type=int, default=SCF_MAX_ITER_DEFAULT, help="SCF max iterations (self_consistent/both).")
+    ap.add_argument("--scf_tol", type=float, default=SCF_TOL_DEFAULT, help="SCF convergence tolerance (inf-norm of dV).")
+    ap.add_argument("--scf_damping", type=float, default=SCF_DAMPING_DEFAULT, help="SCF damping in (0,1].")
+    ap.add_argument("--scf_occ_k", type=int, default=SCF_OCC_K_DEFAULT, help="SCF number of lowest eigenstates to use.")
+    ap.add_argument("--scf_tau", type=float, default=SCF_TAU_DEFAULT, help="SCF temperature for soft weights.")
+    ap.add_argument(
         "--seed_strategy",
         choices=["global", "per_row"],
         default="global",
@@ -158,6 +187,12 @@ def main_pipeline(argv: list[str] | None = None) -> int:
         decoy_hard_tanimoto_max=float(args.decoy_hard_tanimoto_max),
         physics_mode=physics_mode,
         edge_weight_mode=str(args.edge_weight_mode),
+        potential_mode=str(args.potential_mode),
+        scf_max_iter=int(args.scf_max_iter),
+        scf_tol=float(args.scf_tol),
+        scf_damping=float(args.scf_damping),
+        scf_occ_k=int(args.scf_occ_k),
+        scf_tau=float(args.scf_tau),
     )
     text = json.dumps(out, ensure_ascii=False, sort_keys=True, indent=2)
     if args.out:
@@ -225,6 +260,12 @@ def main_batch(argv: list[str] | None = None) -> int:
         decoy_hard_tanimoto_max=float(args.decoy_hard_tanimoto_max),
         physics_mode=physics_mode,
         edge_weight_mode=str(args.edge_weight_mode),
+        potential_mode=str(args.potential_mode),
+        scf_max_iter=int(args.scf_max_iter),
+        scf_tol=float(args.scf_tol),
+        scf_damping=float(args.scf_damping),
+        scf_occ_k=int(args.scf_occ_k),
+        scf_tau=float(args.scf_tau),
         seed_strategy=str(args.seed_strategy),
         no_index=bool(args.no_index),
         no_manifest=bool(args.no_manifest),
