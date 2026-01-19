@@ -756,3 +756,16 @@
   - Evidence pack artifacts: scf_trace.csv, scf_summary.json, scf_audit_metrics.csv, summary_metadata.json (scf_audit_verdict=SUCCESS; scf_iters_mean=14.75; scf_iters_max=15; deltaV_max_max=0.1567902269999999; scf_converged_rate=1.0; scf_nontrivial_rate=1.0)
 - Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/136 (merge: 8582b0316c93f316fc42ed990746e0b07cd1111c)
 - CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21136630958
+
+### 2026-01-19 - P4.0 INTEGRATION-BASELINE-RAILS-1: baseline интегратор (energy grid) + benchmark артефакты (stress pack)
+- Code PR: https://github.com/RobertPaulig/Geometric_table/pull/138 (merge: eb0fa851d685f79d561f92f439fac7c3000cd1c9)
+- CI run (3/3 ci/* on code merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21140329965
+- Live proof (stress pack):
+  - Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/physics-operator-integration-baseline-2026-01-19-r1
+  - Source commit: eb0fa851d685f79d561f92f439fac7c3000cd1c9
+  - Publish run: https://github.com/RobertPaulig/Geometric_table/actions/runs/21140462233
+  - Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/physics-operator-integration-baseline-2026-01-19-r1/evidence_pack.zip
+  - SHA256(evidence_pack.zip): C07DC02484C1EB75751A6CEE3BE83C82664E51980DAC9192DA25BEEC95F6140B
+  - Evidence pack artifacts: integration_benchmark.csv, integration_benchmark.md, summary_metadata.json (integrator_mode=baseline; energy_range=[-0.15, 4.15]; energy_points=128; eta=0.05; integration_walltime_ms_median=2.3876529999995455)
+- Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/139 (merge: 639d79edb98181b9715ef0f8d01adc8cd9cc2784)
+- CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21141045407
