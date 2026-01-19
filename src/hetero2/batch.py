@@ -1157,6 +1157,28 @@ def run_batch(
     dos_WH = compute_dos_curve(eigenvalues=eigs_WH, energy_grid=energy_grid, eta=dos_eta) if eigs_WH else np.zeros_like(energy_grid)
     dos_WH_ms = (time.perf_counter() - t0) * 1000.0
 
+    baseline_noise_abs = float("nan")
+    baseline_noise_rel = float("nan")
+    baseline_noise_grid_points = int(0)
+    baseline_noise_k_abs = 1.0
+    baseline_noise_k_rel = 1.0
+    if integrator_mode == "both" and energy_grid.size >= 2:
+        # Baseline-aware "noise floor": estimate discretization sensitivity by comparing N vs (2N-1) grid.
+        fine_n = int(2 * int(energy_grid.size) - 1)
+        if fine_n >= 3:
+            energy_grid_fine = np.linspace(float(dos_energy_min), float(dos_energy_max), fine_n, dtype=float)
+            dos_L_fine = (
+                compute_dos_curve(eigenvalues=eigs_L, energy_grid=energy_grid_fine, eta=dos_eta) if eigs_L else np.zeros_like(energy_grid_fine)
+            )
+            # Nested grid: N points are exactly every other point in (2N-1).
+            dos_L_fine_sub = np.asarray(dos_L_fine[::2], dtype=float)
+            if dos_L_fine_sub.size == energy_grid.size and dos_L.size == energy_grid.size:
+                diff = np.abs(dos_L_fine_sub - np.asarray(dos_L, dtype=float))
+                baseline_noise_abs = float(np.median(diff)) if diff.size else float("nan")
+                denom = np.abs(dos_L_fine_sub) + 1e-12
+                baseline_noise_rel = float(np.median(diff / denom)) if diff.size else float("nan")
+                baseline_noise_grid_points = int(fine_n)
+
     # Adaptive curves (P4.1): piecewise approximation with a posteriori error estimate.
     adaptive_cfg = AdaptiveIntegrationConfig(
         eps_abs=float(integrator_eps_abs),
@@ -1197,7 +1219,17 @@ def run_batch(
             def _f(x: np.ndarray, *, _eigs: list[float] = eigs) -> np.ndarray:
                 return compute_dos_curve(eigenvalues=_eigs, energy_grid=np.asarray(x, dtype=float), eta=float(dos_eta))
 
-            res = adaptive_approximate_on_grid(f=_f, energy_grid=energy_grid, cfg=adaptive_cfg, tol_scale=tol_scale)
+            res = adaptive_approximate_on_grid(
+                f=_f,
+                energy_grid=energy_grid,
+                cfg=adaptive_cfg,
+                tol_scale=tol_scale,
+                baseline_values=np.asarray(baseline_values, dtype=float),
+                baseline_noise_abs=baseline_noise_abs if math.isfinite(float(baseline_noise_abs)) else None,
+                baseline_noise_rel=baseline_noise_rel if math.isfinite(float(baseline_noise_rel)) else None,
+                baseline_noise_k_abs=float(baseline_noise_k_abs),
+                baseline_noise_k_rel=float(baseline_noise_k_rel),
+            )
             adaptive_curves[curve_id] = np.asarray(res.values, dtype=float)
             summary_row = dict(res.summary)
             summary_row["curve_id"] = curve_id
@@ -1256,6 +1288,8 @@ def run_batch(
     integrator_segments_used_median = float("nan")
     integrator_evals_total_median = float("nan")
     integrator_error_est_total_median = float("nan")
+    integrator_eval_ratio_median = float("nan")
+    integrator_cache_hit_rate_median = float("nan")
 
     if integrator_mode in {"adaptive", "both"}:
         adaptive_trace_csv = out_dir / "adaptive_integration_trace.csv"
@@ -1313,7 +1347,9 @@ def run_batch(
 
         if integrator_mode == "both":
             compare_csv = out_dir / "integration_compare.csv"
+            speed_profile_csv = out_dir / "integration_speed_profile.csv"
             compare_rows: list[dict[str, object]] = []
+            speed_profile_rows: list[dict[str, object]] = []
             for curve_id, baseline_vals, baseline_ms, adaptive_vals in [
                 ("dos_L", dos_L, dos_L_ms, adaptive_curves.get("dos_L", dos_L)),
                 ("dos_H", dos_H, dos_H_ms, adaptive_curves.get("dos_H", dos_H)),
@@ -1331,6 +1367,11 @@ def run_batch(
                 adaptive_verdict_row = str(adaptive_summaries.get(curve_id, {}).get("verdict", "INCONCLUSIVE_LIMIT_HIT"))
                 adaptive_ms = float(adaptive_summaries.get(curve_id, {}).get("walltime_ms_total", float("nan")))
                 speedup = float(baseline_ms / adaptive_ms) if (adaptive_ms and adaptive_ms > 0.0 and math.isfinite(adaptive_ms)) else float("nan")
+                adaptive_evals_total = float(adaptive_summaries.get(curve_id, {}).get("evals_total", float("nan")))
+                adaptive_segments_used = float(adaptive_summaries.get(curve_id, {}).get("segments_used", float("nan")))
+                cache_hit_rate = float(adaptive_summaries.get(curve_id, {}).get("cache_hit_rate", float("nan")))
+                baseline_points = float(energy_grid.size)
+                eval_ratio = float(adaptive_evals_total / baseline_points) if baseline_points > 0 and math.isfinite(adaptive_evals_total) else float("nan")
                 compare_rows.append(
                     {
                         "molecule_id": "__run__",
@@ -1343,6 +1384,21 @@ def run_batch(
                         "baseline_walltime_ms": float(baseline_ms),
                         "adaptive_walltime_ms": adaptive_ms,
                         "speedup": speedup,
+                        "adaptive_verdict_row": adaptive_verdict_row,
+                    }
+                )
+                speed_profile_rows.append(
+                    {
+                        "molecule_id": "__run__",
+                        "curve_id": str(curve_id),
+                        "baseline_points": baseline_points,
+                        "adaptive_evals_total": adaptive_evals_total,
+                        "eval_ratio": eval_ratio,
+                        "baseline_walltime_ms": float(baseline_ms),
+                        "adaptive_walltime_ms": adaptive_ms,
+                        "speedup": speedup,
+                        "cache_hit_rate": cache_hit_rate,
+                        "segments_used": adaptive_segments_used,
                         "adaptive_verdict_row": adaptive_verdict_row,
                     }
                 )
@@ -1374,6 +1430,41 @@ def run_batch(
                         out_row[k] = "" if not math.isfinite(v) else f"{v:.10g}"
                     w.writerow(out_row)
 
+            speed_profile_csv.write_text("", encoding="utf-8")
+            with speed_profile_csv.open("w", encoding="utf-8", newline="") as f:
+                w = csv.DictWriter(
+                    f,
+                    fieldnames=[
+                        "molecule_id",
+                        "curve_id",
+                        "baseline_points",
+                        "adaptive_evals_total",
+                        "eval_ratio",
+                        "baseline_walltime_ms",
+                        "adaptive_walltime_ms",
+                        "speedup",
+                        "cache_hit_rate",
+                        "segments_used",
+                        "adaptive_verdict_row",
+                    ],
+                )
+                w.writeheader()
+                for row in speed_profile_rows:
+                    out_row = dict(row)
+                    for k in [
+                        "baseline_points",
+                        "adaptive_evals_total",
+                        "eval_ratio",
+                        "baseline_walltime_ms",
+                        "adaptive_walltime_ms",
+                        "speedup",
+                        "cache_hit_rate",
+                        "segments_used",
+                    ]:
+                        v = float(out_row.get(k, float("nan")))
+                        out_row[k] = "" if not math.isfinite(v) else f"{v:.10g}"
+                    w.writerow(out_row)
+
             pass_rate = float(sum(1 for r in compare_rows if bool(r.get("pass_tolerance", False)))) / float(len(compare_rows)) if compare_rows else float("nan")
             integrator_correctness_pass_rate = float(pass_rate)
 
@@ -1383,10 +1474,22 @@ def run_batch(
 
             segments = [float(adaptive_summaries.get(k, {}).get("segments_used", float("nan"))) for k in adaptive_summaries.keys()]
             evals = [float(adaptive_summaries.get(k, {}).get("evals_total", float("nan"))) for k in adaptive_summaries.keys()]
+            eval_ratios = [
+                float(adaptive_summaries.get(k, {}).get("evals_total", float("nan"))) / float(energy_grid.size)
+                for k in adaptive_summaries.keys()
+                if energy_grid.size
+            ]
             errs = [float(adaptive_summaries.get(k, {}).get("error_est_total", float("nan"))) for k in adaptive_summaries.keys()]
+            cache_rates = [float(adaptive_summaries.get(k, {}).get("cache_hit_rate", float("nan"))) for k in adaptive_summaries.keys()]
             integrator_segments_used_median = float(statistics.median([x for x in segments if math.isfinite(float(x))])) if segments else float("nan")
             integrator_evals_total_median = float(statistics.median([x for x in evals if math.isfinite(float(x))])) if evals else float("nan")
             integrator_error_est_total_median = float(statistics.median([x for x in errs if math.isfinite(float(x))])) if errs else float("nan")
+            integrator_eval_ratio_median = (
+                float(statistics.median([x for x in eval_ratios if math.isfinite(float(x))])) if eval_ratios else float("nan")
+            )
+            integrator_cache_hit_rate_median = (
+                float(statistics.median([x for x in cache_rates if math.isfinite(float(x))])) if cache_rates else float("nan")
+            )
 
             if not math.isfinite(float(integrator_correctness_pass_rate)) or float(integrator_correctness_pass_rate) < 0.99:
                 integrator_verdict = "FAIL_CORRECTNESS"
@@ -1911,10 +2014,17 @@ def run_batch(
         "integrator_correctness_pass_rate": float(integrator_correctness_pass_rate),
         "integrator_segments_used_median": float(integrator_segments_used_median),
         "integrator_evals_total_median": float(integrator_evals_total_median),
+        "integrator_eval_ratio_median": float(integrator_eval_ratio_median),
+        "integrator_cache_hit_rate_median": float(integrator_cache_hit_rate_median),
         "integrator_error_est_total_median": float(integrator_error_est_total_median),
         "integrator_speedup_target": float(integrator_speedup_target),
         "integrator_speedup_median": float(integrator_speedup_median),
         "integrator_speedup_verdict": str(integrator_speedup_verdict),
+        "baseline_noise_grid_points": int(baseline_noise_grid_points),
+        "baseline_noise_abs": float(baseline_noise_abs),
+        "baseline_noise_rel": float(baseline_noise_rel),
+        "baseline_noise_k_abs": float(baseline_noise_k_abs),
+        "baseline_noise_k_rel": float(baseline_noise_k_rel),
         "integration_walltime_ms_median": float(
             statistics.median([float(dos_L_ms_out), float(dos_H_ms_out), float(dos_WH_ms_out)])
         )

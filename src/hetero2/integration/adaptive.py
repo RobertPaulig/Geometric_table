@@ -37,6 +37,8 @@ class _EvalCache:
         self._f = f
         self._cache: dict[str, float] = {}
         self.evals_total = 0
+        self.requests_total = 0
+        self.hits_total = 0
 
     @staticmethod
     def _key(e: float) -> str:
@@ -52,6 +54,11 @@ class _EvalCache:
             return np.array([], dtype=float)
 
         keys = [self._key(float(x)) for x in e.tolist()]
+        self.requests_total += int(len(keys))
+        for k in keys:
+            if k in self._cache:
+                self.hits_total += 1
+
         missing: dict[str, float] = {k: float(v) for k, v in zip(keys, e.tolist(), strict=False) if k not in self._cache}
         if missing:
             # Deterministic ordering for evaluation and cache fill.
@@ -65,6 +72,13 @@ class _EvalCache:
             self.evals_total += int(vals.size)
 
         return np.array([float(self._cache[k]) for k in keys], dtype=float)
+
+    @property
+    def hit_rate(self) -> float:
+        total = int(self.requests_total)
+        if total <= 0:
+            return float("nan")
+        return float(self.hits_total) / float(total)
 
 
 def _map_x_to_energy(x: np.ndarray, *, e_left: float, e_right: float) -> np.ndarray:
@@ -83,9 +97,13 @@ def _map_energy_to_x(e: np.ndarray, *, e_left: float, e_right: float) -> np.ndar
 
 
 def _chebyshev_nodes(n: int) -> np.ndarray:
-    k = np.arange(int(n), dtype=float)
-    # First-kind Chebyshev nodes on [-1, 1].
-    return np.cos(math.pi * (2.0 * k + 1.0) / (2.0 * float(n)))
+    n = int(n)
+    if n <= 1:
+        return np.array([0.0], dtype=float)
+    k = np.arange(n, dtype=float)
+    # Chebyshev–Lobatto nodes on [-1, 1]. These are nested for n -> (2n-1),
+    # enabling deterministic p-refinement with cache reuse.
+    return np.cos(math.pi * k / float(n - 1))
 
 
 def adaptive_approximate_on_grid(
@@ -94,6 +112,11 @@ def adaptive_approximate_on_grid(
     energy_grid: np.ndarray,
     cfg: AdaptiveIntegrationConfig,
     tol_scale: float,
+    baseline_values: np.ndarray | None = None,
+    baseline_noise_abs: float | None = None,
+    baseline_noise_rel: float | None = None,
+    baseline_noise_k_abs: float = 1.0,
+    baseline_noise_k_rel: float = 1.0,
     eps_floor: float = 1e-12,
 ) -> AdaptiveCurveResult:
     grid = np.asarray(energy_grid, dtype=float)
@@ -110,6 +133,7 @@ def adaptive_approximate_on_grid(
                 "segments_used": 0,
                 "evals_total": 0,
                 "walltime_ms_total": 0.0,
+                "cache_hit_rate": float("nan"),
             },
         )
 
@@ -128,17 +152,34 @@ def adaptive_approximate_on_grid(
                 "segments_used": 0,
                 "evals_total": 0,
                 "walltime_ms_total": 0.0,
+                "cache_hit_rate": float("nan"),
             },
         )
 
+    baseline_arr = None
+    if baseline_values is not None:
+        arr = np.asarray(baseline_values, dtype=float)
+        if arr.shape == grid.shape:
+            baseline_arr = arr
+
     tol = float(cfg.eps_abs) + float(cfg.eps_rel) * float(abs(float(tol_scale)))
+    if baseline_noise_abs is not None and math.isfinite(float(baseline_noise_abs)):
+        tol = max(float(tol), float(baseline_noise_k_abs) * float(abs(float(baseline_noise_abs))))
+    if baseline_noise_rel is not None and math.isfinite(float(baseline_noise_rel)):
+        tol = max(float(tol), float(baseline_noise_k_rel) * float(abs(float(baseline_noise_rel))) * float(abs(float(tol_scale))))
     tol = max(float(tol), float(eps_floor))
 
     cache = _EvalCache(f)
     trace: list[AdaptiveSegmentTrace] = []
 
-    # Stack of segments to process: (e_left, e_right).
-    pending: list[tuple[float, float]] = [(e_min, e_max)]
+    # Chebyshev polynomial per segment. If baseline grid values are provided (integrator_mode=both),
+    # use them for error estimation to avoid over-refining beyond the baseline resolution.
+    max_poly_degree = max(1, min(int(cfg.poly_degree_max), 64))
+    start_poly_degree = min(max_poly_degree, 4)
+    max_n_probe = int(max_poly_degree + 1)
+    start_n_probe = int(start_poly_degree + 1)
+
+    pending: list[tuple[float, float, int]] = [(e_min, e_max, start_n_probe)]
     accepted: list[tuple[float, float, np.ndarray]] = []
 
     limit_hit_reason = ""
@@ -147,47 +188,64 @@ def adaptive_approximate_on_grid(
 
     subdomains_max = int(cfg.subdomains_max)
     eval_budget_max = int(cfg.eval_budget_max)
-    poly_degree = max(1, min(int(cfg.poly_degree_max), 64))
     quad_order = max(2, min(int(cfg.quad_order_max), 128))
 
     while pending:
-        left, right = pending.pop()
+        left, right, n_probe = pending.pop()
         seg_t0 = time.perf_counter()
         evals_before = int(cache.evals_total)
 
         split_reason = "accepted"
         error_est = float("nan")
 
-        # Probe points (Chebyshev nodes).
-        n_probe = int(poly_degree + 1)
         x_probe = _chebyshev_nodes(n_probe)
         e_probe = _map_x_to_energy(x_probe, e_left=left, e_right=right)
-        y_probe = cache.eval(e_probe)
+        y_probe = np.asarray(cache.eval(e_probe), dtype=float)
+
+        poly_degree = int(max(1, n_probe - 1))
         coeffs = chebyshev.chebfit(x_probe, y_probe, deg=int(poly_degree))
 
-        # Error estimate on Gauss nodes (max abs diff).
-        x_quad, _ = legendre.leggauss(int(quad_order))
-        e_quad = _map_x_to_energy(x_quad, e_left=left, e_right=right)
-        y_true = cache.eval(e_quad)
-        y_hat = chebyshev.chebval(x_quad, coeffs)
-        if y_true.size:
-            error_est = float(np.max(np.abs(y_true - y_hat)))
+        if baseline_arr is not None:
+            mask = (grid >= float(left)) & (grid <= float(right))
+            if np.any(mask):
+                x_grid = _map_energy_to_x(grid[mask], e_left=float(left), e_right=float(right))
+                y_hat = chebyshev.chebval(x_grid, coeffs)
+                error_est = float(np.max(np.abs(np.asarray(y_hat, dtype=float) - np.asarray(baseline_arr[mask], dtype=float))))
+            else:
+                error_est = 0.0
         else:
-            error_est = 0.0
+            # Fallback: Gauss-point error estimate (adaptive-only mode / unit tests).
+            x_quad, _ = legendre.leggauss(int(quad_order))
+            e_quad = _map_x_to_energy(x_quad, e_left=left, e_right=right)
+            y_true = np.asarray(cache.eval(e_quad), dtype=float)
+            y_hat = chebyshev.chebval(x_quad, coeffs)
+            error_est = float(np.max(np.abs(y_true - y_hat))) if y_true.size else 0.0
 
-        # Decide split / accept.
         accept_segment = True
         if error_est > tol:
-            can_split = len(accepted) + len(pending) + 1 < subdomains_max
-            can_eval_more = cache.evals_total < eval_budget_max
-            if can_split and can_eval_more:
+            can_split = len(accepted) + len(pending) + 1 < int(subdomains_max)
+            can_eval_more = int(cache.evals_total) < int(eval_budget_max)
+            can_refine = int(n_probe) < int(max_n_probe)
+            scheduled = False
+            if can_eval_more and can_refine:
+                # Deterministic p-refinement using nested n -> (2n-1) nodes (clipped to max).
+                n_probe_next = min(int(max_n_probe), int(2 * int(n_probe) - 1))
+                if n_probe_next > int(n_probe):
+                    pending.append((left, right, int(n_probe_next)))
+                    split_reason = "p_refine_error_gt_tol"
+                    accept_segment = False
+                    scheduled = True
+
+            if not scheduled and can_split and can_eval_more:
                 mid = 0.5 * (left + right)
                 # Deterministic depth-first: push right then left.
-                pending.append((mid, right))
-                pending.append((left, mid))
+                pending.append((mid, right, int(start_n_probe)))
+                pending.append((left, mid, int(start_n_probe)))
                 split_reason = "split_error_gt_tol"
                 accept_segment = False
-            else:
+                scheduled = True
+
+            if not scheduled:
                 split_reason = "limit_hit"
                 verdict = "INCONCLUSIVE_LIMIT_HIT"
                 if not limit_hit_reason:
@@ -197,6 +255,7 @@ def adaptive_approximate_on_grid(
                         limit_hit_reason = "eval_budget_max"
                     else:
                         limit_hit_reason = "unknown"
+
         if accept_segment:
             accepted.append((left, right, coeffs))
 
@@ -216,11 +275,9 @@ def adaptive_approximate_on_grid(
             )
         )
 
-    # Evaluate piecewise polynomial on the requested grid.
     accepted_sorted = sorted(accepted, key=lambda s: (float(s[0]), float(s[1])))
     values_out = np.zeros_like(grid)
     for idx, (left, right, coeffs) in enumerate(accepted_sorted):
-        # Include right endpoint only for the last segment to avoid double coverage.
         if idx == len(accepted_sorted) - 1:
             mask = (grid >= float(left)) & (grid <= float(right))
         else:
@@ -235,7 +292,7 @@ def adaptive_approximate_on_grid(
             (
                 float(t.error_est)
                 for t in trace
-                if str(t.split_reason) != "split_error_gt_tol" and math.isfinite(float(t.error_est))
+                if str(t.split_reason) == "accepted" and math.isfinite(float(t.error_est))
             ),
             default=float("nan"),
         )
@@ -254,6 +311,7 @@ def adaptive_approximate_on_grid(
             "segments_used": int(len(accepted_sorted)),
             "evals_total": int(cache.evals_total),
             "walltime_ms_total": float(walltime_ms_total),
+            "cache_hit_rate": float(cache.hit_rate),
         },
     )
 

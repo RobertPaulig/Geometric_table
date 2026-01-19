@@ -57,12 +57,14 @@ def test_batch_writes_adaptive_integration_artifacts_in_both_mode(tmp_path: Path
     adaptive_trace_csv = out_dir / "adaptive_integration_trace.csv"
     adaptive_summary_json = out_dir / "adaptive_integration_summary.json"
     compare_csv = out_dir / "integration_compare.csv"
+    speed_profile_csv = out_dir / "integration_speed_profile.csv"
     zip_path = out_dir / "evidence_pack.zip"
     meta_path = out_dir / "summary_metadata.json"
 
     assert adaptive_trace_csv.exists()
     assert adaptive_summary_json.exists()
     assert compare_csv.exists()
+    assert speed_profile_csv.exists()
     assert zip_path.exists()
     assert meta_path.exists()
 
@@ -74,6 +76,8 @@ def test_batch_writes_adaptive_integration_artifacts_in_both_mode(tmp_path: Path
     assert "integrator_speedup_median" in meta
     assert "integrator_speedup_verdict" in meta
     assert "integrator_verdict" in meta
+    assert "integrator_eval_ratio_median" in meta
+    assert "integrator_cache_hit_rate_median" in meta
 
     with compare_csv.open("r", encoding="utf-8", newline="") as f:
         reader = csv.DictReader(f)
@@ -95,9 +99,30 @@ def test_batch_writes_adaptive_integration_artifacts_in_both_mode(tmp_path: Path
         rows = list(reader)
         assert rows
 
+    with speed_profile_csv.open("r", encoding="utf-8", newline="") as f:
+        reader = csv.DictReader(f)
+        assert reader.fieldnames is not None
+        for key in [
+            "molecule_id",
+            "curve_id",
+            "baseline_points",
+            "adaptive_evals_total",
+            "eval_ratio",
+            "baseline_walltime_ms",
+            "adaptive_walltime_ms",
+            "speedup",
+            "cache_hit_rate",
+            "segments_used",
+            "adaptive_verdict_row",
+        ]:
+            assert key in reader.fieldnames
+        rows = list(reader)
+        assert rows
+
     with zipfile.ZipFile(zip_path, "r") as zf:
         names = set(zf.namelist())
         assert "adaptive_integration_trace.csv" in names
         assert "adaptive_integration_summary.json" in names
         assert "integration_compare.csv" in names
+        assert "integration_speed_profile.csv" in names
 
