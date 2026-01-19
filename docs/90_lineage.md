@@ -682,3 +682,19 @@
   - Evidence pack artifacts: dos_curve.csv, ldos_summary.csv, summary_metadata.json (dos_grid_n=128, dos_eta=0.05)
   - Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/118 (merge: 1b9a67d56e2d3ca58e2877447e4de69fb58dcc1e)
   - CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21119709311
+
+### 2026-01-19 - PHYSICS-P3-SELF-CONSISTENT-POTENTIAL-1: self-consistent potential (SCF) artifacts (stress pack)
+- Code PR: https://github.com/RobertPaulig/Geometric_table/pull/120 (merge: 5cc2b4d3ff2d9438f9b236c59056124458ea0cc7)
+- CI run (3/3 ci/* on code merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21121323194
+- Workflow PR (publish inputs): https://github.com/RobertPaulig/Geometric_table/pull/121 (merge: 8e9ab74dc1a44c91c09d082c03c314a448ed9a02)
+- CI run (3/3 ci/* on workflow merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21121518323
+- Live proof (stress pack):
+  - Inputs: physics_mode=both; edge_weight_mode=bond_order_delta_chi; potential_mode=both; scf_max_iter=50; scf_tol=1e-6; scf_damping=0.5; scf_occ_k=5; scf_tau=1.0
+  - Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/physics-operator-scf-2026-01-19-r1
+  - Source commit: 8e9ab74dc1a44c91c09d082c03c314a448ed9a02
+  - Publish run: https://github.com/RobertPaulig/Geometric_table/actions/runs/21121557871
+  - Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/physics-operator-scf-2026-01-19-r1/evidence_pack.zip
+  - SHA256(evidence_pack.zip): ADFFF664035F103661E011FE5EF8FB490D4A48449BCC8BA101B9D71BB17061A4
+  - Evidence pack artifacts: scf_trace.csv, potential_vectors.csv, summary_metadata.json (scf_schema=hetero2_scf.v1; scf_converged=true; scf_iters=1; scf_residual_final=3.469446951953614e-17)
+  - Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/122 (merge: b949c180a98d9e5cbc23ec520855728ca9875a3f)
+  - Registry facts PR (SCF summary): https://github.com/RobertPaulig/Geometric_table/pull/123 (merge: 6316631c13b332624f62892cfed0139f2342098a)
