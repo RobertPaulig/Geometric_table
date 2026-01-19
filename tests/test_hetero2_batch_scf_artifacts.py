@@ -58,10 +58,14 @@ def test_batch_emits_scf_artifacts_and_includes_them_in_zip(tmp_path: Path) -> N
 
     trace_rows = list(csv.DictReader(scf_trace_csv.read_text(encoding="utf-8").splitlines()))
     assert len(trace_rows) >= 1
-    assert trace_rows[0]["id"] == "m0"
-    assert "residual_inf" in trace_rows[0]
-    assert "residual_mean" in trace_rows[0]
+    assert trace_rows[0]["row_id"] == "m0"
+    assert trace_rows[0]["mol_id"] == "m0"
+    assert "residual" in trace_rows[0]
+    assert "delta_V_inf" in trace_rows[0]
+    assert "delta_rho_l1" in trace_rows[0]
+    assert "gamma" in trace_rows[0]
     assert "status" in trace_rows[0]
+    assert "stop_reason" in trace_rows[0]
 
     vec_rows = list(csv.DictReader(potential_vectors_csv.read_text(encoding="utf-8").splitlines()))
     assert len(vec_rows) >= 1
@@ -79,12 +83,18 @@ def test_batch_emits_scf_artifacts_and_includes_them_in_zip(tmp_path: Path) -> N
     assert bool(meta["scf_enabled"]) is True
     assert meta["scf_status"] in {"CONVERGED", "MAX_ITER"}
     assert int(meta["scf_rows_total"]) == 1
+    assert meta["scf_audit_verdict"] in {"SUCCESS", "INCONCLUSIVE", "TRIVIAL_SCF", "NONCONVERGENT"}
+    assert isinstance(meta["scf_audit_reason"], str)
 
     scf_sum = json.loads(scf_summary_json.read_text(encoding="utf-8"))
     assert scf_sum["schema_version"] == "hetero2_scf_summary.v1"
     assert bool(scf_sum["scf_enabled"]) is True
     assert scf_sum["scf_status"] in {"CONVERGED", "MAX_ITER"}
     assert int(scf_sum["rows_total"]) == 1
+    assert scf_sum["audit_verdict"] in {"SUCCESS", "INCONCLUSIVE", "TRIVIAL_SCF", "NONCONVERGENT"}
+    assert "triviality_flags" in scf_sum
+    assert "stats_all" in scf_sum
+    assert "stats_asym_fixture" in scf_sum
 
     with zipfile.ZipFile(zip_path, "r") as zf:
         names = set(zf.namelist())

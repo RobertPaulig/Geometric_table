@@ -304,6 +304,7 @@ def solve_self_consistent_potential(
     residual_final = float("nan")
     iters = 0
     rho = np.zeros((n,), dtype=float)
+    rho_prev = np.zeros((n,), dtype=float)
 
     for t in range(max_iter):
         iters = t + 1
@@ -315,6 +316,8 @@ def solve_self_consistent_potential(
 
         weights = _softmax(-vals_k / float(tau))
         rho = (vecs_k**2) @ weights
+        delta_rho_l1 = float(np.sum(np.abs(rho - rho_prev)))
+        rho_prev = rho.copy()
         rho_tilde = rho - float(np.mean(rho))
 
         v_proposed = v0_vec + float(gamma) * rho_tilde
@@ -323,12 +326,23 @@ def solve_self_consistent_potential(
         residual_inf = float(np.max(np.abs(dv)))
         residual_mean = float(np.mean(np.abs(dv)))
         residual_final = residual_inf
+        stop_reason = "iterating"
+        if residual_inf < float(tol):
+            stop_reason = "converged"
+            if t == 0 and residual_inf <= 1e-12:
+                stop_reason = "trivial_fixed_point"
+        elif (t + 1) >= max_iter:
+            stop_reason = "max_iters"
 
         trace.append(
             {
                 "iter": int(t + 1),
+                "residual": residual_inf,
                 "residual_inf": residual_inf,
                 "residual_mean": residual_mean,
+                "delta_rho_l1": delta_rho_l1,
+                "delta_V_inf": residual_inf,
+                "gamma": float(gamma),
                 "damping": float(damping),
                 "min_V": float(np.min(v_next)),
                 "max_V": float(np.max(v_next)),
@@ -338,6 +352,7 @@ def solve_self_consistent_potential(
                 "mean_rho": float(np.mean(rho)),
                 "converged": bool(residual_inf < float(tol)),
                 "status": "CONVERGED" if residual_inf < float(tol) else "ITERATING",
+                "stop_reason": stop_reason,
             }
         )
 
