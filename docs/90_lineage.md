@@ -715,3 +715,18 @@
   - Evidence pack artifacts: potential_vectors.csv (V0,V_scaled,gamma), summary_metadata.json (potential_unit_model, potential_scale_gamma)
   - Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/126 (merge: 670cb69c3e6eddc108975cc5343d04e32f215a67)
   - CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21122839905
+
+### 2026-01-19 - PHYSICS-P3-SCF-RAILS-1: SCF artifacts (trace+summary) + registry facts (stress pack)
+- Code PR: https://github.com/RobertPaulig/Geometric_table/pull/128 (merge: dfc5b72301bfdaea4e5d5c7834c8e0202c1dfddf)
+- CI run (3/3 ci/* on code merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21129760355
+- Live proof (stress pack):
+  - Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/physics-operator-scf-2026-01-19-r2
+  - Source commit: dfc5b72301bfdaea4e5d5c7834c8e0202c1dfddf
+  - Publish run: https://github.com/RobertPaulig/Geometric_table/actions/runs/21129844747
+  - Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/physics-operator-scf-2026-01-19-r2/evidence_pack.zip
+  - SHA256(evidence_pack.zip): E89E6E99972840A1900C776529065C2009EF87D5A386545289DA15C71F020179
+  - Evidence pack artifacts: scf_trace.csv, scf_summary.json, summary_metadata.json (potential_unit_model=dimensionless, potential_scale_gamma=1.0, scf_enabled=true, scf_status=CONVERGED)
+- Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/129 (merge: 00e97107bee82c2030b19280a936591e8c8692de)
+- CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21130094003
+- Registry facts PR (SCF fields): https://github.com/RobertPaulig/Geometric_table/pull/130 (merge: 65513a25e56f552473fc7a0269f4b180cacfe4e2)
+- CI run (3/3 ci/* on registry facts merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21130322458
