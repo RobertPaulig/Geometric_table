@@ -789,3 +789,11 @@ separation facts (computed on status==OK rows only):
   - dos_energy_min: -0.15
   - dos_energy_max: 4.15
   - evidence_pack_files: dos_curve.csv, ldos_summary.csv, summary_metadata.json
+
+## physics-operator-scf-2026-01-19-r1
+
+- Source commit: 8e9ab74dc1a44c91c09d082c03c314a448ed9a02
+- Release asset: https://github.com/RobertPaulig/Geometric_table/releases/download/physics-operator-scf-2026-01-19-r1/evidence_pack.zip
+- SHA256(evidence_pack.zip): ADFFF664035F103661E011FE5EF8FB490D4A48449BCC8BA101B9D71BB17061A4
+- Command:
+  hetero2-batch --input stress.csv --out_dir out_stress --artifacts light --score_mode mock --k_decoys 2 --workers 1 --timeout_s 60 --maxtasksperchild 100 --seed_strategy per_row --seed 0 --physics_mode both --edge_weight_mode bond_order_delta_chi --potential_mode both --scf_max_iter 50 --scf_tol 1e-6 --scf_damping 0.5 --scf_occ_k 5 --scf_tau 1.0 --zip_pack
