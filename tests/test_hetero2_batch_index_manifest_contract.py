@@ -52,3 +52,5 @@ def test_batch_emits_index_and_manifest(tmp_path: Path) -> None:
     assert cfg.get("seed_strategy") == "global"
     assert "guardrails_max_atoms" in cfg
     assert "score_mode" in cfg
+    assert cfg.get("potential_unit_model") == "dimensionless"
+    assert float(cfg.get("potential_scale_gamma")) == 1.0

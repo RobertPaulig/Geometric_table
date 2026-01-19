@@ -31,6 +31,8 @@ from hetero2.physics_operator import (
     DOS_ETA_DEFAULT,
     DOS_GRID_N_DEFAULT,
     DOS_LDOS_SCHEMA,
+    POTENTIAL_SCALE_GAMMA_DEFAULT,
+    POTENTIAL_UNIT_MODEL,
     SCF_DAMPING_DEFAULT,
     SCF_GAMMA_DEFAULT,
     SCF_MAX_ITER_DEFAULT,
@@ -154,6 +156,8 @@ def _write_manifest(
     scores_provenance: Dict[str, str] | None,
     guardrails_max_atoms: int,
     guardrails_require_connected: bool,
+    potential_unit_model: str,
+    potential_scale_gamma: float,
     files: List[Dict[str, object]],
 ) -> None:
     payload: Dict[str, object] = {
@@ -169,6 +173,8 @@ def _write_manifest(
             "scores_provenance": scores_provenance or {},
             "guardrails_max_atoms": int(guardrails_max_atoms),
             "guardrails_require_connected": bool(guardrails_require_connected),
+            "potential_unit_model": str(potential_unit_model),
+            "potential_scale_gamma": float(potential_scale_gamma),
         },
         "files": [],
     }
@@ -269,6 +275,7 @@ def _process_row(
     physics_mode: str,
     edge_weight_mode: str,
     potential_mode: str,
+    potential_scale_gamma: float,
     scf_max_iter: int,
     scf_tol: float,
     scf_damping: float,
@@ -304,6 +311,7 @@ def _process_row(
             physics_mode=str(physics_mode),
             edge_weight_mode=str(edge_weight_mode),
             potential_mode=str(potential_mode),
+            potential_scale_gamma=float(potential_scale_gamma),
             scf_max_iter=int(scf_max_iter),
             scf_tol=float(scf_tol),
             scf_damping=float(scf_damping),
@@ -376,6 +384,7 @@ def run_batch(
     physics_mode: str = "topological",
     edge_weight_mode: str = "unweighted",
     potential_mode: str = "static",
+    potential_scale_gamma: float = POTENTIAL_SCALE_GAMMA_DEFAULT,
     scf_max_iter: int = SCF_MAX_ITER_DEFAULT,
     scf_tol: float = SCF_TOL_DEFAULT,
     scf_damping: float = SCF_DAMPING_DEFAULT,
@@ -643,6 +652,8 @@ def run_batch(
                         if not isinstance(v, dict):
                             continue
                         v0_val = float(v.get("V0", float("nan")))
+                        v_scaled_val = float(v.get("V_scaled", float("nan")))
+                        gamma_val = float(v.get("gamma", float("nan")))
                         v_scf_val = float(v.get("V_scf", float("nan")))
                         rho_val = float(v.get("rho_final", float("nan")))
                         potential_vector_rows.append(
@@ -651,6 +662,8 @@ def run_batch(
                                 "node_index": int(v.get("node_index", -1)),
                                 "atom_Z": int(v.get("atom_Z", 0)),
                                 "V0": "" if not math.isfinite(float(v0_val)) else f"{float(v0_val):.10g}",
+                                "V_scaled": "" if not math.isfinite(float(v_scaled_val)) else f"{float(v_scaled_val):.10g}",
+                                "gamma": "" if not math.isfinite(float(gamma_val)) else f"{float(gamma_val):.10g}",
                                 "V_scf": "" if not math.isfinite(float(v_scf_val)) else f"{float(v_scf_val):.10g}",
                                 "rho_final": "" if not math.isfinite(float(rho_val)) else f"{float(rho_val):.10g}",
                             }
@@ -849,6 +862,7 @@ def run_batch(
                 physics_mode=str(physics_mode),
                 edge_weight_mode=str(edge_weight_mode),
                 potential_mode=str(potential_mode),
+                potential_scale_gamma=float(potential_scale_gamma),
                 scf_max_iter=int(scf_max_iter),
                 scf_tol=float(scf_tol),
                 scf_damping=float(scf_damping),
@@ -882,6 +896,7 @@ def run_batch(
                         physics_mode=str(physics_mode),
                         edge_weight_mode=str(edge_weight_mode),
                         potential_mode=str(potential_mode),
+                        potential_scale_gamma=float(potential_scale_gamma),
                         scf_max_iter=int(scf_max_iter),
                         scf_tol=float(scf_tol),
                         scf_damping=float(scf_damping),
@@ -965,6 +980,8 @@ def run_batch(
                 "node_index",
                 "atom_Z",
                 "V0",
+                "V_scaled",
+                "gamma",
                 "V_scf",
                 "rho_final",
             ],
@@ -1200,6 +1217,8 @@ def run_batch(
         "physics_mode": str(physics_mode),
         "edge_weight_mode": str(edge_weight_mode),
         "potential_mode": str(potential_mode),
+        "potential_unit_model": str(POTENTIAL_UNIT_MODEL),
+        "potential_scale_gamma": float(potential_scale_gamma),
         "scf_schema": str(SCF_SCHEMA),
         "scf_max_iter": int(scf_max_iter),
         "scf_tol": float(scf_tol),
@@ -1283,6 +1302,8 @@ def run_batch(
             "physics_mode": str(physics_mode),
             "edge_weight_mode": str(edge_weight_mode),
             "potential_mode": str(potential_mode),
+            "potential_unit_model": str(POTENTIAL_UNIT_MODEL),
+            "potential_scale_gamma": float(potential_scale_gamma),
             "scf_max_iter": int(scf_max_iter),
             "scf_tol": float(scf_tol),
             "scf_damping": float(scf_damping),
@@ -1339,6 +1360,8 @@ def run_batch(
             scores_provenance=scores_prov,
             guardrails_max_atoms=guardrails_max_atoms,
             guardrails_require_connected=guardrails_require_connected,
+            potential_unit_model=str(POTENTIAL_UNIT_MODEL),
+            potential_scale_gamma=float(potential_scale_gamma),
             files=manifest_files,
         )
     # recompute after manifest to include it in checksums

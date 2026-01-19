@@ -38,6 +38,8 @@ def test_standard_claims_evidence_pack_required_files(tmp_path: Path) -> None:
         scores_provenance={},
         guardrails_max_atoms=200,
         guardrails_require_connected=True,
+        potential_unit_model=str(hetero2_batch.POTENTIAL_UNIT_MODEL),
+        potential_scale_gamma=1.0,
         files=manifest_files,
     )
     file_infos_final = hetero2_batch._compute_file_infos(out_dir, skip_names={"checksums.sha256", "evidence_pack.zip"})

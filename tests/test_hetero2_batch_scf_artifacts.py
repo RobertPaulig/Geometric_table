@@ -64,9 +64,13 @@ def test_batch_emits_scf_artifacts_and_includes_them_in_zip(tmp_path: Path) -> N
     assert vec_rows[0]["id"] == "m0"
     assert vec_rows[0]["atom_Z"]
     assert vec_rows[0]["V0"] != ""
+    assert vec_rows[0]["V_scaled"] != ""
+    assert vec_rows[0]["gamma"] != ""
 
     meta = json.loads(summary_metadata_json.read_text(encoding="utf-8"))
     assert meta["potential_mode"] == "both"
+    assert meta["potential_unit_model"] == "dimensionless"
+    assert float(meta["potential_scale_gamma"]) == 1.0
     assert meta["scf_schema"] == SCF_SCHEMA
     assert int(meta["scf_rows_total"]) == 1
 
