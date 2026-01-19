@@ -1311,8 +1311,9 @@ def run_batch(
         else:
             scf_status = "CONVERGED" if bool(scf_converged_all) else "MAX_ITER"
 
-    # SCF audit-proof aggregates (P3.5 rails).
+    # SCF audit-proof aggregates (P3.6 rails).
     SCF_ZERO_EPS = 1e-12
+    SCF_NONTRIVIAL_EPS_V = 1e-6
 
     def _p95(values: List[float]) -> float:
         finite = [float(x) for x in values if isinstance(x, (int, float)) and math.isfinite(float(x))]
@@ -1328,6 +1329,28 @@ def run_batch(
         if not finite:
             return float("nan")
         return float(statistics.mean(finite))
+
+    def _to_float_or_nan(value: object) -> float:
+        try:
+            v = float(value)  # type: ignore[arg-type]
+        except Exception:
+            return float("nan")
+        return float(v) if math.isfinite(float(v)) else float("nan")
+
+    def _abs_deltas_by_row_id() -> Dict[str, List[float]]:
+        by_id: Dict[str, List[float]] = {}
+        for r in potential_vector_rows:
+            if not isinstance(r, dict):
+                continue
+            row_id = str(r.get("id", "")).strip()
+            if not row_id:
+                continue
+            v_scaled = _to_float_or_nan(r.get("V_scaled", float("nan")))
+            v_scf = _to_float_or_nan(r.get("V_scf", float("nan")))
+            if not (math.isfinite(v_scaled) and math.isfinite(v_scf)):
+                continue
+            by_id.setdefault(row_id, []).append(abs(float(v_scf) - float(v_scaled)))
+        return by_id
 
     def _scf_subset_stats(rows: List[Dict[str, object]]) -> Dict[str, object]:
         iters = [int(r.get("scf_iters", 0) or 0) for r in rows]
@@ -1357,6 +1380,55 @@ def run_batch(
     scf_rows_asym_fixture = [r for r in scf_row_summaries if bool(r.get("is_asym_fixture", False))]
     scf_stats_asym = _scf_subset_stats(scf_rows_asym_fixture)
 
+    # Per-row SCF audit metrics (deltaV is defined as max|V_scf - V_scaled| over nodes).
+    scf_abs_deltas_by_id = _abs_deltas_by_row_id()
+    scf_audit_metrics_rows: List[Dict[str, object]] = []
+    for r in scf_row_summaries:
+        row_id = str(r.get("mol_id", r.get("row_id", ""))).strip()
+        deltas = scf_abs_deltas_by_id.get(row_id, [])
+        delta_v_max = float(max(deltas)) if deltas else float("nan")
+        delta_v_p95 = float(_p95(deltas)) if deltas else float("nan")
+        scf_audit_metrics_rows.append(
+            {
+                "mol_id": row_id,
+                "scf_converged": bool(r.get("scf_converged", False)),
+                "scf_iters": int(r.get("scf_iters", 0) or 0),
+                "residual_init": float(r.get("residual_init", float("nan"))),
+                "residual_final": float(r.get("residual_final", float("nan"))),
+                "deltaV_max": float(delta_v_max),
+                "deltaV_p95": float(delta_v_p95),
+                "potential_gamma": float(potential_scale_gamma),
+                "operator_mode": str(physics_mode),
+            }
+        )
+
+    scf_iters_series = [int(r.get("scf_iters", 0) or 0) for r in scf_audit_metrics_rows]
+    scf_residual_final_series = [float(r.get("residual_final", float("nan"))) for r in scf_audit_metrics_rows]
+    scf_delta_v_max_series = [float(r.get("deltaV_max", float("nan"))) for r in scf_audit_metrics_rows]
+    scf_delta_v_p95_series = [float(r.get("deltaV_p95", float("nan"))) for r in scf_audit_metrics_rows]
+    scf_converged_flags = [bool(r.get("scf_converged", False)) for r in scf_audit_metrics_rows]
+    scf_converged_rate = (
+        (sum(1 for x in scf_converged_flags if x) / len(scf_converged_flags)) if scf_converged_flags else float("nan")
+    )
+    scf_iters_mean = float(_mean([float(x) for x in scf_iters_series]))
+    scf_iters_p95 = float(_p95([float(x) for x in scf_iters_series]))
+    scf_iters_max = int(max(scf_iters_series)) if scf_iters_series else 0
+    scf_residual_final_p95 = float(_p95(scf_residual_final_series))
+    scf_residual_final_max = float(max([x for x in scf_residual_final_series if math.isfinite(float(x))], default=float("nan")))
+    scf_delta_v_max_max = float(max([x for x in scf_delta_v_max_series if math.isfinite(float(x))], default=float("nan")))
+    scf_delta_v_p95_max = float(max([x for x in scf_delta_v_p95_series if math.isfinite(float(x))], default=float("nan")))
+
+    scf_nontrivial_flags = [
+        bool(r.get("scf_converged", False))
+        and int(r.get("scf_iters", 0) or 0) >= 2
+        and math.isfinite(float(r.get("deltaV_max", float("nan"))))
+        and float(r.get("deltaV_max", float("nan"))) >= float(SCF_NONTRIVIAL_EPS_V)
+        for r in scf_audit_metrics_rows
+    ]
+    scf_nontrivial_rate = (
+        (sum(1 for x in scf_nontrivial_flags if x) / len(scf_nontrivial_flags)) if scf_nontrivial_flags else float("nan")
+    )
+
     scf_triviality_flags = {
         "all_iters_eq_1": bool(scf_row_summaries) and all(int(r.get("scf_iters", 0) or 0) == 1 for r in scf_row_summaries),
         "all_delta_V_eq_0": bool(scf_row_summaries)
@@ -1370,49 +1442,39 @@ def run_batch(
         ),
     }
 
-    scf_audit_verdict = "INCONCLUSIVE"
+    scf_audit_verdict = "INCONCLUSIVE_INSUFFICIENT_ASYM"
     scf_audit_reason = "scf_disabled"
     if bool(scf_enabled):
         if not scf_trace_rows:
-            scf_audit_verdict = "INCONCLUSIVE"
+            scf_audit_verdict = "INCONCLUSIVE_INSUFFICIENT_ASYM"
             scf_audit_reason = "scf_trace_empty"
         else:
-            converged_rate = float(scf_stats_all.get("converged_rate", float("nan")))
-            if math.isfinite(converged_rate) and converged_rate < 0.95:
-                scf_audit_verdict = "NONCONVERGENT"
+            if math.isfinite(float(scf_converged_rate)) and float(scf_converged_rate) < 0.95:
+                scf_audit_verdict = "NONCONVERGED"
                 scf_audit_reason = "converged_rate_below_0p95"
             else:
-                iters_median_all = float(scf_stats_all.get("iters_median", float("nan")))
-                delta_v_max_all = float(scf_stats_all.get("delta_V_max_overall", float("nan")))
-                if math.isfinite(iters_median_all) and iters_median_all == 1.0 and (
-                    (not math.isfinite(delta_v_max_all)) or abs(delta_v_max_all) <= SCF_ZERO_EPS
+                if int(scf_iters_max) <= 1 or (
+                    math.isfinite(float(scf_delta_v_max_max)) and float(scf_delta_v_max_max) < float(SCF_NONTRIVIAL_EPS_V)
                 ):
-                    scf_audit_verdict = "TRIVIAL_SCF"
-                    scf_audit_reason = "median_iters_eq_1_and_delta_V_eq_0"
+                    scf_audit_verdict = "TRIVIAL_FIXED_POINT"
+                    scf_audit_reason = "iters_max_le_1_or_deltaV_below_eps"
                 else:
                     n_asym = int(scf_stats_asym.get("rows_with_scf", 0))
                     if n_asym < 10:
-                        scf_audit_verdict = "INCONCLUSIVE"
+                        scf_audit_verdict = "INCONCLUSIVE_INSUFFICIENT_ASYM"
                         scf_audit_reason = f"insufficient_asym_fixture_rows:{n_asym}"
                     else:
-                        iters_median_asym = float(scf_stats_asym.get("iters_median", float("nan")))
-                        delta_v_p95_asym = float(scf_stats_asym.get("delta_V_p95", float("nan")))
-                        residual_init_mean_asym = float(scf_stats_asym.get("residual_init_mean", float("nan")))
-                        residual_final_mean_asym = float(scf_stats_asym.get("residual_final_mean", float("nan")))
                         if (
-                            math.isfinite(iters_median_asym)
-                            and iters_median_asym > 1.0
-                            and math.isfinite(delta_v_p95_asym)
-                            and delta_v_p95_asym > SCF_ZERO_EPS
-                            and math.isfinite(residual_init_mean_asym)
-                            and math.isfinite(residual_final_mean_asym)
-                            and residual_final_mean_asym < residual_init_mean_asym
+                            math.isfinite(float(scf_nontrivial_rate))
+                            and float(scf_nontrivial_rate) >= 0.50
+                            and math.isfinite(float(scf_converged_rate))
+                            and float(scf_converged_rate) >= 0.95
                         ):
                             scf_audit_verdict = "SUCCESS"
-                            scf_audit_reason = "nontrivial_on_asym_fixture"
+                            scf_audit_reason = "nontrivial_rate_ge_0p50_and_converged_rate_ge_0p95"
                         else:
-                            scf_audit_verdict = "INCONCLUSIVE"
-                            scf_audit_reason = "asym_nontriviality_not_proven"
+                            scf_audit_verdict = "TRIVIAL_FIXED_POINT"
+                            scf_audit_reason = "nontrivial_rate_below_0p50"
 
     summary_metadata = {
         "auc_interpretation_schema": AUC_INTERPRETATION_SCHEMA,
@@ -1441,6 +1503,16 @@ def run_batch(
         "scf_converged": bool(scf_converged_all),
         "scf_iters": int(scf_iters_max),
         "scf_residual_final": float(scf_residual_final_max),
+        # SCF audit aggregates (P3.6).
+        "scf_iters_mean": float(scf_iters_mean),
+        "scf_iters_p95": float(scf_iters_p95),
+        "scf_iters_max": int(scf_iters_max),
+        "scf_converged_rate": float(scf_converged_rate),
+        "residual_final_p95": float(scf_residual_final_p95),
+        "residual_final_max": float(scf_residual_final_max),
+        "deltaV_max_max": float(scf_delta_v_max_max),
+        "deltaV_p95_max": float(scf_delta_v_p95_max),
+        "scf_nontrivial_rate": float(scf_nontrivial_rate),
         "scf_audit_verdict": str(scf_audit_verdict),
         "scf_audit_reason": str(scf_audit_reason),
         "physics_entropy_beta": float(SPECTRAL_ENTROPY_BETA_DEFAULT),
@@ -1453,6 +1525,35 @@ def run_batch(
     (out_dir / "summary_metadata.json").write_text(
         json.dumps(summary_metadata, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8"
     )
+
+    # SCF audit metrics table (P3.6): one row per molecule.
+    scf_audit_metrics_csv = out_dir / "scf_audit_metrics.csv"
+    scf_audit_metrics_csv.write_text("", encoding="utf-8")
+    with scf_audit_metrics_csv.open("w", encoding="utf-8", newline="") as f:
+        w = csv.DictWriter(
+            f,
+            fieldnames=[
+                "mol_id",
+                "scf_converged",
+                "scf_iters",
+                "residual_init",
+                "residual_final",
+                "deltaV_max",
+                "deltaV_p95",
+                "potential_gamma",
+                "operator_mode",
+            ],
+        )
+        w.writeheader()
+        for r in scf_audit_metrics_rows:
+            out_row = dict(r)
+            # normalize bools to 0/1 and floats to stable strings
+            out_row["scf_converged"] = "1" if bool(out_row.get("scf_converged", False)) else "0"
+            for k in ["residual_init", "residual_final", "deltaV_max", "deltaV_p95", "potential_gamma"]:
+                v = _to_float_or_nan(out_row.get(k, float("nan")))
+                out_row[k] = "" if not math.isfinite(float(v)) else f"{float(v):.10g}"
+            out_row["scf_iters"] = str(int(out_row.get("scf_iters", 0) or 0))
+            w.writerow(out_row)
 
     scf_summary = {
         "schema_version": "hetero2_scf_summary.v1",

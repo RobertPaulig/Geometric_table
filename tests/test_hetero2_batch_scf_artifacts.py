@@ -47,12 +47,14 @@ def test_batch_emits_scf_artifacts_and_includes_them_in_zip(tmp_path: Path) -> N
     scf_trace_csv = out_dir / "scf_trace.csv"
     potential_vectors_csv = out_dir / "potential_vectors.csv"
     scf_summary_json = out_dir / "scf_summary.json"
+    scf_audit_metrics_csv = out_dir / "scf_audit_metrics.csv"
     summary_metadata_json = out_dir / "summary_metadata.json"
     zip_path = out_dir / "evidence_pack.zip"
 
     assert scf_trace_csv.exists()
     assert potential_vectors_csv.exists()
     assert scf_summary_json.exists()
+    assert scf_audit_metrics_csv.exists()
     assert summary_metadata_json.exists()
     assert zip_path.exists()
 
@@ -75,6 +77,21 @@ def test_batch_emits_scf_artifacts_and_includes_them_in_zip(tmp_path: Path) -> N
     assert vec_rows[0]["V_scaled"] != ""
     assert vec_rows[0]["gamma"] != ""
 
+    audit_rows = list(csv.DictReader(scf_audit_metrics_csv.read_text(encoding="utf-8").splitlines()))
+    assert len(audit_rows) == 1
+    assert audit_rows[0]["mol_id"] == "m0"
+    for k in [
+        "scf_converged",
+        "scf_iters",
+        "residual_init",
+        "residual_final",
+        "deltaV_max",
+        "deltaV_p95",
+        "potential_gamma",
+        "operator_mode",
+    ]:
+        assert k in audit_rows[0]
+
     meta = json.loads(summary_metadata_json.read_text(encoding="utf-8"))
     assert meta["potential_mode"] == "both"
     assert meta["potential_unit_model"] == "dimensionless"
@@ -83,15 +100,38 @@ def test_batch_emits_scf_artifacts_and_includes_them_in_zip(tmp_path: Path) -> N
     assert bool(meta["scf_enabled"]) is True
     assert meta["scf_status"] in {"CONVERGED", "MAX_ITER"}
     assert int(meta["scf_rows_total"]) == 1
-    assert meta["scf_audit_verdict"] in {"SUCCESS", "INCONCLUSIVE", "TRIVIAL_SCF", "NONCONVERGENT"}
+    assert meta["scf_audit_verdict"] in {
+        "SUCCESS",
+        "TRIVIAL_FIXED_POINT",
+        "NONCONVERGED",
+        "INCONCLUSIVE_INSUFFICIENT_ASYM",
+    }
     assert isinstance(meta["scf_audit_reason"], str)
+    # P3.6 audit aggregates must be present even if verdict is inconclusive.
+    for k in [
+        "scf_iters_mean",
+        "scf_iters_p95",
+        "scf_iters_max",
+        "scf_converged_rate",
+        "residual_final_p95",
+        "residual_final_max",
+        "deltaV_max_max",
+        "deltaV_p95_max",
+        "scf_nontrivial_rate",
+    ]:
+        assert k in meta
 
     scf_sum = json.loads(scf_summary_json.read_text(encoding="utf-8"))
     assert scf_sum["schema_version"] == "hetero2_scf_summary.v1"
     assert bool(scf_sum["scf_enabled"]) is True
     assert scf_sum["scf_status"] in {"CONVERGED", "MAX_ITER"}
     assert int(scf_sum["rows_total"]) == 1
-    assert scf_sum["audit_verdict"] in {"SUCCESS", "INCONCLUSIVE", "TRIVIAL_SCF", "NONCONVERGENT"}
+    assert scf_sum["audit_verdict"] in {
+        "SUCCESS",
+        "TRIVIAL_FIXED_POINT",
+        "NONCONVERGED",
+        "INCONCLUSIVE_INSUFFICIENT_ASYM",
+    }
     assert "triviality_flags" in scf_sum
     assert "stats_all" in scf_sum
     assert "stats_asym_fixture" in scf_sum
@@ -101,6 +141,7 @@ def test_batch_emits_scf_artifacts_and_includes_them_in_zip(tmp_path: Path) -> N
         assert "scf_trace.csv" in names
         assert "potential_vectors.csv" in names
         assert "scf_summary.json" in names
+        assert "scf_audit_metrics.csv" in names
 
 
 def test_batch_marks_inconclusive_when_scf_does_not_converge(tmp_path: Path) -> None:
