@@ -698,3 +698,20 @@
   - Evidence pack artifacts: scf_trace.csv, potential_vectors.csv, summary_metadata.json (scf_schema=hetero2_scf.v1; scf_converged=true; scf_iters=1; scf_residual_final=3.469446951953614e-17)
   - Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/122 (merge: b949c180a98d9e5cbc23ec520855728ca9875a3f)
   - Registry facts PR (SCF summary): https://github.com/RobertPaulig/Geometric_table/pull/123 (merge: 6316631c13b332624f62892cfed0139f2342098a)
+
+### 2026-01-19 - PHYSICS-UNITS-CALIBRATION-RAILS-1: dimensionless units model + potential_scale_gamma (stress pack)
+- What:
+  - Formalized units model: operator parameters are dimensionless (no physical Å/eV claims without calibration).
+  - Added global potential scaling parameter `potential_scale_gamma` (default 1.0) and logged it into evidence pack metadata.
+- Code PR: https://github.com/RobertPaulig/Geometric_table/pull/125 (merge: 587fd8f816d4e66cc2569815f4210ca972bc3525)
+- CI run (3/3 ci/* on code merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21122560272
+- Live proof (stress pack):
+  - Inputs: physics_mode=both; edge_weight_mode=unweighted; potential_mode=both; potential_unit_model=dimensionless; potential_scale_gamma=1.0
+  - Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/physics-operator-units-gamma-2026-01-19-r1
+  - Source commit: 587fd8f816d4e66cc2569815f4210ca972bc3525
+  - Publish run: https://github.com/RobertPaulig/Geometric_table/actions/runs/21122692884
+  - Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/physics-operator-units-gamma-2026-01-19-r1/evidence_pack.zip
+  - SHA256(evidence_pack.zip): 6529B5356345576F858D333F71737332D049EB745A6191AD6AD10775A93FA4BD
+  - Evidence pack artifacts: potential_vectors.csv (V0,V_scaled,gamma), summary_metadata.json (potential_unit_model, potential_scale_gamma)
+  - Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/126 (merge: 670cb69c3e6eddc108975cc5343d04e32f215a67)
+  - CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21122839905
