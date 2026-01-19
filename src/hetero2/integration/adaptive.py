@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import functools
 import math
 import time
 from dataclasses import dataclass
@@ -79,6 +80,12 @@ class _EvalCache:
         if total <= 0:
             return float("nan")
         return float(self.hits_total) / float(total)
+
+
+@functools.lru_cache(maxsize=64)
+def _leggauss_cached(n: int) -> tuple[np.ndarray, np.ndarray]:
+    x, w = legendre.leggauss(int(n))
+    return np.asarray(x, dtype=float), np.asarray(w, dtype=float)
 
 
 def _map_x_to_energy(x: np.ndarray, *, e_left: float, e_right: float) -> np.ndarray:
@@ -215,7 +222,7 @@ def adaptive_approximate_on_grid(
                 error_est = 0.0
         else:
             # Fallback: Gauss-point error estimate (adaptive-only mode / unit tests).
-            x_quad, _ = legendre.leggauss(int(quad_order))
+            x_quad, _ = _leggauss_cached(int(quad_order))
             e_quad = _map_x_to_energy(x_quad, e_left=left, e_right=right)
             y_true = np.asarray(cache.eval(e_quad), dtype=float)
             y_hat = chebyshev.chebval(x_quad, coeffs)
@@ -228,24 +235,7 @@ def adaptive_approximate_on_grid(
             can_refine = int(n_probe) < int(max_n_probe)
             scheduled = False
 
-            # Prefer splitting over aggressive p-refinement for very wide segments in baseline-aware mode.
-            # This avoids wasting many evaluations on parent segments that will be split anyway.
-            prefer_split = False
-            if baseline_arr is not None:
-                mask = (grid >= float(left)) & (grid <= float(right))
-                grid_points = int(np.count_nonzero(mask))
-                if grid_points > int(max_n_probe) * 2:
-                    prefer_split = True
-
-            if prefer_split and can_split and can_eval_more:
-                mid = 0.5 * (left + right)
-                # Deterministic depth-first: push right then left.
-                pending.append((mid, right, int(start_n_probe)))
-                pending.append((left, mid, int(start_n_probe)))
-                split_reason = "split_error_gt_tol"
-                accept_segment = False
-                scheduled = True
-
+            # Upgrade-before-split: try deterministic p-refinement first.
             if not scheduled and can_eval_more and can_refine:
                 # Deterministic p-refinement using nested n -> (2n-1) nodes (clipped to max).
                 n_probe_next = min(int(max_n_probe), int(2 * int(n_probe) - 1))
