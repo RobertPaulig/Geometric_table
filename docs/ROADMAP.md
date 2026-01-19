@@ -305,6 +305,21 @@ DoD:
 - Итеративный solver логирует сходимость (итерации/остаток) и сохраняет артефакт в evidence pack.
 - Детерминизм подтверждён через rerun и совпадающие checksums.
 
+### PHYSICS-P3.1: CALIBRATION-GAMMA-1 (масштаб потенциала, без физ-claims)
+Статус: [ ] planned  [ ] in-progress  [ ] done
+
+Entry criteria:
+- PHYSICS-P3 “self-consistent / trace / verdict” работает и детерминизм подтверждён.
+- В evidence pack явно зафиксированы `potential_unit_model="dimensionless"` и `potential_scale_gamma` (см. контракт).
+
+DoD:
+- Есть скрипт `scripts/calibrate_gamma.py`, который принимает calibration set (CSV) и подбирает `potential_scale_gamma`.
+- Скрипт пишет `calibration_report.json` с параметрами/метриками/идентификатором набора.
+- Результат калибровки фиксируется как “истина” через evidence pack + registry entry (dataset-id + gamma + отчёт).
+
+Hard rule:
+- Пока PHYSICS-P3.1 не DONE, запрещены claims про физические единицы (Å/eV). Разрешены только dimensionless/trend claims.
+
 ### PHYSICS-P4 (опционально): ускорение интеграции (SADDLa)
 Статус: [ ] planned  [ ] in-progress  [ ] done
 

@@ -24,6 +24,8 @@ SCF_DAMPING_DEFAULT = 0.5
 SCF_OCC_K_DEFAULT = 5
 SCF_TAU_DEFAULT = 1.0
 SCF_GAMMA_DEFAULT = 0.5
+POTENTIAL_UNIT_MODEL = "dimensionless"
+POTENTIAL_SCALE_GAMMA_DEFAULT = 1.0
 
 
 class MissingPhysicsParams(RuntimeError):
@@ -152,6 +154,13 @@ def _potentials_for_types(types: Sequence[int], atoms_db: AtomsDbV1) -> np.ndarr
     if missing:
         raise MissingPhysicsParams(missing_atomic_numbers=missing, source_path=atoms_db.source_path, missing_key="epsilon")
     return np.array([float(atoms_db.potential_by_atomic_num[int(z)]) for z in types], dtype=float)
+
+
+def _apply_potential_scale(v0_raw: np.ndarray, *, potential_scale_gamma: float) -> np.ndarray:
+    gamma = float(potential_scale_gamma)
+    if not math.isfinite(gamma):
+        raise ValueError("potential_scale_gamma must be finite")
+    return np.asarray(v0_raw, dtype=float) * gamma
 
 
 def _chis_for_types(types: Sequence[int], atoms_db: AtomsDbV1) -> np.ndarray:
@@ -405,6 +414,7 @@ def compute_physics_features(
     types: Sequence[int],
     physics_mode: str,
     edge_weight_mode: str = "unweighted",
+    potential_scale_gamma: float = POTENTIAL_SCALE_GAMMA_DEFAULT,
     beta: float = SPECTRAL_ENTROPY_BETA_DEFAULT,
     atoms_db: AtomsDbV1 | None = None,
 ) -> dict[str, object]:
@@ -437,7 +447,10 @@ def compute_physics_features(
     atoms_db_obj = load_atoms_db_v1() if atoms_db is None else atoms_db
     potentials: np.ndarray | None = None
     if mode in {"hamiltonian", "both"}:
-        potentials = _potentials_for_types(types, atoms_db_obj)
+        potentials = _apply_potential_scale(
+            _potentials_for_types(types, atoms_db_obj),
+            potential_scale_gamma=float(potential_scale_gamma),
+        )
         H = lap + np.diag(potentials)
         vals_H = eigvals_symmetric(H)
         out["H_gap"] = float(spectral_gap(vals_H))
@@ -471,7 +484,10 @@ def compute_physics_features(
             out["W_entropy"] = float(spectral_entropy_beta(vals_W, beta=float(beta)))
         if mode in {"hamiltonian", "both"}:
             if potentials is None:
-                potentials = _potentials_for_types(types, atoms_db_obj)
+                potentials = _apply_potential_scale(
+                    _potentials_for_types(types, atoms_db_obj),
+                    potential_scale_gamma=float(potential_scale_gamma),
+                )
             Hw = lap_w + np.diag(potentials)
             vals_WH = eigvals_symmetric(Hw)
             out["WH_gap"] = float(spectral_gap(vals_WH))
@@ -485,6 +501,7 @@ def compute_spectra(
     adjacency: np.ndarray,
     types: Sequence[int],
     physics_mode: str,
+    potential_scale_gamma: float = POTENTIAL_SCALE_GAMMA_DEFAULT,
     atoms_db: AtomsDbV1 | None = None,
 ) -> dict[str, np.ndarray]:
     mode = str(physics_mode)
@@ -497,7 +514,10 @@ def compute_spectra(
         out["L"] = eigvals_symmetric(lap)
     if mode in {"hamiltonian", "both"}:
         atoms_db_obj = load_atoms_db_v1() if atoms_db is None else atoms_db
-        v = _potentials_for_types(types, atoms_db_obj)
+        v = _apply_potential_scale(
+            _potentials_for_types(types, atoms_db_obj),
+            potential_scale_gamma=float(potential_scale_gamma),
+        )
         H = lap + np.diag(v)
         out["H"] = eigvals_symmetric(H)
     return out
@@ -511,6 +531,7 @@ def compute_dos_ldos_payload(
     physics_mode: str,
     edge_weight_mode: str,
     potentials_override: np.ndarray | None = None,
+    potential_scale_gamma: float = POTENTIAL_SCALE_GAMMA_DEFAULT,
     atoms_db: AtomsDbV1 | None = None,
 ) -> dict[str, object]:
     mode = str(physics_mode)
@@ -540,7 +561,13 @@ def compute_dos_ldos_payload(
         payload["eigvals_L"] = [float(x) for x in eigvals_symmetric(lap).tolist()]
 
     if mode in {"hamiltonian", "both"}:
-        potentials = np.asarray(potentials_override, dtype=float) if potentials_override is not None else _potentials_for_types(types, atoms_db_obj)
+        if potentials_override is not None:
+            potentials = np.asarray(potentials_override, dtype=float)
+        else:
+            potentials = _apply_potential_scale(
+                _potentials_for_types(types, atoms_db_obj),
+                potential_scale_gamma=float(potential_scale_gamma),
+            )
         H = lap + np.diag(potentials)
         vals_H, vecs_H = eigh_symmetric(H)
         payload["eigvals_H"] = [float(x) for x in vals_H.tolist()]
@@ -577,6 +604,7 @@ def compute_operator_payload(
     physics_mode: str,
     edge_weight_mode: str,
     potential_mode: str = "static",
+    potential_scale_gamma: float = POTENTIAL_SCALE_GAMMA_DEFAULT,
     scf_max_iter: int = SCF_MAX_ITER_DEFAULT,
     scf_tol: float = SCF_TOL_DEFAULT,
     scf_damping: float = SCF_DAMPING_DEFAULT,
@@ -600,7 +628,9 @@ def compute_operator_payload(
 
     lap = laplacian_from_adjacency(adjacency)
     atoms_db_obj = load_atoms_db_v1() if atoms_db is None else atoms_db
-    v0 = _potentials_for_types(types, atoms_db_obj)
+    v0_raw = _potentials_for_types(types, atoms_db_obj)
+    v0_scaled = _apply_potential_scale(v0_raw, potential_scale_gamma=float(potential_scale_gamma))
+    gamma_scale = float(potential_scale_gamma)
 
     lap_w: np.ndarray | None = None
     if ew_mode != "unweighted":
@@ -625,9 +655,9 @@ def compute_operator_payload(
 
     if pot_mode in {"self_consistent", "both"} and mode in {"hamiltonian", "both"}:
         base_lap = lap_w if lap_w is not None else lap
-        v0_vec, v_scf, rho_final, trace, scf_converged, scf_iters, scf_residual_final = solve_self_consistent_potential(
+        _, v_scf, rho_final, trace, scf_converged, scf_iters, scf_residual_final = solve_self_consistent_potential(
             laplacian=base_lap,
-            v0=v0,
+            v0=v0_scaled,
             scf_max_iter=int(scf_max_iter),
             scf_tol=float(scf_tol),
             scf_damping=float(scf_damping),
@@ -638,6 +668,8 @@ def compute_operator_payload(
         scf_payload = {
             "schema_version": SCF_SCHEMA,
             "potential_mode_used": pot_mode,
+            "potential_unit_model": POTENTIAL_UNIT_MODEL,
+            "potential_scale_gamma": float(gamma_scale),
             "scf_max_iter": int(scf_max_iter),
             "scf_tol": float(scf_tol),
             "scf_damping": float(scf_damping),
@@ -652,15 +684,17 @@ def compute_operator_payload(
                 {
                     "node_index": int(i),
                     "atom_Z": int(types[i]),
-                    "V0": float(v0_vec[i]),
+                    "V0": float(v0_raw[i]),
+                    "V_scaled": float(v0_scaled[i]),
+                    "gamma": float(gamma_scale),
                     "V_scf": float(v_scf[i]),
                     "rho_final": float(rho_final[i]) if rho_final is not None else float("nan"),
                 }
-                for i in range(int(v0_vec.size))
+                for i in range(int(v0_scaled.size))
             ],
         }
 
-    potentials_effective = v0
+    potentials_effective = v0_scaled
     if pot_mode in {"self_consistent", "both"} and v_scf is not None:
         potentials_effective = v_scf
 
@@ -671,6 +705,8 @@ def compute_operator_payload(
         "physics_missing_params_count": 0,
         "edge_weight_mode_used": ew_mode,
         "potential_mode_used": pot_mode,
+        "potential_unit_model": POTENTIAL_UNIT_MODEL,
+        "potential_scale_gamma": float(gamma_scale),
         "L_gap": "",
         "L_trace": "",
         "L_entropy_beta": "",
@@ -686,7 +722,7 @@ def compute_operator_payload(
         out["L_entropy_beta"] = float(spectral_entropy_beta(vals_L, beta=float(beta)))
 
     if mode in {"hamiltonian", "both"}:
-        H_static = lap + np.diag(v0)
+        H_static = lap + np.diag(v0_scaled)
         vals_H_static = eigvals_symmetric(H_static)
         out["H_gap"] = float(spectral_gap(vals_H_static))
         out["H_trace"] = float(spectral_trace(vals_H_static))
@@ -709,7 +745,7 @@ def compute_operator_payload(
             out["W_gap"] = float(spectral_gap(vals_W))
             out["W_entropy"] = float(spectral_entropy_beta(vals_W, beta=float(beta)))
         if mode in {"hamiltonian", "both"}:
-            Hw_static = lap_w + np.diag(v0)
+            Hw_static = lap_w + np.diag(v0_scaled)
             vals_WH_static = eigvals_symmetric(Hw_static)
             out["WH_gap"] = float(spectral_gap(vals_WH_static))
             out["WH_entropy"] = float(spectral_entropy_beta(vals_WH_static, beta=float(beta)))
@@ -726,6 +762,7 @@ def compute_operator_payload(
         physics_mode=mode,
         edge_weight_mode=ew_mode,
         potentials_override=potentials_effective if mode in {"hamiltonian", "both"} else None,
+        potential_scale_gamma=float(potential_scale_gamma),
         atoms_db=atoms_db_obj,
     )
 

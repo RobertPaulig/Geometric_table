@@ -9,6 +9,7 @@ from hetero2.pipeline import run_pipeline_v2
 from hetero2.report import render_report_v2
 from hetero2.batch import run_batch
 from hetero2.physics_operator import (
+    POTENTIAL_SCALE_GAMMA_DEFAULT,
     SCF_DAMPING_DEFAULT,
     SCF_MAX_ITER_DEFAULT,
     SCF_OCC_K_DEFAULT,
@@ -51,6 +52,12 @@ def _parse_pipeline_args(argv: list[str] | None = None) -> argparse.Namespace:
         choices=["static", "self_consistent", "both"],
         default="static",
         help="Potential mode for H=L+V: static uses V0; self_consistent runs SCF; both computes both and stores SCF artifacts.",
+    )
+    ap.add_argument(
+        "--potential_scale_gamma",
+        type=float,
+        default=POTENTIAL_SCALE_GAMMA_DEFAULT,
+        help="Global potential scale: V_scaled = gamma * V0 (dimensionless). Default: 1.0.",
     )
     ap.add_argument("--scf_max_iter", type=int, default=SCF_MAX_ITER_DEFAULT, help="SCF max iterations (self_consistent/both).")
     ap.add_argument("--scf_tol", type=float, default=SCF_TOL_DEFAULT, help="SCF convergence tolerance (inf-norm of dV).")
@@ -142,6 +149,12 @@ def _parse_batch_args(argv: list[str] | None = None) -> argparse.Namespace:
         default="static",
         help="Potential mode for H=L+V: static uses V0; self_consistent runs SCF; both computes both and stores SCF artifacts.",
     )
+    ap.add_argument(
+        "--potential_scale_gamma",
+        type=float,
+        default=POTENTIAL_SCALE_GAMMA_DEFAULT,
+        help="Global potential scale: V_scaled = gamma * V0 (dimensionless). Default: 1.0.",
+    )
     ap.add_argument("--scf_max_iter", type=int, default=SCF_MAX_ITER_DEFAULT, help="SCF max iterations (self_consistent/both).")
     ap.add_argument("--scf_tol", type=float, default=SCF_TOL_DEFAULT, help="SCF convergence tolerance (inf-norm of dV).")
     ap.add_argument("--scf_damping", type=float, default=SCF_DAMPING_DEFAULT, help="SCF damping in (0,1].")
@@ -188,6 +201,7 @@ def main_pipeline(argv: list[str] | None = None) -> int:
         physics_mode=physics_mode,
         edge_weight_mode=str(args.edge_weight_mode),
         potential_mode=str(args.potential_mode),
+        potential_scale_gamma=float(args.potential_scale_gamma),
         scf_max_iter=int(args.scf_max_iter),
         scf_tol=float(args.scf_tol),
         scf_damping=float(args.scf_damping),
@@ -261,6 +275,7 @@ def main_batch(argv: list[str] | None = None) -> int:
         physics_mode=physics_mode,
         edge_weight_mode=str(args.edge_weight_mode),
         potential_mode=str(args.potential_mode),
+        potential_scale_gamma=float(args.potential_scale_gamma),
         scf_max_iter=int(args.scf_max_iter),
         scf_tol=float(args.scf_tol),
         scf_damping=float(args.scf_damping),
