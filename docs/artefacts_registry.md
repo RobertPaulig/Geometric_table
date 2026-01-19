@@ -936,3 +936,11 @@ separation facts (computed on status==OK rows only):
   - integrator_eps_abs: 1e-06
   - integrator_eps_rel: 1e-04
   - evidence_pack_files: integration_benchmark.csv, integration_benchmark.md, adaptive_integration_trace.csv, adaptive_integration_summary.json, integration_compare.csv
+
+## physics-operator-integration-adaptive-speedup-2026-01-19-r1
+
+- Source commit: f969fbd7801353e1a5295a0cf747e4a53efe3790
+- Release asset: https://github.com/RobertPaulig/Geometric_table/releases/download/physics-operator-integration-adaptive-speedup-2026-01-19-r1/evidence_pack.zip
+- SHA256(evidence_pack.zip): 10157D81032ACBB137D26F916B77860E7331AC41FB50577F128CF70B3E18E8E4
+- Command:
+  hetero2-batch --input stress.csv --out_dir out_stress --artifacts light --score_mode mock --k_decoys 2 --workers 1 --timeout_s 60 --maxtasksperchild 100 --seed_strategy per_row --seed 0 --physics_mode topological --edge_weight_mode unweighted --potential_mode static --scf_max_iter 50 --scf_tol 1e-6 --scf_damping 0.5 --scf_occ_k 5 --scf_tau 1.0 --integrator_mode both --integrator_eps_abs 1e-6 --integrator_eps_rel 1e-4 --integrator_subdomains_max 64 --integrator_poly_degree_max 32 --integrator_quad_order_max 16 --integrator_eval_budget_max 4096 --integrator_split_criterion max_abs_error --zip_pack
