@@ -880,3 +880,11 @@ separation facts (computed on status==OK rows only):
 - SHA256(evidence_pack.zip): C07DC02484C1EB75751A6CEE3BE83C82664E51980DAC9192DA25BEEC95F6140B
 - Command:
   hetero2-batch --input stress.csv --out_dir out_stress --artifacts light --score_mode mock --k_decoys 2 --workers 2 --timeout_s 60 --maxtasksperchild 100 --seed_strategy per_row --seed 0 --physics_mode both --edge_weight_mode unweighted --potential_mode static --scf_max_iter 50 --scf_tol 1e-6 --scf_damping 0.5 --scf_occ_k 5 --scf_tau 1.0 --zip_pack
+- Integration benchmark (from summary_metadata.json in evidence_pack.zip):
+  - integrator_mode: baseline
+  - energy_range: [-0.15, 4.15]
+  - energy_points: 128
+  - eta: 0.05
+  - integrator_eps: 1e-06
+  - integration_walltime_ms_median: 2.3876529999995455
+  - evidence_pack_files: integration_benchmark.csv, integration_benchmark.md, summary_metadata.json
