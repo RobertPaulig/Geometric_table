@@ -769,3 +769,27 @@
   - Evidence pack artifacts: integration_benchmark.csv, integration_benchmark.md, summary_metadata.json (integrator_mode=baseline; energy_range=[-0.15, 4.15]; energy_points=128; eta=0.05; integration_walltime_ms_median=2.3876529999995455)
 - Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/139 (merge: 639d79edb98181b9715ef0f8d01adc8cd9cc2784)
 - CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21141045407
+
+### 2026-01-19 - P4.1 ADAPTIVE-INTEGRATION-1: adaptive integrator + correctness comparison + speedup verdict (stress pack)
+- Code PR: https://github.com/RobertPaulig/Geometric_table/pull/141 (merge: 19b21d980e968525783e635b87689aa854403128)
+- CI run (3/3 ci/* on code merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21144672211
+- Bugfix PR (correctness): https://github.com/RobertPaulig/Geometric_table/pull/143 (merge: 5600faa7debce8647e574ee2f858b3ddd534a9c3)
+- CI run (3/3 ci/* on bugfix merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21145366452
+- Live proof r1 (stress pack; adaptive correctness failed):
+  - Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/physics-operator-integration-adaptive-2026-01-19-r1
+  - Publish run: https://github.com/RobertPaulig/Geometric_table/actions/runs/21144735538
+  - Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/physics-operator-integration-adaptive-2026-01-19-r1/evidence_pack.zip
+  - SHA256(evidence_pack.zip): 6C2F3ED358220DB60F725AF202B310051CD9F901FC454420F3B7A9FD08464C0C
+  - integrator_verdict=FAIL_CORRECTNESS; integrator_correctness_pass_rate=0.666667; integrator_speedup_median=0.322449
+- Live proof r2 (stress pack; adaptive correctness restored):
+  - Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/physics-operator-integration-adaptive-2026-01-19-r2
+  - Publish run: https://github.com/RobertPaulig/Geometric_table/actions/runs/21145429269
+  - Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/physics-operator-integration-adaptive-2026-01-19-r2/evidence_pack.zip
+  - SHA256(evidence_pack.zip): C76F584884E28CA04EF792D19D5BE2A0B13F3B67FAD526EEA36DD21CED09028C
+  - integrator_verdict=SUCCESS; integrator_correctness_pass_rate=1.0; integrator_speedup_median=0.231419; integrator_speedup_verdict=NO_SPEEDUP_YET
+  - dos_L_segments_used=20; dos_L_evals_total=975; dos_L_error_est_total=9.46613e-05
+- Evidence pack artifacts: adaptive_integration_trace.csv, adaptive_integration_summary.json, integration_compare.csv, integration_benchmark.csv, integration_benchmark.md, summary_metadata.json
+- Registry PR r2: https://github.com/RobertPaulig/Geometric_table/pull/144 (merge: 6687fde3cb32a548dc4f0a59a58c563b40f5d667)
+- CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21145777488
+- Registry PR r1 (historical r1 facts): https://github.com/RobertPaulig/Geometric_table/pull/142 (merge: 1fcfdaaa7f04e0c344670102c3ee39177a8b278d)
+- CI run (3/3 ci/* on registry r1 merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21146286010
