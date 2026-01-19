@@ -176,6 +176,7 @@ def adaptive_approximate_on_grid(
             error_est = 0.0
 
         # Decide split / accept.
+        accept_segment = True
         if error_est > tol:
             can_split = len(accepted) + len(pending) + 1 < subdomains_max
             can_eval_more = cache.evals_total < eval_budget_max
@@ -185,6 +186,7 @@ def adaptive_approximate_on_grid(
                 pending.append((mid, right))
                 pending.append((left, mid))
                 split_reason = "split_error_gt_tol"
+                accept_segment = False
             else:
                 split_reason = "limit_hit"
                 verdict = "INCONCLUSIVE_LIMIT_HIT"
@@ -195,7 +197,8 @@ def adaptive_approximate_on_grid(
                         limit_hit_reason = "eval_budget_max"
                     else:
                         limit_hit_reason = "unknown"
-        accepted.append((left, right, coeffs))
+        if accept_segment:
+            accepted.append((left, right, coeffs))
 
         evals_after = int(cache.evals_total)
         trace.append(
@@ -228,7 +231,14 @@ def adaptive_approximate_on_grid(
         values_out[mask] = chebyshev.chebval(x, coeffs)
 
     error_est_total = float(
-        max((float(t.error_est) for t in trace if math.isfinite(float(t.error_est))), default=float("nan"))
+        max(
+            (
+                float(t.error_est)
+                for t in trace
+                if str(t.split_reason) != "split_error_gt_tol" and math.isfinite(float(t.error_est))
+            ),
+            default=float("nan"),
+        )
     )
     walltime_ms_total = float((time.perf_counter() - t_total) * 1000.0)
 
