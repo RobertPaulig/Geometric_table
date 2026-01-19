@@ -854,3 +854,21 @@ separation facts (computed on status==OK rows only):
     - residual_init_mean: 0.037387575359043745
     - residual_final_mean: 7.321790598292799e-07
   - evidence_pack_files: scf_trace.csv, scf_summary.json, potential_vectors.csv, summary_metadata.json
+
+## physics-operator-scf-audit-2026-01-19-r2
+
+- Source commit: 220f00773a6e87a3af642ebb3c6e4eb35ebd0042
+- Release asset: https://github.com/RobertPaulig/Geometric_table/releases/download/physics-operator-scf-audit-2026-01-19-r2/evidence_pack.zip
+- SHA256(evidence_pack.zip): 3409C1137495CE450D22D6D23C4EB174FDF696EE317712124CB5248F5C18BD7E
+- Input CSV asset (asym fixture set): https://github.com/RobertPaulig/Geometric_table/releases/download/physics-operator-scf-audit-2026-01-19-r2/scf_audit.csv
+- Command:
+  hetero2-batch --input scf_audit.csv --out_dir out_scf_audit --artifacts light --score_mode mock --k_decoys 2 --workers 1 --timeout_s 60 --maxtasksperchild 100 --seed_strategy per_row --seed 0 --physics_mode both --edge_weight_mode bond_order_delta_chi --potential_mode both --potential_scale_gamma 1.0 --scf_max_iter 50 --scf_tol 1e-6 --scf_damping 0.5 --scf_occ_k 5 --scf_tau 1.0 --zip_pack
+- SCF audit (from summary_metadata.json in evidence_pack.zip):
+  - scf_audit_verdict: SUCCESS
+  - scf_audit_reason: nontrivial_rate_ge_0p50_and_converged_rate_ge_0p95
+  - scf_converged_rate: 1.0
+  - scf_nontrivial_rate: 1.0
+  - scf_iters_mean/p95/max: 14.75 / 15.0 / 15
+  - deltaV_max_max: 0.1567902269999999
+  - residual_final_p95: 9.73477578228299e-07
+  - evidence_pack_files: scf_audit_metrics.csv, scf_trace.csv, scf_summary.json, potential_vectors.csv, summary_metadata.json
