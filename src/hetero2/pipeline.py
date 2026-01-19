@@ -11,7 +11,15 @@ from hetero1a.schemas import SCORES_SCHEMA
 from hetero2.chemgraph import ChemGraph
 from hetero2.decoy_strategy import generate_decoys_v1
 from hetero2.guardrails import MAX_ATOMS_DEFAULT, preflight_smiles
-from hetero2.physics_operator import SPECTRAL_ENTROPY_BETA_DEFAULT, compute_dos_ldos_payload, compute_physics_features
+from hetero2.physics_operator import (
+    SCF_DAMPING_DEFAULT,
+    SCF_MAX_ITER_DEFAULT,
+    SCF_OCC_K_DEFAULT,
+    SCF_TAU_DEFAULT,
+    SCF_TOL_DEFAULT,
+    SPECTRAL_ENTROPY_BETA_DEFAULT,
+    compute_operator_payload,
+)
 from hetero2.spectral import compute_stability_metrics, laplacian_eigvals
 
 
@@ -131,6 +139,12 @@ def run_pipeline_v2(
     decoy_hard_tanimoto_max: float = 0.95,
     physics_mode: str = "topological",
     edge_weight_mode: str = "unweighted",
+    potential_mode: str = "static",
+    scf_max_iter: int = SCF_MAX_ITER_DEFAULT,
+    scf_tol: float = SCF_TOL_DEFAULT,
+    scf_damping: float = SCF_DAMPING_DEFAULT,
+    scf_occ_k: int = SCF_OCC_K_DEFAULT,
+    scf_tau: float = SCF_TAU_DEFAULT,
 ) -> Dict[str, object]:
     ts = timestamp.strip() or _utc_now_iso()
     preflight = preflight_smiles(smiles, max_atoms=guardrails_max_atoms, require_connected=guardrails_require_connected)
@@ -163,20 +177,19 @@ def run_pipeline_v2(
     cg = ChemGraph(preflight.canonical_smiles)
     eigvals = laplacian_eigvals(cg.laplacian())
     spectral_metrics = compute_stability_metrics(eigvals)
-    operator = compute_physics_features(
+    operator = compute_operator_payload(
         adjacency=cg.adjacency(),
         bonds=cg.heavy_bonds_with_order(),
         types=cg.heavy_atom_types(),
         physics_mode=str(physics_mode),
         edge_weight_mode=str(edge_weight_mode),
+        potential_mode=str(potential_mode),
+        scf_max_iter=int(scf_max_iter),
+        scf_tol=float(scf_tol),
+        scf_damping=float(scf_damping),
+        scf_occ_k=int(scf_occ_k),
+        scf_tau=float(scf_tau),
         beta=float(SPECTRAL_ENTROPY_BETA_DEFAULT),
-    )
-    operator["dos_ldos"] = compute_dos_ldos_payload(
-        adjacency=cg.adjacency(),
-        bonds=cg.heavy_bonds_with_order(),
-        types=cg.heavy_atom_types(),
-        physics_mode=str(physics_mode),
-        edge_weight_mode=str(edge_weight_mode),
     )
     decoys_result, decoy_strategy = generate_decoys_v1(
         cg.canonical_smiles,

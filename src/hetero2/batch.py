@@ -31,6 +31,13 @@ from hetero2.physics_operator import (
     DOS_ETA_DEFAULT,
     DOS_GRID_N_DEFAULT,
     DOS_LDOS_SCHEMA,
+    SCF_DAMPING_DEFAULT,
+    SCF_GAMMA_DEFAULT,
+    SCF_MAX_ITER_DEFAULT,
+    SCF_OCC_K_DEFAULT,
+    SCF_SCHEMA,
+    SCF_TAU_DEFAULT,
+    SCF_TOL_DEFAULT,
     MissingPhysicsParams,
     SPECTRAL_ENTROPY_BETA_DEFAULT,
     compute_dos_curve,
@@ -261,6 +268,12 @@ def _process_row(
     decoy_hard_tanimoto_max: float,
     physics_mode: str,
     edge_weight_mode: str,
+    potential_mode: str,
+    scf_max_iter: int,
+    scf_tol: float,
+    scf_damping: float,
+    scf_occ_k: int,
+    scf_tau: float,
 ) -> Dict[str, object]:
     """Isolated worker to avoid RDKit leaks across tasks."""
     if not smiles:
@@ -290,6 +303,12 @@ def _process_row(
             decoy_hard_tanimoto_max=float(decoy_hard_tanimoto_max),
             physics_mode=str(physics_mode),
             edge_weight_mode=str(edge_weight_mode),
+            potential_mode=str(potential_mode),
+            scf_max_iter=int(scf_max_iter),
+            scf_tol=float(scf_tol),
+            scf_damping=float(scf_damping),
+            scf_occ_k=int(scf_occ_k),
+            scf_tau=float(scf_tau),
         )
         warnings = pipeline.get("warnings", []) if isinstance(pipeline, dict) else []
         if score_mode == "mock" and scores_path:
@@ -356,6 +375,12 @@ def run_batch(
     decoy_hard_tanimoto_max: float = 0.95,
     physics_mode: str = "topological",
     edge_weight_mode: str = "unweighted",
+    potential_mode: str = "static",
+    scf_max_iter: int = SCF_MAX_ITER_DEFAULT,
+    scf_tol: float = SCF_TOL_DEFAULT,
+    scf_damping: float = SCF_DAMPING_DEFAULT,
+    scf_occ_k: int = SCF_OCC_K_DEFAULT,
+    scf_tau: float = SCF_TAU_DEFAULT,
     seed_strategy: str = "global",
     no_index: bool = False,
     no_manifest: bool = False,
@@ -424,6 +449,13 @@ def run_batch(
     hardness_pairs_rows: List[Dict[str, object]] = []
     # Physics operator foundation: per-row feature rows.
     operator_rows: List[Dict[str, object]] = []
+    # Self-consistent potential (SCF): per-iteration and per-node artifacts (may be empty if disabled).
+    scf_trace_rows: List[Dict[str, object]] = []
+    potential_vector_rows: List[Dict[str, object]] = []
+    scf_rows_total = 0
+    scf_rows_converged = 0
+    scf_iters_max = 0
+    scf_residual_final_max = float("nan")
     # Cache external scores payloads by resolved path.
     scores_cache: Dict[str, Dict[str, object]] = {}
 
@@ -470,6 +502,7 @@ def run_batch(
         )
 
     def handle_result(res: Dict[str, object]) -> None:
+        nonlocal scf_rows_total, scf_rows_converged, scf_iters_max, scf_residual_final_max
         pipeline = res.get("pipeline")
         mol_id = str(res.get("id", ""))
         status = str(res.get("status", ""))
@@ -480,9 +513,21 @@ def run_batch(
             warnings = sorted(set(warnings))
             pipeline["warnings"] = warnings
             if artifacts == "full":
+                pipeline_to_write = dict(pipeline)
+                op_raw = pipeline.get("operator", {})
+                if isinstance(op_raw, dict):
+                    op_to_write = dict(op_raw)
+                    scf_raw = op_raw.get("scf", {})
+                    if isinstance(scf_raw, dict) and str(scf_raw.get("schema_version", "")) == SCF_SCHEMA:
+                        scf_to_write = dict(scf_raw)
+                        scf_to_write.pop("trace", None)
+                        scf_to_write.pop("vectors", None)
+                        op_to_write["scf"] = scf_to_write
+                    pipeline_to_write["operator"] = op_to_write
                 pipe_path = out_dir / f"{mol_id}.pipeline.json"
                 pipe_path.write_text(
-                    json.dumps(pipeline, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8"
+                    json.dumps(pipeline_to_write, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+                    encoding="utf-8",
                 )
                 rep_path = out_dir / f"{mol_id}.report.md"
                 render_report_v2(pipeline, out_path=str(rep_path), assets_dir=out_dir / f"{mol_id}_assets")
@@ -551,6 +596,65 @@ def run_batch(
                 ldos_WH = dos_ldos.get("ldos_WH", None)
                 if isinstance(ldos_WH, dict):
                     ldos_inputs_by_id.setdefault(mol_id, {})["WH"] = ldos_WH
+
+            scf = op.get("scf", {}) if isinstance(op.get("scf"), dict) else {}
+            if isinstance(scf, dict) and str(scf.get("schema_version", "")) == SCF_SCHEMA:
+                scf_rows_total += 1
+                if bool(scf.get("scf_converged", False)):
+                    scf_rows_converged += 1
+                scf_iters = int(scf.get("scf_iters", 0) or 0)
+                scf_iters_max = max(scf_iters_max, scf_iters)
+                scf_residual = float(scf.get("scf_residual_final", float("nan")))
+                if math.isfinite(float(scf_residual)):
+                    if not math.isfinite(float(scf_residual_final_max)) or float(scf_residual) > float(scf_residual_final_max):
+                        scf_residual_final_max = float(scf_residual)
+
+                trace = scf.get("trace", [])
+                if isinstance(trace, list):
+                    for t in trace:
+                        if not isinstance(t, dict):
+                            continue
+                        residual_inf = float(t.get("residual_inf", float("nan")))
+                        min_v = float(t.get("min_V", float("nan")))
+                        max_v = float(t.get("max_V", float("nan")))
+                        mean_v = float(t.get("mean_V", float("nan")))
+                        min_rho = float(t.get("min_rho", float("nan")))
+                        max_rho = float(t.get("max_rho", float("nan")))
+                        mean_rho = float(t.get("mean_rho", float("nan")))
+                        scf_trace_rows.append(
+                            {
+                                "id": mol_id,
+                                "iter": int(t.get("iter", 0) or 0),
+                                "residual_inf": "" if not math.isfinite(float(residual_inf)) else f"{float(residual_inf):.10g}",
+                                "damping": "" if not math.isfinite(float(t.get("damping", float('nan')))) else f"{float(t.get('damping')):.10g}",
+                                "min_V": "" if not math.isfinite(float(min_v)) else f"{float(min_v):.10g}",
+                                "max_V": "" if not math.isfinite(float(max_v)) else f"{float(max_v):.10g}",
+                                "mean_V": "" if not math.isfinite(float(mean_v)) else f"{float(mean_v):.10g}",
+                                "min_rho": "" if not math.isfinite(float(min_rho)) else f"{float(min_rho):.10g}",
+                                "max_rho": "" if not math.isfinite(float(max_rho)) else f"{float(max_rho):.10g}",
+                                "mean_rho": "" if not math.isfinite(float(mean_rho)) else f"{float(mean_rho):.10g}",
+                                "converged": bool(t.get("converged", False)),
+                            }
+                        )
+
+                vectors = scf.get("vectors", [])
+                if isinstance(vectors, list):
+                    for v in vectors:
+                        if not isinstance(v, dict):
+                            continue
+                        v0_val = float(v.get("V0", float("nan")))
+                        v_scf_val = float(v.get("V_scf", float("nan")))
+                        rho_val = float(v.get("rho_final", float("nan")))
+                        potential_vector_rows.append(
+                            {
+                                "id": mol_id,
+                                "node_index": int(v.get("node_index", -1)),
+                                "atom_Z": int(v.get("atom_Z", 0)),
+                                "V0": "" if not math.isfinite(float(v0_val)) else f"{float(v0_val):.10g}",
+                                "V_scf": "" if not math.isfinite(float(v_scf_val)) else f"{float(v_scf_val):.10g}",
+                                "rho_final": "" if not math.isfinite(float(rho_val)) else f"{float(rho_val):.10g}",
+                            }
+                        )
 
             decoys = pipeline.get("decoys", [])
             smiles_orig = str(pipeline.get("smiles", ""))
@@ -673,7 +777,16 @@ def run_batch(
                 n_decoys_scored = n_decoys_generated
 
         op = pipeline.get("operator", {}) if isinstance(pipeline, dict) and isinstance(pipeline.get("operator"), dict) else {}
-        outcome_verdict = "ERROR_MISSING_PHYSICS_PARAMS" if status == "ERROR" and reason == "missing_physics_params" else ""
+        outcome_verdict = ""
+        outcome_reason = ""
+        if status == "ERROR" and reason == "missing_physics_params":
+            outcome_verdict = "ERROR_MISSING_PHYSICS_PARAMS"
+            outcome_reason = "missing_physics_params"
+        elif status == "OK":
+            scf = op.get("scf", {}) if isinstance(op.get("scf"), dict) else {}
+            if isinstance(scf, dict) and str(scf.get("schema_version", "")) == SCF_SCHEMA and not bool(scf.get("scf_converged", True)):
+                outcome_verdict = "INCONCLUSIVE_SCF_NOT_CONVERGED"
+                outcome_reason = "scf_not_converged"
         summary_entry = {
             "id": mol_id,
             "status": status or "ERROR",
@@ -704,7 +817,7 @@ def run_batch(
             "H_trace": op.get("H_trace", ""),
             "H_entropy_beta": op.get("H_entropy_beta", ""),
             "outcome_verdict": outcome_verdict,
-            "outcome_reason": "missing_physics_params" if outcome_verdict else "",
+            "outcome_reason": outcome_reason,
         }
         if str(edge_weight_mode) != "unweighted":
             summary_entry.update(
@@ -735,6 +848,12 @@ def run_batch(
                 decoy_hard_tanimoto_max=float(decoy_hard_tanimoto_max),
                 physics_mode=str(physics_mode),
                 edge_weight_mode=str(edge_weight_mode),
+                potential_mode=str(potential_mode),
+                scf_max_iter=int(scf_max_iter),
+                scf_tol=float(scf_tol),
+                scf_damping=float(scf_damping),
+                scf_occ_k=int(scf_occ_k),
+                scf_tau=float(scf_tau),
             )
             handle_result(res)
     else:
@@ -762,6 +881,12 @@ def run_batch(
                         decoy_hard_tanimoto_max=float(decoy_hard_tanimoto_max),
                         physics_mode=str(physics_mode),
                         edge_weight_mode=str(edge_weight_mode),
+                        potential_mode=str(potential_mode),
+                        scf_max_iter=int(scf_max_iter),
+                        scf_tol=float(scf_tol),
+                        scf_damping=float(scf_damping),
+                        scf_occ_k=int(scf_occ_k),
+                        scf_tau=float(scf_tau),
                     ),
                 )
                 async_results.append((task["mol_id"], async_res))
@@ -805,6 +930,47 @@ def run_batch(
         w = csv.DictWriter(f, fieldnames=operator_fieldnames)
         w.writeheader()
         for row in operator_rows:
+            w.writerow(row)
+
+    # Write SCF artifacts (always present; may be empty if potential_mode does not compute SCF).
+    scf_trace_csv = out_dir / "scf_trace.csv"
+    potential_vectors_csv = out_dir / "potential_vectors.csv"
+    scf_trace_csv.write_text("", encoding="utf-8")
+    potential_vectors_csv.write_text("", encoding="utf-8")
+    with scf_trace_csv.open("w", encoding="utf-8", newline="") as f:
+        w = csv.DictWriter(
+            f,
+            fieldnames=[
+                "id",
+                "iter",
+                "residual_inf",
+                "damping",
+                "min_V",
+                "max_V",
+                "mean_V",
+                "min_rho",
+                "max_rho",
+                "mean_rho",
+                "converged",
+            ],
+        )
+        w.writeheader()
+        for row in scf_trace_rows:
+            w.writerow(row)
+    with potential_vectors_csv.open("w", encoding="utf-8", newline="") as f:
+        w = csv.DictWriter(
+            f,
+            fieldnames=[
+                "id",
+                "node_index",
+                "atom_Z",
+                "V0",
+                "V_scf",
+                "rho_final",
+            ],
+        )
+        w.writeheader()
+        for row in potential_vector_rows:
             w.writerow(row)
 
     # Write DOS/LDOS artifacts (always present; may be empty if too little data).
@@ -1022,6 +1188,7 @@ def run_batch(
     hardness_curve_md.write_text("\n".join(hardness_lines) + "\n", encoding="utf-8")
 
     # Write summary_metadata.json for audit-grade consumption (no schema bump, additive artifact).
+    scf_converged_all = bool(scf_rows_total > 0 and scf_rows_converged == scf_rows_total)
     summary_metadata = {
         "auc_interpretation_schema": AUC_INTERPRETATION_SCHEMA,
         "auc_interpretation": str(auc_label),
@@ -1032,6 +1199,19 @@ def run_batch(
         "auc_tie_aware_by_bin": {k: float(v) for k, v in auc_by_bin.items()},
         "physics_mode": str(physics_mode),
         "edge_weight_mode": str(edge_weight_mode),
+        "potential_mode": str(potential_mode),
+        "scf_schema": str(SCF_SCHEMA),
+        "scf_max_iter": int(scf_max_iter),
+        "scf_tol": float(scf_tol),
+        "scf_damping": float(scf_damping),
+        "scf_occ_k": int(scf_occ_k),
+        "scf_tau": float(scf_tau),
+        "scf_gamma": float(SCF_GAMMA_DEFAULT),
+        "scf_rows_total": int(scf_rows_total),
+        "scf_rows_converged": int(scf_rows_converged),
+        "scf_converged": bool(scf_converged_all),
+        "scf_iters": int(scf_iters_max),
+        "scf_residual_final": float(scf_residual_final_max),
         "physics_entropy_beta": float(SPECTRAL_ENTROPY_BETA_DEFAULT),
         "dos_ldos_schema": str(DOS_LDOS_SCHEMA),
         "dos_grid_n": int(dos_grid_n),
@@ -1102,12 +1282,28 @@ def run_batch(
             "decoy_hard_tanimoto_max": float(decoy_hard_tanimoto_max),
             "physics_mode": str(physics_mode),
             "edge_weight_mode": str(edge_weight_mode),
+            "potential_mode": str(potential_mode),
+            "scf_max_iter": int(scf_max_iter),
+            "scf_tol": float(scf_tol),
+            "scf_damping": float(scf_damping),
+            "scf_occ_k": int(scf_occ_k),
+            "scf_tau": float(scf_tau),
+            "scf_gamma": float(SCF_GAMMA_DEFAULT),
             "physics_entropy_beta": float(SPECTRAL_ENTROPY_BETA_DEFAULT),
             "guardrails_max_atoms": guardrails_max_atoms,
             "guardrails_require_connected": guardrails_require_connected,
             "score_mode": score_mode,
         },
     }
+    if scf_rows_total > 0:
+        metrics["scf"] = {
+            "schema_version": str(SCF_SCHEMA),
+            "rows_total": int(scf_rows_total),
+            "rows_converged": int(scf_rows_converged),
+            "converged": bool(scf_converged_all),
+            "iters_max": int(scf_iters_max),
+            "residual_final_max": float(scf_residual_final_max),
+        }
     if score_mode == "external_scores":
         metrics["scores_coverage"] = dict(scores_coverage)
     metrics["decoy_realism"] = {
