@@ -45,7 +45,9 @@ from hetero2.physics_operator import (
     compute_dos_curve,
     compute_ldos_curve,
 )
+from hetero2.integration.adaptive import adaptive_approximate_on_grid
 from hetero2.integration.baseline_grid import build_benchmark_row_baseline_grid
+from hetero2.integration.types import AdaptiveIntegrationConfig
 from hetero2.pipeline import run_pipeline_v2
 from hetero2.report import render_report_v2
 
@@ -397,6 +399,13 @@ def run_batch(
     integrator_energy_points: int = DOS_GRID_N_DEFAULT,
     integrator_eta: float = DOS_ETA_DEFAULT,
     integrator_eps: float = 1e-6,
+    integrator_eps_abs: float = 1e-6,
+    integrator_eps_rel: float = 1e-4,
+    integrator_subdomains_max: int = 64,
+    integrator_poly_degree_max: int = 8,
+    integrator_quad_order_max: int = 16,
+    integrator_eval_budget_max: int = 4096,
+    integrator_split_criterion: str = "max_abs_error",
     seed_strategy: str = "global",
     no_index: bool = False,
     no_manifest: bool = False,
@@ -1084,7 +1093,8 @@ def run_batch(
             w.writerow(row)
 
     # Write DOS/LDOS artifacts (always present; may be empty if too little data).
-    if str(integrator_mode) != "baseline":
+    integrator_mode = str(integrator_mode)
+    if integrator_mode not in {"baseline", "adaptive", "both"}:
         integrator_mode = "baseline"
     dos_grid_n = int(integrator_energy_points)
     dos_eta = float(integrator_eta)
@@ -1126,33 +1136,103 @@ def run_batch(
     else:
         energy_grid = np.array([], dtype=float)
 
-    dos_eigs_count_L = sum(len(seq) for seq in dos_eigs_L)
-    dos_eigs_count_H = sum(len(seq) for seq in dos_eigs_H)
-    dos_eigs_count_WH = sum(len(seq) for seq in dos_eigs_WH)
+    eigs_L = [x for seq in dos_eigs_L for x in seq]
+    eigs_H = [x for seq in dos_eigs_H for x in seq]
+    eigs_WH = [x for seq in dos_eigs_WH for x in seq]
 
+    dos_eigs_count_L = int(len(eigs_L))
+    dos_eigs_count_H = int(len(eigs_H))
+    dos_eigs_count_WH = int(len(eigs_WH))
+
+    # Baseline curves (P4.0): fixed energy grid.
     t0 = time.perf_counter()
-    dos_L = (
-        compute_dos_curve(eigenvalues=[x for seq in dos_eigs_L for x in seq], energy_grid=energy_grid, eta=dos_eta)
-        if dos_eigs_L
-        else np.zeros_like(energy_grid)
-    )
+    dos_L = compute_dos_curve(eigenvalues=eigs_L, energy_grid=energy_grid, eta=dos_eta) if eigs_L else np.zeros_like(energy_grid)
     dos_L_ms = (time.perf_counter() - t0) * 1000.0
 
     t0 = time.perf_counter()
-    dos_H = (
-        compute_dos_curve(eigenvalues=[x for seq in dos_eigs_H for x in seq], energy_grid=energy_grid, eta=dos_eta)
-        if dos_eigs_H
-        else np.zeros_like(energy_grid)
-    )
+    dos_H = compute_dos_curve(eigenvalues=eigs_H, energy_grid=energy_grid, eta=dos_eta) if eigs_H else np.zeros_like(energy_grid)
     dos_H_ms = (time.perf_counter() - t0) * 1000.0
 
     t0 = time.perf_counter()
-    dos_WH = (
-        compute_dos_curve(eigenvalues=[x for seq in dos_eigs_WH for x in seq], energy_grid=energy_grid, eta=dos_eta)
-        if dos_eigs_WH
-        else np.zeros_like(energy_grid)
-    )
+    dos_WH = compute_dos_curve(eigenvalues=eigs_WH, energy_grid=energy_grid, eta=dos_eta) if eigs_WH else np.zeros_like(energy_grid)
     dos_WH_ms = (time.perf_counter() - t0) * 1000.0
+
+    # Adaptive curves (P4.1): piecewise approximation with a posteriori error estimate.
+    adaptive_cfg = AdaptiveIntegrationConfig(
+        eps_abs=float(integrator_eps_abs),
+        eps_rel=float(integrator_eps_rel),
+        subdomains_max=int(integrator_subdomains_max),
+        poly_degree_max=int(integrator_poly_degree_max),
+        quad_order_max=int(integrator_quad_order_max),
+        eval_budget_max=int(integrator_eval_budget_max),
+        split_criterion=str(integrator_split_criterion),
+    )
+    adaptive_curves: dict[str, np.ndarray] = {}
+    adaptive_summaries: dict[str, dict[str, object]] = {}
+    adaptive_traces_rows: list[dict[str, object]] = []
+
+    if integrator_mode in {"adaptive", "both"} and energy_grid.size:
+        for curve_id, eigs, baseline_values in [
+            ("dos_L", eigs_L, dos_L),
+            ("dos_H", eigs_H, dos_H),
+            ("dos_WH", eigs_WH, dos_WH),
+        ]:
+            if not eigs:
+                adaptive_curves[curve_id] = np.zeros_like(energy_grid)
+                adaptive_summaries[curve_id] = {
+                    "curve_id": curve_id,
+                    "verdict": "SUCCESS",
+                    "limit_hit_reason": "",
+                    "eps_abs": float(adaptive_cfg.eps_abs),
+                    "eps_rel": float(adaptive_cfg.eps_rel),
+                    "error_est_total": float("nan"),
+                    "segments_used": 0,
+                    "evals_total": 0,
+                    "walltime_ms_total": 0.0,
+                }
+                continue
+
+            tol_scale = float(np.max(np.abs(np.asarray(baseline_values, dtype=float)))) if baseline_values.size else 0.0
+
+            def _f(x: np.ndarray, *, _eigs: list[float] = eigs) -> np.ndarray:
+                return compute_dos_curve(eigenvalues=_eigs, energy_grid=np.asarray(x, dtype=float), eta=float(dos_eta))
+
+            res = adaptive_approximate_on_grid(f=_f, energy_grid=energy_grid, cfg=adaptive_cfg, tol_scale=tol_scale)
+            adaptive_curves[curve_id] = np.asarray(res.values, dtype=float)
+            summary_row = dict(res.summary)
+            summary_row["curve_id"] = curve_id
+            adaptive_summaries[curve_id] = summary_row
+            for tr in res.trace:
+                adaptive_traces_rows.append(
+                    {
+                        "molecule_id": "__run__",
+                        "curve_id": curve_id,
+                        "segment_id": int(tr.segment_id),
+                        "E_left": float(tr.e_left),
+                        "E_right": float(tr.e_right),
+                        "n_probe_points": int(tr.n_probe_points),
+                        "poly_degree": int(tr.poly_degree),
+                        "quad_order": int(tr.quad_order),
+                        "n_function_evals": int(tr.n_function_evals),
+                        "error_est": float(tr.error_est),
+                        "walltime_ms_segment": float(tr.walltime_ms_segment),
+                        "split_reason": str(tr.split_reason),
+                    }
+                )
+
+    dos_L_out = dos_L
+    dos_H_out = dos_H
+    dos_WH_out = dos_WH
+    dos_L_ms_out = float(dos_L_ms)
+    dos_H_ms_out = float(dos_H_ms)
+    dos_WH_ms_out = float(dos_WH_ms)
+    if integrator_mode == "adaptive" and adaptive_curves:
+        dos_L_out = np.asarray(adaptive_curves.get("dos_L", dos_L), dtype=float)
+        dos_H_out = np.asarray(adaptive_curves.get("dos_H", dos_H), dtype=float)
+        dos_WH_out = np.asarray(adaptive_curves.get("dos_WH", dos_WH), dtype=float)
+        dos_L_ms_out = float(adaptive_summaries.get("dos_L", {}).get("walltime_ms_total", dos_L_ms))
+        dos_H_ms_out = float(adaptive_summaries.get("dos_H", {}).get("walltime_ms_total", dos_H_ms))
+        dos_WH_ms_out = float(adaptive_summaries.get("dos_WH", {}).get("walltime_ms_total", dos_WH_ms))
 
     with dos_curve_csv.open("w", encoding="utf-8", newline="") as f:
         w = csv.DictWriter(f, fieldnames=["energy", "dos_L", "dos_H", "dos_WH"])
@@ -1161,11 +1241,170 @@ def run_batch(
             w.writerow(
                 {
                     "energy": f"{float(energy_grid[idx]):.10g}",
-                    "dos_L": f"{float(dos_L[idx]):.10g}" if energy_grid.size else "",
-                    "dos_H": f"{float(dos_H[idx]):.10g}" if energy_grid.size else "",
-                    "dos_WH": f"{float(dos_WH[idx]):.10g}" if energy_grid.size else "",
+                    "dos_L": f"{float(dos_L_out[idx]):.10g}" if energy_grid.size else "",
+                    "dos_H": f"{float(dos_H_out[idx]):.10g}" if energy_grid.size else "",
+                    "dos_WH": f"{float(dos_WH_out[idx]):.10g}" if energy_grid.size else "",
                 }
             )
+
+    # P4.1 artifacts (adaptive trace + summary + baseline comparison).
+    integrator_speedup_target = 1.5
+    integrator_correctness_pass_rate = float("nan")
+    integrator_speedup_median = float("nan")
+    integrator_speedup_verdict = "N/A"
+    integrator_verdict = "BASELINE_ONLY"
+    integrator_segments_used_median = float("nan")
+    integrator_evals_total_median = float("nan")
+    integrator_error_est_total_median = float("nan")
+
+    if integrator_mode in {"adaptive", "both"}:
+        adaptive_trace_csv = out_dir / "adaptive_integration_trace.csv"
+        adaptive_summary_json = out_dir / "adaptive_integration_summary.json"
+
+        adaptive_trace_csv.write_text("", encoding="utf-8")
+        with adaptive_trace_csv.open("w", encoding="utf-8", newline="") as f:
+            w = csv.DictWriter(
+                f,
+                fieldnames=[
+                    "molecule_id",
+                    "curve_id",
+                    "segment_id",
+                    "E_left",
+                    "E_right",
+                    "n_probe_points",
+                    "poly_degree",
+                    "quad_order",
+                    "n_function_evals",
+                    "error_est",
+                    "walltime_ms_segment",
+                    "split_reason",
+                ],
+            )
+            w.writeheader()
+            for row in adaptive_traces_rows:
+                out_row = dict(row)
+                for k in ["E_left", "E_right", "error_est", "walltime_ms_segment"]:
+                    v = float(out_row.get(k, float("nan")))
+                    out_row[k] = "" if not math.isfinite(v) else f"{v:.10g}"
+                out_row["n_probe_points"] = str(int(out_row.get("n_probe_points", 0) or 0))
+                out_row["poly_degree"] = str(int(out_row.get("poly_degree", 0) or 0))
+                out_row["quad_order"] = str(int(out_row.get("quad_order", 0) or 0))
+                out_row["n_function_evals"] = str(int(out_row.get("n_function_evals", 0) or 0))
+                out_row["segment_id"] = str(int(out_row.get("segment_id", 0) or 0))
+                w.writerow(out_row)
+
+        summary_payload = {
+            "schema_version": "hetero2_adaptive_integration_summary.v1",
+            "integrator_mode": str(integrator_mode),
+            "energy_points": int(energy_grid.size),
+            "energy_min": float(dos_energy_min),
+            "energy_max": float(dos_energy_max),
+            "eta": float(dos_eta),
+            "eps_abs": float(adaptive_cfg.eps_abs),
+            "eps_rel": float(adaptive_cfg.eps_rel),
+            "subdomains_max": int(adaptive_cfg.subdomains_max),
+            "poly_degree_max": int(adaptive_cfg.poly_degree_max),
+            "quad_order_max": int(adaptive_cfg.quad_order_max),
+            "eval_budget_max": int(adaptive_cfg.eval_budget_max),
+            "split_criterion": str(adaptive_cfg.split_criterion),
+            "curves": [adaptive_summaries[k] for k in sorted(adaptive_summaries.keys())],
+        }
+        adaptive_summary_json.write_text(json.dumps(summary_payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+
+        if integrator_mode == "both":
+            compare_csv = out_dir / "integration_compare.csv"
+            compare_rows: list[dict[str, object]] = []
+            for curve_id, baseline_vals, baseline_ms, adaptive_vals in [
+                ("dos_L", dos_L, dos_L_ms, adaptive_curves.get("dos_L", dos_L)),
+                ("dos_H", dos_H, dos_H_ms, adaptive_curves.get("dos_H", dos_H)),
+                ("dos_WH", dos_WH, dos_WH_ms, adaptive_curves.get("dos_WH", dos_WH)),
+            ]:
+                base_arr = np.asarray(baseline_vals, dtype=float)
+                adapt_arr = np.asarray(adaptive_vals, dtype=float)
+                base_value = float(np.max(np.abs(base_arr))) if base_arr.size else float("nan")
+                adapt_value = float(np.max(np.abs(adapt_arr))) if adapt_arr.size else float("nan")
+                abs_err = float(np.max(np.abs(adapt_arr - base_arr))) if base_arr.size and adapt_arr.size else float("nan")
+                denom = abs(float(base_value)) + 1e-12
+                rel_err = float(abs_err / denom) if math.isfinite(float(abs_err)) else float("nan")
+                tol = float(adaptive_cfg.eps_abs) + float(adaptive_cfg.eps_rel) * abs(float(base_value))
+                pass_tol = bool(math.isfinite(float(abs_err)) and float(abs_err) <= float(tol))
+                adaptive_verdict_row = str(adaptive_summaries.get(curve_id, {}).get("verdict", "INCONCLUSIVE_LIMIT_HIT"))
+                adaptive_ms = float(adaptive_summaries.get(curve_id, {}).get("walltime_ms_total", float("nan")))
+                speedup = float(baseline_ms / adaptive_ms) if (adaptive_ms and adaptive_ms > 0.0 and math.isfinite(adaptive_ms)) else float("nan")
+                compare_rows.append(
+                    {
+                        "molecule_id": "__run__",
+                        "curve_id": str(curve_id),
+                        "baseline_value": base_value,
+                        "adaptive_value": adapt_value,
+                        "abs_err": abs_err,
+                        "rel_err": rel_err,
+                        "pass_tolerance": pass_tol,
+                        "baseline_walltime_ms": float(baseline_ms),
+                        "adaptive_walltime_ms": adaptive_ms,
+                        "speedup": speedup,
+                        "adaptive_verdict_row": adaptive_verdict_row,
+                    }
+                )
+
+            compare_csv.write_text("", encoding="utf-8")
+            with compare_csv.open("w", encoding="utf-8", newline="") as f:
+                w = csv.DictWriter(
+                    f,
+                    fieldnames=[
+                        "molecule_id",
+                        "curve_id",
+                        "baseline_value",
+                        "adaptive_value",
+                        "abs_err",
+                        "rel_err",
+                        "pass_tolerance",
+                        "baseline_walltime_ms",
+                        "adaptive_walltime_ms",
+                        "speedup",
+                        "adaptive_verdict_row",
+                    ],
+                )
+                w.writeheader()
+                for row in compare_rows:
+                    out_row = dict(row)
+                    out_row["pass_tolerance"] = "1" if bool(out_row.get("pass_tolerance", False)) else "0"
+                    for k in ["baseline_value", "adaptive_value", "abs_err", "rel_err", "baseline_walltime_ms", "adaptive_walltime_ms", "speedup"]:
+                        v = float(out_row.get(k, float("nan")))
+                        out_row[k] = "" if not math.isfinite(v) else f"{v:.10g}"
+                    w.writerow(out_row)
+
+            pass_rate = float(sum(1 for r in compare_rows if bool(r.get("pass_tolerance", False)))) / float(len(compare_rows)) if compare_rows else float("nan")
+            integrator_correctness_pass_rate = float(pass_rate)
+
+            speedups = [float(r.get("speedup", float("nan"))) for r in compare_rows]
+            speedups = [s for s in speedups if math.isfinite(float(s)) and float(s) > 0.0]
+            integrator_speedup_median = float(statistics.median(speedups)) if speedups else float("nan")
+
+            segments = [float(adaptive_summaries.get(k, {}).get("segments_used", float("nan"))) for k in adaptive_summaries.keys()]
+            evals = [float(adaptive_summaries.get(k, {}).get("evals_total", float("nan"))) for k in adaptive_summaries.keys()]
+            errs = [float(adaptive_summaries.get(k, {}).get("error_est_total", float("nan"))) for k in adaptive_summaries.keys()]
+            integrator_segments_used_median = float(statistics.median([x for x in segments if math.isfinite(float(x))])) if segments else float("nan")
+            integrator_evals_total_median = float(statistics.median([x for x in evals if math.isfinite(float(x))])) if evals else float("nan")
+            integrator_error_est_total_median = float(statistics.median([x for x in errs if math.isfinite(float(x))])) if errs else float("nan")
+
+            if not math.isfinite(float(integrator_correctness_pass_rate)) or float(integrator_correctness_pass_rate) < 0.99:
+                integrator_verdict = "FAIL_CORRECTNESS"
+                integrator_speedup_verdict = "N/A_CORRECTNESS_FAILED"
+            else:
+                any_fail = any(str(r.get("adaptive_verdict_row", "")) == "FAIL_NUMERICAL" for r in compare_rows)
+                any_inconclusive = any(str(r.get("adaptive_verdict_row", "")) == "INCONCLUSIVE_LIMIT_HIT" for r in compare_rows)
+                if any_fail:
+                    integrator_verdict = "FAIL_NUMERICAL"
+                elif any_inconclusive:
+                    integrator_verdict = "INCONCLUSIVE_LIMIT_HIT"
+                else:
+                    integrator_verdict = "SUCCESS"
+
+                if math.isfinite(float(integrator_speedup_median)) and float(integrator_speedup_median) >= float(integrator_speedup_target):
+                    integrator_speedup_verdict = "SPEEDUP_CONFIRMED"
+                else:
+                    integrator_speedup_verdict = "NO_SPEEDUP_YET"
 
     # Integration benchmark (P4.0 baseline rails): capture grid config + walltime + determinism checksum.
     integration_benchmark_csv = out_dir / "integration_benchmark.csv"
@@ -1176,30 +1415,30 @@ def run_batch(
             molecule_id="__run__",
             curve_id="dos_L",
             energy_grid=[float(x) for x in energy_grid.tolist()],
-            values=[float(x) for x in dos_L.tolist()],
+            values=[float(x) for x in dos_L_out.tolist()],
             eigenvalues_count=int(dos_eigs_count_L),
             energy_points=int(energy_grid.size),
-            walltime_ms_total=float(dos_L_ms),
+            walltime_ms_total=float(dos_L_ms_out),
             integrator_mode=str(integrator_mode),
         ),
         build_benchmark_row_baseline_grid(
             molecule_id="__run__",
             curve_id="dos_H",
             energy_grid=[float(x) for x in energy_grid.tolist()],
-            values=[float(x) for x in dos_H.tolist()],
+            values=[float(x) for x in dos_H_out.tolist()],
             eigenvalues_count=int(dos_eigs_count_H),
             energy_points=int(energy_grid.size),
-            walltime_ms_total=float(dos_H_ms),
+            walltime_ms_total=float(dos_H_ms_out),
             integrator_mode=str(integrator_mode),
         ),
         build_benchmark_row_baseline_grid(
             molecule_id="__run__",
             curve_id="dos_WH",
             energy_grid=[float(x) for x in energy_grid.tolist()],
-            values=[float(x) for x in dos_WH.tolist()],
+            values=[float(x) for x in dos_WH_out.tolist()],
             eigenvalues_count=int(dos_eigs_count_WH),
             energy_points=int(energy_grid.size),
-            walltime_ms_total=float(dos_WH_ms),
+            walltime_ms_total=float(dos_WH_ms_out),
             integrator_mode=str(integrator_mode),
         ),
     ]
@@ -1237,7 +1476,7 @@ def run_batch(
             )
 
     integration_benchmark_lines = [
-        "# Integration Benchmark (baseline rails)",
+        "# Integration Benchmark",
         "",
         "This artifact captures fixed-grid evaluation cost and determinism signatures for spectral curves.",
         "",
@@ -1248,11 +1487,13 @@ def run_batch(
         f"- energy_min: {dos_energy_min if math.isfinite(float(dos_energy_min)) else 'nan'}",
         f"- energy_max: {dos_energy_max if math.isfinite(float(dos_energy_max)) else 'nan'}",
         f"- eta: {float(dos_eta)}",
-        f"- integrator_eps: {float(integrator_eps)}  # unused for baseline, reserved for adaptive",
+        f"- integrator_eps_abs: {float(integrator_eps_abs)}",
+        f"- integrator_eps_rel: {float(integrator_eps_rel)}",
+        f"- integrator_eps (deprecated): {float(integrator_eps)}",
         "",
         "## Metrics",
         "",
-        "- n_function_evals: energy_points (baseline fixed grid)",
+        "- n_function_evals: energy_points (baseline fixed grid)  # adaptive writes additional audit artifacts",
         "- walltime_ms_total: measured wall-clock time to compute the curve",
         "- result_checksum: SHA256 signature over (energy,value) pairs (stable formatting)",
         "",
@@ -1655,12 +1896,27 @@ def run_batch(
         "dos_energy_max": float(dos_energy_max),
         "integrator_mode": str(integrator_mode),
         "integrator_eps": float(integrator_eps),
+        "integrator_eps_abs": float(integrator_eps_abs),
+        "integrator_eps_rel": float(integrator_eps_rel),
+        "integrator_subdomains_max": int(integrator_subdomains_max),
+        "integrator_poly_degree_max": int(integrator_poly_degree_max),
+        "integrator_quad_order_max": int(integrator_quad_order_max),
+        "integrator_eval_budget_max": int(integrator_eval_budget_max),
+        "integrator_split_criterion": str(integrator_split_criterion),
         "integrator_energy_points": int(energy_grid.size),
         "integrator_energy_min": float(dos_energy_min),
         "integrator_energy_max": float(dos_energy_max),
         "integrator_eta": float(dos_eta),
+        "integrator_verdict": str(integrator_verdict),
+        "integrator_correctness_pass_rate": float(integrator_correctness_pass_rate),
+        "integrator_segments_used_median": float(integrator_segments_used_median),
+        "integrator_evals_total_median": float(integrator_evals_total_median),
+        "integrator_error_est_total_median": float(integrator_error_est_total_median),
+        "integrator_speedup_target": float(integrator_speedup_target),
+        "integrator_speedup_median": float(integrator_speedup_median),
+        "integrator_speedup_verdict": str(integrator_speedup_verdict),
         "integration_walltime_ms_median": float(
-            statistics.median([float(dos_L_ms), float(dos_H_ms), float(dos_WH_ms)])
+            statistics.median([float(dos_L_ms_out), float(dos_H_ms_out), float(dos_WH_ms_out)])
         )
         if energy_grid.size
         else float("nan"),

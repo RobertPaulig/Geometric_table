@@ -67,6 +67,38 @@ on:
         description: "SCF temperature for soft weights"
         required: true
         default: "1.0"
+      integrator_mode:
+        description: "integrator_mode for DOS/LDOS integration (baseline|adaptive|both)"
+        required: true
+        default: "baseline"
+      integrator_eps_abs:
+        description: "adaptive abs tolerance (P4.1)"
+        required: true
+        default: "1e-6"
+      integrator_eps_rel:
+        description: "adaptive rel tolerance (P4.1)"
+        required: true
+        default: "1e-4"
+      integrator_subdomains_max:
+        description: "adaptive subdomains_max (P4.1)"
+        required: true
+        default: "64"
+      integrator_poly_degree_max:
+        description: "adaptive poly_degree_max (P4.1)"
+        required: true
+        default: "8"
+      integrator_quad_order_max:
+        description: "adaptive quad_order_max (P4.1)"
+        required: true
+        default: "16"
+      integrator_eval_budget_max:
+        description: "adaptive eval_budget_max (P4.1)"
+        required: true
+        default: "4096"
+      integrator_split_criterion:
+        description: "adaptive split_criterion label (audit/logging) (P4.1)"
+        required: true
+        default: "max_abs_error"
       prerelease:
         description: "Mark GitHub release as pre-release"
         required: true
@@ -122,6 +154,14 @@ jobs:
             --scf_damping ${{ inputs.scf_damping }} \
             --scf_occ_k ${{ inputs.scf_occ_k }} \
             --scf_tau ${{ inputs.scf_tau }} \
+            --integrator_mode ${{ inputs.integrator_mode }} \
+            --integrator_eps_abs ${{ inputs.integrator_eps_abs }} \
+            --integrator_eps_rel ${{ inputs.integrator_eps_rel }} \
+            --integrator_subdomains_max ${{ inputs.integrator_subdomains_max }} \
+            --integrator_poly_degree_max ${{ inputs.integrator_poly_degree_max }} \
+            --integrator_quad_order_max ${{ inputs.integrator_quad_order_max }} \
+            --integrator_eval_budget_max ${{ inputs.integrator_eval_budget_max }} \
+            --integrator_split_criterion ${{ inputs.integrator_split_criterion }} \
             --zip_pack
 
       - name: Validate zip (no unpack)
@@ -143,7 +183,7 @@ jobs:
 
           - Source ref: ${{ inputs.ref }}
           - Batch (repro):
-            hetero2-batch --input stress.csv --out_dir out_stress --artifacts light --score_mode mock --k_decoys ${{ inputs.k_decoys }} --workers ${{ inputs.workers }} --timeout_s ${{ inputs.timeout_s }} --maxtasksperchild 100 --seed_strategy per_row --seed ${{ inputs.seed }} --physics_mode ${{ inputs.physics_mode }} --edge_weight_mode ${{ inputs.edge_weight_mode }} --potential_mode ${{ inputs.potential_mode }} --scf_max_iter ${{ inputs.scf_max_iter }} --scf_tol ${{ inputs.scf_tol }} --scf_damping ${{ inputs.scf_damping }} --scf_occ_k ${{ inputs.scf_occ_k }} --scf_tau ${{ inputs.scf_tau }} --zip_pack
+            hetero2-batch --input stress.csv --out_dir out_stress --artifacts light --score_mode mock --k_decoys ${{ inputs.k_decoys }} --workers ${{ inputs.workers }} --timeout_s ${{ inputs.timeout_s }} --maxtasksperchild 100 --seed_strategy per_row --seed ${{ inputs.seed }} --physics_mode ${{ inputs.physics_mode }} --edge_weight_mode ${{ inputs.edge_weight_mode }} --potential_mode ${{ inputs.potential_mode }} --scf_max_iter ${{ inputs.scf_max_iter }} --scf_tol ${{ inputs.scf_tol }} --scf_damping ${{ inputs.scf_damping }} --scf_occ_k ${{ inputs.scf_occ_k }} --scf_tau ${{ inputs.scf_tau }} --integrator_mode ${{ inputs.integrator_mode }} --integrator_eps_abs ${{ inputs.integrator_eps_abs }} --integrator_eps_rel ${{ inputs.integrator_eps_rel }} --integrator_subdomains_max ${{ inputs.integrator_subdomains_max }} --integrator_poly_degree_max ${{ inputs.integrator_poly_degree_max }} --integrator_quad_order_max ${{ inputs.integrator_quad_order_max }} --integrator_eval_budget_max ${{ inputs.integrator_eval_budget_max }} --integrator_split_criterion ${{ inputs.integrator_split_criterion }} --zip_pack
           - Pack: summary.csv, metrics.json, index.md, manifest.json, checksums.sha256, evidence_pack.zip
           - SHA256(evidence_pack.zip): ${{ steps.hash.outputs.sha256 }}
           EOF
@@ -226,7 +266,7 @@ jobs:
           - Release asset: ${{ needs.build-pack.outputs.asset_url }}
           - SHA256(evidence_pack.zip): ${{ needs.build-pack.outputs.sha256 }}
           - Command:
-            hetero2-batch --input stress.csv --out_dir out_stress --artifacts light --score_mode mock --k_decoys ${{ inputs.k_decoys }} --workers ${{ inputs.workers }} --timeout_s ${{ inputs.timeout_s }} --maxtasksperchild 100 --seed_strategy per_row --seed ${{ inputs.seed }} --physics_mode ${{ inputs.physics_mode }} --edge_weight_mode ${{ inputs.edge_weight_mode }} --potential_mode ${{ inputs.potential_mode }} --scf_max_iter ${{ inputs.scf_max_iter }} --scf_tol ${{ inputs.scf_tol }} --scf_damping ${{ inputs.scf_damping }} --scf_occ_k ${{ inputs.scf_occ_k }} --scf_tau ${{ inputs.scf_tau }} --zip_pack
+            hetero2-batch --input stress.csv --out_dir out_stress --artifacts light --score_mode mock --k_decoys ${{ inputs.k_decoys }} --workers ${{ inputs.workers }} --timeout_s ${{ inputs.timeout_s }} --maxtasksperchild 100 --seed_strategy per_row --seed ${{ inputs.seed }} --physics_mode ${{ inputs.physics_mode }} --edge_weight_mode ${{ inputs.edge_weight_mode }} --potential_mode ${{ inputs.potential_mode }} --scf_max_iter ${{ inputs.scf_max_iter }} --scf_tol ${{ inputs.scf_tol }} --scf_damping ${{ inputs.scf_damping }} --scf_occ_k ${{ inputs.scf_occ_k }} --scf_tau ${{ inputs.scf_tau }} --integrator_mode ${{ inputs.integrator_mode }} --integrator_eps_abs ${{ inputs.integrator_eps_abs }} --integrator_eps_rel ${{ inputs.integrator_eps_rel }} --integrator_subdomains_max ${{ inputs.integrator_subdomains_max }} --integrator_poly_degree_max ${{ inputs.integrator_poly_degree_max }} --integrator_quad_order_max ${{ inputs.integrator_quad_order_max }} --integrator_eval_budget_max ${{ inputs.integrator_eval_budget_max }} --integrator_split_criterion ${{ inputs.integrator_split_criterion }} --zip_pack
           EOF
 
       - name: Create PR with registry update
