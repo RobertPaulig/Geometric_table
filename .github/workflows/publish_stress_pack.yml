@@ -43,6 +43,30 @@ on:
         description: "edge_weight_mode for hetero2-batch (unweighted|bond_order|bond_order_delta_chi)"
         required: true
         default: "unweighted"
+      potential_mode:
+        description: "potential_mode for hetero2-batch (static|self_consistent|both)"
+        required: true
+        default: "static"
+      scf_max_iter:
+        description: "SCF max iterations (self_consistent/both)"
+        required: true
+        default: "50"
+      scf_tol:
+        description: "SCF convergence tolerance (inf-norm of dV)"
+        required: true
+        default: "1e-6"
+      scf_damping:
+        description: "SCF damping in (0,1]"
+        required: true
+        default: "0.5"
+      scf_occ_k:
+        description: "SCF number of lowest eigenstates to use"
+        required: true
+        default: "5"
+      scf_tau:
+        description: "SCF temperature for soft weights"
+        required: true
+        default: "1.0"
       prerelease:
         description: "Mark GitHub release as pre-release"
         required: true
@@ -92,6 +116,12 @@ jobs:
             --seed ${{ inputs.seed }} \
             --physics_mode ${{ inputs.physics_mode }} \
             --edge_weight_mode ${{ inputs.edge_weight_mode }} \
+            --potential_mode ${{ inputs.potential_mode }} \
+            --scf_max_iter ${{ inputs.scf_max_iter }} \
+            --scf_tol ${{ inputs.scf_tol }} \
+            --scf_damping ${{ inputs.scf_damping }} \
+            --scf_occ_k ${{ inputs.scf_occ_k }} \
+            --scf_tau ${{ inputs.scf_tau }} \
             --zip_pack
 
       - name: Validate zip (no unpack)
@@ -113,7 +143,7 @@ jobs:
 
           - Source ref: ${{ inputs.ref }}
           - Batch (repro):
-            hetero2-batch --input stress.csv --out_dir out_stress --artifacts light --score_mode mock --k_decoys ${{ inputs.k_decoys }} --workers ${{ inputs.workers }} --timeout_s ${{ inputs.timeout_s }} --maxtasksperchild 100 --seed_strategy per_row --seed ${{ inputs.seed }} --physics_mode ${{ inputs.physics_mode }} --edge_weight_mode ${{ inputs.edge_weight_mode }} --zip_pack
+            hetero2-batch --input stress.csv --out_dir out_stress --artifacts light --score_mode mock --k_decoys ${{ inputs.k_decoys }} --workers ${{ inputs.workers }} --timeout_s ${{ inputs.timeout_s }} --maxtasksperchild 100 --seed_strategy per_row --seed ${{ inputs.seed }} --physics_mode ${{ inputs.physics_mode }} --edge_weight_mode ${{ inputs.edge_weight_mode }} --potential_mode ${{ inputs.potential_mode }} --scf_max_iter ${{ inputs.scf_max_iter }} --scf_tol ${{ inputs.scf_tol }} --scf_damping ${{ inputs.scf_damping }} --scf_occ_k ${{ inputs.scf_occ_k }} --scf_tau ${{ inputs.scf_tau }} --zip_pack
           - Pack: summary.csv, metrics.json, index.md, manifest.json, checksums.sha256, evidence_pack.zip
           - SHA256(evidence_pack.zip): ${{ steps.hash.outputs.sha256 }}
           EOF
@@ -196,7 +226,7 @@ jobs:
           - Release asset: ${{ needs.build-pack.outputs.asset_url }}
           - SHA256(evidence_pack.zip): ${{ needs.build-pack.outputs.sha256 }}
           - Command:
-            hetero2-batch --input stress.csv --out_dir out_stress --artifacts light --score_mode mock --k_decoys ${{ inputs.k_decoys }} --workers ${{ inputs.workers }} --timeout_s ${{ inputs.timeout_s }} --maxtasksperchild 100 --seed_strategy per_row --seed ${{ inputs.seed }} --physics_mode ${{ inputs.physics_mode }} --edge_weight_mode ${{ inputs.edge_weight_mode }} --zip_pack
+            hetero2-batch --input stress.csv --out_dir out_stress --artifacts light --score_mode mock --k_decoys ${{ inputs.k_decoys }} --workers ${{ inputs.workers }} --timeout_s ${{ inputs.timeout_s }} --maxtasksperchild 100 --seed_strategy per_row --seed ${{ inputs.seed }} --physics_mode ${{ inputs.physics_mode }} --edge_weight_mode ${{ inputs.edge_weight_mode }} --potential_mode ${{ inputs.potential_mode }} --scf_max_iter ${{ inputs.scf_max_iter }} --scf_tol ${{ inputs.scf_tol }} --scf_damping ${{ inputs.scf_damping }} --scf_occ_k ${{ inputs.scf_occ_k }} --scf_tau ${{ inputs.scf_tau }} --zip_pack
           EOF
 
       - name: Create PR with registry update
