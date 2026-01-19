@@ -888,3 +888,11 @@ separation facts (computed on status==OK rows only):
   - integrator_eps: 1e-06
   - integration_walltime_ms_median: 2.3876529999995455
   - evidence_pack_files: integration_benchmark.csv, integration_benchmark.md, summary_metadata.json
+
+## physics-operator-integration-adaptive-2026-01-19-r1
+
+- Source commit: 19b21d980e968525783e635b87689aa854403128
+- Release asset: https://github.com/RobertPaulig/Geometric_table/releases/download/physics-operator-integration-adaptive-2026-01-19-r1/evidence_pack.zip
+- SHA256(evidence_pack.zip): 6C2F3ED358220DB60F725AF202B310051CD9F901FC454420F3B7A9FD08464C0C
+- Command:
+  hetero2-batch --input stress.csv --out_dir out_stress --artifacts light --score_mode mock --k_decoys 2 --workers 1 --timeout_s 60 --maxtasksperchild 100 --seed_strategy per_row --seed 0 --physics_mode topological --edge_weight_mode unweighted --potential_mode static --scf_max_iter 50 --scf_tol 1e-6 --scf_damping 0.5 --scf_occ_k 5 --scf_tau 1.0 --integrator_mode both --integrator_eps_abs 1e-6 --integrator_eps_rel 1e-4 --integrator_subdomains_max 64 --integrator_poly_degree_max 8 --integrator_quad_order_max 16 --integrator_eval_budget_max 4096 --integrator_split_criterion max_abs_error --zip_pack
