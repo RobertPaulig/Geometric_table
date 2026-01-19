@@ -78,6 +78,10 @@ def test_batch_writes_adaptive_integration_artifacts_in_both_mode(tmp_path: Path
     assert "integrator_verdict" in meta
     assert "integrator_eval_ratio_median" in meta
     assert "integrator_cache_hit_rate_median" in meta
+    assert "integrator_benchmark_curves" in meta
+    assert "integrator_expected_rows" in meta
+    assert "integrator_valid_rows" in meta
+    assert "integrator_valid_row_fraction" in meta
 
     with compare_csv.open("r", encoding="utf-8", newline="") as f:
         reader = csv.DictReader(f)
@@ -105,6 +109,9 @@ def test_batch_writes_adaptive_integration_artifacts_in_both_mode(tmp_path: Path
         for key in [
             "molecule_id",
             "curve_id",
+            "curve_name",
+            "baseline_valid",
+            "adaptive_valid",
             "baseline_points",
             "adaptive_evals_total",
             "eval_ratio",
@@ -114,6 +121,7 @@ def test_batch_writes_adaptive_integration_artifacts_in_both_mode(tmp_path: Path
             "cache_hit_rate",
             "segments_used",
             "adaptive_verdict_row",
+            "row_verdict",
         ]:
             assert key in reader.fieldnames
         rows = list(reader)

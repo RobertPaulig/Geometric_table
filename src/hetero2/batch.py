@@ -404,7 +404,7 @@ def run_batch(
     integrator_subdomains_max: int = 64,
     integrator_poly_degree_max: int = 8,
     integrator_quad_order_max: int = 16,
-    integrator_eval_budget_max: int = 4096,
+    integrator_eval_budget_max: int = 0,
     integrator_split_criterion: str = "max_abs_error",
     seed_strategy: str = "global",
     no_index: bool = False,
@@ -1144,6 +1144,16 @@ def run_batch(
     dos_eigs_count_H = int(len(eigs_H))
     dos_eigs_count_WH = int(len(eigs_WH))
 
+    # Contract: which curves are expected for integration benchmarking depends on physics_mode/edge_weight_mode.
+    # Keep the list stable (no dynamic skipping based on missing outputs).
+    integrator_benchmark_curves: list[str] = []
+    if str(physics_mode) in {"topological", "both"}:
+        integrator_benchmark_curves.append("dos_L")
+    if str(physics_mode) in {"hamiltonian", "both"}:
+        integrator_benchmark_curves.append("dos_H")
+    if str(edge_weight_mode) != "unweighted" and str(physics_mode) in {"hamiltonian", "both"}:
+        integrator_benchmark_curves.append("dos_WH")
+
     # Baseline curves (P4.0): fixed energy grid.
     t0 = time.perf_counter()
     dos_L = compute_dos_curve(eigenvalues=eigs_L, energy_grid=energy_grid, eta=dos_eta) if eigs_L else np.zeros_like(energy_grid)
@@ -1180,13 +1190,18 @@ def run_batch(
                 baseline_noise_grid_points = int(fine_n)
 
     # Adaptive curves (P4.1): piecewise approximation with a posteriori error estimate.
+    integrator_eval_budget_max_effective = int(integrator_eval_budget_max)
+    if integrator_eval_budget_max_effective <= 0:
+        # Default: near-baseline budget to avoid pathological over-refinement while still enabling correctness.
+        integrator_eval_budget_max_effective = int(math.ceil(1.25 * float(int(energy_grid.size))))
+
     adaptive_cfg = AdaptiveIntegrationConfig(
         eps_abs=float(integrator_eps_abs),
         eps_rel=float(integrator_eps_rel),
         subdomains_max=int(integrator_subdomains_max),
         poly_degree_max=int(integrator_poly_degree_max),
         quad_order_max=int(integrator_quad_order_max),
-        eval_budget_max=int(integrator_eval_budget_max),
+        eval_budget_max=int(integrator_eval_budget_max_effective),
         split_criterion=str(integrator_split_criterion),
     )
     adaptive_curves: dict[str, np.ndarray] = {}
@@ -1194,24 +1209,17 @@ def run_batch(
     adaptive_traces_rows: list[dict[str, object]] = []
 
     if integrator_mode in {"adaptive", "both"} and energy_grid.size:
-        for curve_id, eigs, baseline_values in [
-            ("dos_L", eigs_L, dos_L),
-            ("dos_H", eigs_H, dos_H),
-            ("dos_WH", eigs_WH, dos_WH),
-        ]:
+        curve_specs: list[tuple[str, list[float], np.ndarray]] = []
+        for curve_id in integrator_benchmark_curves:
+            if curve_id == "dos_L":
+                curve_specs.append((curve_id, eigs_L, np.asarray(dos_L, dtype=float)))
+            elif curve_id == "dos_H":
+                curve_specs.append((curve_id, eigs_H, np.asarray(dos_H, dtype=float)))
+            elif curve_id == "dos_WH":
+                curve_specs.append((curve_id, eigs_WH, np.asarray(dos_WH, dtype=float)))
+
+        for curve_id, eigs, baseline_values in curve_specs:
             if not eigs:
-                adaptive_curves[curve_id] = np.zeros_like(energy_grid)
-                adaptive_summaries[curve_id] = {
-                    "curve_id": curve_id,
-                    "verdict": "SUCCESS",
-                    "limit_hit_reason": "",
-                    "eps_abs": float(adaptive_cfg.eps_abs),
-                    "eps_rel": float(adaptive_cfg.eps_rel),
-                    "error_est_total": float("nan"),
-                    "segments_used": 0,
-                    "evals_total": 0,
-                    "walltime_ms_total": 0.0,
-                }
                 continue
 
             tol_scale = float(np.max(np.abs(np.asarray(baseline_values, dtype=float)))) if baseline_values.size else 0.0
@@ -1290,6 +1298,9 @@ def run_batch(
     integrator_error_est_total_median = float("nan")
     integrator_eval_ratio_median = float("nan")
     integrator_cache_hit_rate_median = float("nan")
+    integrator_expected_rows = int(len(integrator_benchmark_curves))
+    integrator_valid_rows = int(0)
+    integrator_valid_row_fraction = float("nan")
 
     if integrator_mode in {"adaptive", "both"}:
         adaptive_trace_csv = out_dir / "adaptive_integration_trace.csv"
@@ -1350,28 +1361,67 @@ def run_batch(
             speed_profile_csv = out_dir / "integration_speed_profile.csv"
             compare_rows: list[dict[str, object]] = []
             speed_profile_rows: list[dict[str, object]] = []
-            for curve_id, baseline_vals, baseline_ms, adaptive_vals in [
-                ("dos_L", dos_L, dos_L_ms, adaptive_curves.get("dos_L", dos_L)),
-                ("dos_H", dos_H, dos_H_ms, adaptive_curves.get("dos_H", dos_H)),
-                ("dos_WH", dos_WH, dos_WH_ms, adaptive_curves.get("dos_WH", dos_WH)),
-            ]:
-                base_arr = np.asarray(baseline_vals, dtype=float)
-                adapt_arr = np.asarray(adaptive_vals, dtype=float)
+            curve_baseline: dict[str, tuple[np.ndarray, float]] = {
+                "dos_L": (np.asarray(dos_L, dtype=float), float(dos_L_ms)),
+                "dos_H": (np.asarray(dos_H, dtype=float), float(dos_H_ms)),
+                "dos_WH": (np.asarray(dos_WH, dtype=float), float(dos_WH_ms)),
+            }
+            curve_has_eigs: dict[str, bool] = {
+                "dos_L": bool(dos_eigs_count_L > 0),
+                "dos_H": bool(dos_eigs_count_H > 0),
+                "dos_WH": bool(dos_eigs_count_WH > 0),
+            }
+
+            for curve_id in integrator_benchmark_curves:
+                baseline_vals, baseline_ms = curve_baseline.get(curve_id, (np.array([], dtype=float), float("nan")))
+                baseline_valid = bool(curve_has_eigs.get(curve_id, False) and energy_grid.size > 0)
+                adaptive_valid = bool(curve_id in adaptive_summaries)
+
+                adaptive_vals = np.asarray(adaptive_curves.get(curve_id, baseline_vals), dtype=float)
+                adaptive_verdict_row = str(adaptive_summaries.get(curve_id, {}).get("verdict", "N/A"))
+                adaptive_ms = float(adaptive_summaries.get(curve_id, {}).get("walltime_ms_total", float("nan")))
+                adaptive_evals_total = float(adaptive_summaries.get(curve_id, {}).get("evals_total", float("nan")))
+                adaptive_segments_used = float(adaptive_summaries.get(curve_id, {}).get("segments_used", float("nan")))
+                cache_hit_rate = float(adaptive_summaries.get(curve_id, {}).get("cache_hit_rate", float("nan")))
+
+                if baseline_valid and adaptive_valid:
+                    integrator_valid_rows += 1
+
+                baseline_points = float(energy_grid.size) if baseline_valid else float("nan")
+                adaptive_evals_total_out = float(adaptive_evals_total) if adaptive_valid else float("nan")
+                eval_ratio = (
+                    float(adaptive_evals_total_out / baseline_points)
+                    if baseline_valid and adaptive_valid and baseline_points > 0 and math.isfinite(adaptive_evals_total_out)
+                    else float("nan")
+                )
+                speedup = (
+                    float(baseline_ms / adaptive_ms)
+                    if baseline_valid and adaptive_valid and adaptive_ms and adaptive_ms > 0.0 and math.isfinite(adaptive_ms)
+                    else float("nan")
+                )
+
+                base_arr = np.asarray(baseline_vals, dtype=float) if baseline_valid else np.array([], dtype=float)
+                adapt_arr = np.asarray(adaptive_vals, dtype=float) if baseline_valid and adaptive_valid else np.array([], dtype=float)
                 base_value = float(np.max(np.abs(base_arr))) if base_arr.size else float("nan")
                 adapt_value = float(np.max(np.abs(adapt_arr))) if adapt_arr.size else float("nan")
                 abs_err = float(np.max(np.abs(adapt_arr - base_arr))) if base_arr.size and adapt_arr.size else float("nan")
                 denom = abs(float(base_value)) + 1e-12
                 rel_err = float(abs_err / denom) if math.isfinite(float(abs_err)) else float("nan")
-                tol = float(adaptive_cfg.eps_abs) + float(adaptive_cfg.eps_rel) * abs(float(base_value))
-                pass_tol = bool(math.isfinite(float(abs_err)) and float(abs_err) <= float(tol))
-                adaptive_verdict_row = str(adaptive_summaries.get(curve_id, {}).get("verdict", "INCONCLUSIVE_LIMIT_HIT"))
-                adaptive_ms = float(adaptive_summaries.get(curve_id, {}).get("walltime_ms_total", float("nan")))
-                speedup = float(baseline_ms / adaptive_ms) if (adaptive_ms and adaptive_ms > 0.0 and math.isfinite(adaptive_ms)) else float("nan")
-                adaptive_evals_total = float(adaptive_summaries.get(curve_id, {}).get("evals_total", float("nan")))
-                adaptive_segments_used = float(adaptive_summaries.get(curve_id, {}).get("segments_used", float("nan")))
-                cache_hit_rate = float(adaptive_summaries.get(curve_id, {}).get("cache_hit_rate", float("nan")))
-                baseline_points = float(energy_grid.size)
-                eval_ratio = float(adaptive_evals_total / baseline_points) if baseline_points > 0 and math.isfinite(adaptive_evals_total) else float("nan")
+                tol = float(adaptive_cfg.eps_abs) + float(adaptive_cfg.eps_rel) * abs(float(base_value)) if math.isfinite(float(base_value)) else float("nan")
+                pass_tol = bool(math.isfinite(float(abs_err)) and math.isfinite(float(tol)) and float(abs_err) <= float(tol))
+
+                row_verdict = "OK"
+                if not baseline_valid:
+                    row_verdict = "BASELINE_NA"
+                elif not adaptive_valid:
+                    row_verdict = "ADAPTIVE_NA"
+                elif adaptive_verdict_row == "INCONCLUSIVE_LIMIT_HIT":
+                    row_verdict = "LIMIT_HIT"
+                elif adaptive_verdict_row == "FAIL_NUMERICAL":
+                    row_verdict = "ERROR"
+                elif not pass_tol:
+                    row_verdict = "ERROR"
+
                 compare_rows.append(
                     {
                         "molecule_id": "__run__",
@@ -1391,15 +1441,19 @@ def run_batch(
                     {
                         "molecule_id": "__run__",
                         "curve_id": str(curve_id),
+                        "curve_name": str(curve_id),
+                        "baseline_valid": bool(baseline_valid),
+                        "adaptive_valid": bool(adaptive_valid),
                         "baseline_points": baseline_points,
-                        "adaptive_evals_total": adaptive_evals_total,
+                        "adaptive_evals_total": adaptive_evals_total_out,
                         "eval_ratio": eval_ratio,
-                        "baseline_walltime_ms": float(baseline_ms),
-                        "adaptive_walltime_ms": adaptive_ms,
+                        "baseline_walltime_ms": float(baseline_ms) if baseline_valid else float("nan"),
+                        "adaptive_walltime_ms": adaptive_ms if adaptive_valid else float("nan"),
                         "speedup": speedup,
                         "cache_hit_rate": cache_hit_rate,
                         "segments_used": adaptive_segments_used,
                         "adaptive_verdict_row": adaptive_verdict_row,
+                        "row_verdict": str(row_verdict),
                     }
                 )
 
@@ -1437,6 +1491,9 @@ def run_batch(
                     fieldnames=[
                         "molecule_id",
                         "curve_id",
+                        "curve_name",
+                        "baseline_valid",
+                        "adaptive_valid",
                         "baseline_points",
                         "adaptive_evals_total",
                         "eval_ratio",
@@ -1446,11 +1503,14 @@ def run_batch(
                         "cache_hit_rate",
                         "segments_used",
                         "adaptive_verdict_row",
+                        "row_verdict",
                     ],
                 )
                 w.writeheader()
                 for row in speed_profile_rows:
                     out_row = dict(row)
+                    out_row["baseline_valid"] = "1" if bool(out_row.get("baseline_valid", False)) else "0"
+                    out_row["adaptive_valid"] = "1" if bool(out_row.get("adaptive_valid", False)) else "0"
                     for k in [
                         "baseline_points",
                         "adaptive_evals_total",
@@ -1465,49 +1525,70 @@ def run_batch(
                         out_row[k] = "" if not math.isfinite(v) else f"{v:.10g}"
                     w.writerow(out_row)
 
-            pass_rate = float(sum(1 for r in compare_rows if bool(r.get("pass_tolerance", False)))) / float(len(compare_rows)) if compare_rows else float("nan")
+            integrator_valid_row_fraction = (
+                float(integrator_valid_rows) / float(integrator_expected_rows) if integrator_expected_rows > 0 else float("nan")
+            )
+
+            comparable = [
+                r
+                for r in speed_profile_rows
+                if bool(r.get("baseline_valid", False)) and bool(r.get("adaptive_valid", False)) and str(r.get("row_verdict", "")) != "BASELINE_NA"
+            ]
+            pass_rate = float(sum(1 for r in compare_rows if bool(r.get("pass_tolerance", False)))) / float(len(comparable)) if comparable else float("nan")
             integrator_correctness_pass_rate = float(pass_rate)
 
-            speedups = [float(r.get("speedup", float("nan"))) for r in compare_rows]
+            ok_rows = [r for r in speed_profile_rows if str(r.get("row_verdict", "")) == "OK"]
+            speedups = [float(r.get("speedup", float("nan"))) for r in ok_rows]
             speedups = [s for s in speedups if math.isfinite(float(s)) and float(s) > 0.0]
             integrator_speedup_median = float(statistics.median(speedups)) if speedups else float("nan")
 
-            segments = [float(adaptive_summaries.get(k, {}).get("segments_used", float("nan"))) for k in adaptive_summaries.keys()]
-            evals = [float(adaptive_summaries.get(k, {}).get("evals_total", float("nan"))) for k in adaptive_summaries.keys()]
-            eval_ratios = [
-                float(adaptive_summaries.get(k, {}).get("evals_total", float("nan"))) / float(energy_grid.size)
-                for k in adaptive_summaries.keys()
-                if energy_grid.size
+            eval_ratios = [float(r.get("eval_ratio", float("nan"))) for r in ok_rows]
+            eval_ratios = [x for x in eval_ratios if math.isfinite(float(x)) and float(x) > 0.0]
+            integrator_eval_ratio_median = float(statistics.median(eval_ratios)) if eval_ratios else float("nan")
+
+            adaptive_perf_rows = [
+                r for r in speed_profile_rows if bool(r.get("baseline_valid", False)) and bool(r.get("adaptive_valid", False))
             ]
-            errs = [float(adaptive_summaries.get(k, {}).get("error_est_total", float("nan"))) for k in adaptive_summaries.keys()]
-            cache_rates = [float(adaptive_summaries.get(k, {}).get("cache_hit_rate", float("nan"))) for k in adaptive_summaries.keys()]
+            segments = [float(r.get("segments_used", float("nan"))) for r in adaptive_perf_rows]
+            evals = [float(r.get("adaptive_evals_total", float("nan"))) for r in adaptive_perf_rows]
+            errs = [
+                float(adaptive_summaries.get(str(r.get("curve_id", "")), {}).get("error_est_total", float("nan")))
+                for r in adaptive_perf_rows
+            ]
+            cache_rates = [float(r.get("cache_hit_rate", float("nan"))) for r in adaptive_perf_rows]
             integrator_segments_used_median = float(statistics.median([x for x in segments if math.isfinite(float(x))])) if segments else float("nan")
             integrator_evals_total_median = float(statistics.median([x for x in evals if math.isfinite(float(x))])) if evals else float("nan")
             integrator_error_est_total_median = float(statistics.median([x for x in errs if math.isfinite(float(x))])) if errs else float("nan")
-            integrator_eval_ratio_median = (
-                float(statistics.median([x for x in eval_ratios if math.isfinite(float(x))])) if eval_ratios else float("nan")
-            )
             integrator_cache_hit_rate_median = (
                 float(statistics.median([x for x in cache_rates if math.isfinite(float(x))])) if cache_rates else float("nan")
             )
 
-            if not math.isfinite(float(integrator_correctness_pass_rate)) or float(integrator_correctness_pass_rate) < 0.99:
-                integrator_verdict = "FAIL_CORRECTNESS"
-                integrator_speedup_verdict = "N/A_CORRECTNESS_FAILED"
+            if math.isfinite(float(integrator_valid_row_fraction)) and float(integrator_valid_row_fraction) < 0.95:
+                integrator_verdict = "INCONCLUSIVE_METRICS_INVALID"
+                integrator_speedup_verdict = "N/A_METRICS_INVALID"
             else:
-                any_fail = any(str(r.get("adaptive_verdict_row", "")) == "FAIL_NUMERICAL" for r in compare_rows)
-                any_inconclusive = any(str(r.get("adaptive_verdict_row", "")) == "INCONCLUSIVE_LIMIT_HIT" for r in compare_rows)
-                if any_fail:
-                    integrator_verdict = "FAIL_NUMERICAL"
-                elif any_inconclusive:
-                    integrator_verdict = "INCONCLUSIVE_LIMIT_HIT"
+                if not math.isfinite(float(integrator_correctness_pass_rate)) or float(integrator_correctness_pass_rate) < 0.99:
+                    integrator_verdict = "FAIL_CORRECTNESS"
+                    integrator_speedup_verdict = "N/A_CORRECTNESS_FAILED"
                 else:
-                    integrator_verdict = "SUCCESS"
+                    any_fail = any(str(r.get("adaptive_verdict_row", "")) == "FAIL_NUMERICAL" for r in compare_rows)
+                    any_inconclusive = any(str(r.get("adaptive_verdict_row", "")) == "INCONCLUSIVE_LIMIT_HIT" for r in compare_rows)
+                    if any_fail:
+                        integrator_verdict = "FAIL_NUMERICAL"
+                    elif any_inconclusive:
+                        integrator_verdict = "INCONCLUSIVE_LIMIT_HIT"
+                    else:
+                        integrator_verdict = "SUCCESS"
 
-                if math.isfinite(float(integrator_speedup_median)) and float(integrator_speedup_median) >= float(integrator_speedup_target):
-                    integrator_speedup_verdict = "SPEEDUP_CONFIRMED"
-                else:
-                    integrator_speedup_verdict = "NO_SPEEDUP_YET"
+                    speedup_min_target = 1.0
+                    if not math.isfinite(float(integrator_speedup_median)):
+                        integrator_speedup_verdict = "NO_SPEEDUP_YET"
+                    elif float(integrator_speedup_median) < float(speedup_min_target):
+                        integrator_speedup_verdict = "FAIL_SPEEDUP"
+                    elif float(integrator_speedup_median) >= float(integrator_speedup_target):
+                        integrator_speedup_verdict = "SPEEDUP_CONFIRMED"
+                    else:
+                        integrator_speedup_verdict = "NO_SPEEDUP_YET"
 
     # Integration benchmark (P4.0 baseline rails): capture grid config + walltime + determinism checksum.
     integration_benchmark_csv = out_dir / "integration_benchmark.csv"
@@ -2004,14 +2085,18 @@ def run_batch(
         "integrator_subdomains_max": int(integrator_subdomains_max),
         "integrator_poly_degree_max": int(integrator_poly_degree_max),
         "integrator_quad_order_max": int(integrator_quad_order_max),
-        "integrator_eval_budget_max": int(integrator_eval_budget_max),
+        "integrator_eval_budget_max": int(integrator_eval_budget_max_effective),
         "integrator_split_criterion": str(integrator_split_criterion),
+        "integrator_benchmark_curves": list(integrator_benchmark_curves),
         "integrator_energy_points": int(energy_grid.size),
         "integrator_energy_min": float(dos_energy_min),
         "integrator_energy_max": float(dos_energy_max),
         "integrator_eta": float(dos_eta),
         "integrator_verdict": str(integrator_verdict),
         "integrator_correctness_pass_rate": float(integrator_correctness_pass_rate),
+        "integrator_expected_rows": int(integrator_expected_rows),
+        "integrator_valid_rows": int(integrator_valid_rows),
+        "integrator_valid_row_fraction": float(integrator_valid_row_fraction),
         "integrator_segments_used_median": float(integrator_segments_used_median),
         "integrator_evals_total_median": float(integrator_evals_total_median),
         "integrator_eval_ratio_median": float(integrator_eval_ratio_median),

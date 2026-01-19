@@ -178,7 +178,12 @@ def _parse_batch_args(argv: list[str] | None = None) -> argparse.Namespace:
     ap.add_argument("--integrator_subdomains_max", type=int, default=64, help="Adaptive integrator max subdomains (P4.1).")
     ap.add_argument("--integrator_poly_degree_max", type=int, default=8, help="Adaptive integrator max polynomial degree per subdomain (P4.1).")
     ap.add_argument("--integrator_quad_order_max", type=int, default=16, help="Adaptive integrator max Gauss quadrature order for error probing (P4.1).")
-    ap.add_argument("--integrator_eval_budget_max", type=int, default=4096, help="Adaptive integrator max function evaluations (P4.1).")
+    ap.add_argument(
+        "--integrator_eval_budget_max",
+        type=int,
+        default=0,
+        help="Adaptive integrator max function evaluations (P4.1). 0=auto (~1.25x baseline energy_points).",
+    )
     ap.add_argument("--integrator_split_criterion", default="max_abs_error", help="Adaptive integrator split criterion label (audit/logging) (P4.1).")
     ap.add_argument(
         "--seed_strategy",
