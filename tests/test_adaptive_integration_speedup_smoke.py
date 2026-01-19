@@ -37,7 +37,9 @@ def test_adaptive_integrator_is_not_more_expensive_than_baseline_on_smooth_funct
 
 
 def test_adaptive_integrator_reports_nonzero_cache_hit_rate() -> None:
-    energy_grid = np.linspace(-2.0, 2.0, 128, dtype=float)
+    # Use a small grid with a larger poly_degree_max so p-refinement happens without being preempted
+    # by "prefer split on wide segments" heuristics. This makes cache reuse observable and deterministic.
+    energy_grid = np.linspace(-2.0, 2.0, 33, dtype=float)
 
     def f(x: np.ndarray) -> np.ndarray:
         vals = np.asarray(x, dtype=float)
@@ -47,7 +49,7 @@ def test_adaptive_integrator_reports_nonzero_cache_hit_rate() -> None:
         eps_abs=1e-6,
         eps_rel=1e-4,
         subdomains_max=64,
-        poly_degree_max=8,
+        poly_degree_max=32,
         quad_order_max=16,
         eval_budget_max=4096,
         split_criterion="max_abs_error",
