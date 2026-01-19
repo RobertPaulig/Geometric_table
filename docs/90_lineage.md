@@ -743,3 +743,16 @@
   - SCF audit verdict: SUCCESS (reason: nontrivial_on_asym_fixture; iters_median=15.0; delta_V_p95=0.0880012216377013; residual_init_mean=0.037387575359043745 → residual_final_mean=7.321790598292799e-07)
 - Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/133 (merge: c2f71b288ee81a30da3bd720ccaa0f102e13f592)
 - CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21134356078
+
+### 2026-01-19 - PHYSICS-P3.6-SCF-NONTRIVIAL-GATES-1: SCF audit metrics + run-level nontrivial verdict (asym fixture set)
+- Code PR: https://github.com/RobertPaulig/Geometric_table/pull/135 (merge: 220f00773a6e87a3af642ebb3c6e4eb35ebd0042)
+- CI run (3/3 ci/* on code merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21136385185
+- Live proof (asym fixture set; local build, release assets pinned):
+  - Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/physics-operator-scf-audit-2026-01-19-r2
+  - Source commit: 220f00773a6e87a3af642ebb3c6e4eb35ebd0042
+  - Input CSV asset (asym_ ids): https://github.com/RobertPaulig/Geometric_table/releases/download/physics-operator-scf-audit-2026-01-19-r2/scf_audit.csv
+  - Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/physics-operator-scf-audit-2026-01-19-r2/evidence_pack.zip
+  - SHA256(evidence_pack.zip): 3409C1137495CE450D22D6D23C4EB174FDF696EE317712124CB5248F5C18BD7E
+  - Evidence pack artifacts: scf_trace.csv, scf_summary.json, scf_audit_metrics.csv, summary_metadata.json (scf_audit_verdict=SUCCESS; scf_iters_mean=14.75; scf_iters_max=15; deltaV_max_max=0.1567902269999999; scf_converged_rate=1.0; scf_nontrivial_rate=1.0)
+- Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/136 (merge: 8582b0316c93f316fc42ed990746e0b07cd1111c)
+- CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21136630958
