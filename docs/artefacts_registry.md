@@ -992,3 +992,41 @@ separation facts (computed on status==OK rows only):
       - n_atoms=200 n_samples=10 median_speedup=0.03720015333905859 median_eval_ratio=0.8359375 pass_rate=1.0
       - n_atoms=400 n_samples=10 median_speedup=0.06403126872207464 median_eval_ratio=0.8359375 pass_rate=1.0
       - n_atoms=800 n_samples=10 median_speedup=0.201066376990021 median_eval_ratio=0.8359375 pass_rate=1.0
+
+## physics-operator-large-scale-2026-01-20-r2
+
+- Source commit: e7f576d7bfdbea31f8229ae90c5806ff7508331d
+- Release asset: https://github.com/RobertPaulig/Geometric_table/releases/download/physics-operator-large-scale-2026-01-20-r2/physics_large_scale_evidence_pack.zip
+- SHA256(physics_large_scale_evidence_pack.zip): BB8A54751BFA98D8A68C719A19B7B8A0284977BED591459CF0D029878654F999
+- Command:
+  python scripts/build_p5_large_scale_pack.py --out_dir out_physics_large_scale --n_atoms_bins "20,50,100,200,400,800" --samples_per_bin 10 --seed 0 --curve_id "dos_H" --energy_points 128 --dos_eta 0.2 --potential_scale_gamma 1.0 --edge_weight_mode bond_order_delta_chi --integrator_eps_abs 1e-6 --integrator_eps_rel 1e-4 --integrator_subdomains_max 32 --integrator_poly_degree_max 16 --integrator_quad_order_max 32 --integrator_eval_budget_max 256 --integrator_split_criterion "curvature" --overhead_region_n_max 100 --gate_n_min 200 --speedup_gate_break_even 1.0 --speedup_gate_strong 2.0
+- Outcome (facts from summary_metadata.json):
+  - law_ref:
+    - contract_path: docs/contracts/INTEGRATION_SCALE_CONTRACT.md
+    - contract_commit: e7f576d7bfdbea31f8229ae90c5806ff7508331d
+    - contract_version: p5.1.v1
+  - integrator (P5.1):
+    - gate_n_min: 200
+    - correctness_gate_rate: 1.0
+    - min_scale_samples: 5
+    - integrator_correctness_pass_rate_at_scale: 1.0
+    - integrator_speedup_median_at_scale: 0.11588066997158922
+    - integrator_eval_ratio_median_at_scale: 1.1962616822429906
+    - integrator_correctness_verdict: PASS_CORRECTNESS_AT_SCALE
+    - integrator_speedup_verdict: FAIL_SPEEDUP_AT_SCALE
+    - integrator_verdict_reason: FAIL: correctness ok at scale; speedup_median_at_scale=0.11588066997158922 < 1.0
+  - scale (P5):
+    - scale_n_atoms_min: 20
+    - scale_n_atoms_max: 800
+    - scale_overhead_region_n_max: 100
+    - scale_gate_n_min: 200
+    - scale_break_even_n_estimate: None
+    - scale_speedup_median_at_maxN: 0.19773954628146345
+    - scale_speedup_verdict: FAIL_SPEEDUP_AT_SCALE
+    - bins:
+      - n_atoms=20 n_samples=10 median_speedup=0.008302636278321243 median_eval_ratio=0.7218578715584704 pass_rate=1.0
+      - n_atoms=50 n_samples=10 median_speedup=0.015548566986817034 median_eval_ratio=1.1962616822429906 pass_rate=1.0
+      - n_atoms=100 n_samples=10 median_speedup=0.02435279487229796 median_eval_ratio=1.1962616822429906 pass_rate=1.0
+      - n_atoms=200 n_samples=10 median_speedup=0.03995939025453221 median_eval_ratio=1.1962616822429906 pass_rate=1.0
+      - n_atoms=400 n_samples=10 median_speedup=0.11588066997158922 median_eval_ratio=1.1962616822429906 pass_rate=1.0
+      - n_atoms=800 n_samples=10 median_speedup=0.19773954628146345 median_eval_ratio=1.1962616822429906 pass_rate=1.0
