@@ -126,8 +126,8 @@ jobs:
           echo "${{ inputs.integrator_eval_budget_max }}" | grep -E '^[0-9]+$'
           echo "${{ inputs.overhead_region_n_max }}" | grep -E '^[0-9]+$'
           echo "${{ inputs.gate_n_min }}" | grep -E '^[0-9]+$'
-          echo "${{ inputs.dos_eta }}" | grep -E '^[0-9]+(\\.[0-9]+)?$'
-          echo "${{ inputs.potential_scale_gamma }}" | grep -E '^[0-9]+(\\.[0-9]+)?$'
+          echo "${{ inputs.dos_eta }}" | grep -E '^[0-9]+(\.[0-9]+)?$'
+          echo "${{ inputs.potential_scale_gamma }}" | grep -E '^[0-9]+(\.[0-9]+)?$'
 
       - uses: actions/setup-python@v5
         with:
