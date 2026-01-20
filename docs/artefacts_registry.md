@@ -1053,6 +1053,11 @@ separation facts (computed on status==OK rows only):
     - integrator_correctness_verdict: PASS_CORRECTNESS_AT_SCALE
     - integrator_speedup_verdict: FAIL_SPEEDUP_AT_SCALE
     - integrator_verdict_reason: FAIL: correctness ok at scale; speedup_median_at_scale=0.11754749203803679 < 1.0
+  - cost (P5.2):
+    - pack contains timing_breakdown.csv
+    - cost_bottleneck_verdict_at_scale: BOTTLENECK_IS_INTEGRATOR
+    - cost_median_dos_ldos_eval_ms_at_scale: 2.487639000023023
+    - cost_median_integration_logic_ms_at_scale: 4.544935500007341
   - scale (P5):
     - scale_n_atoms_min: 20
     - scale_n_atoms_max: 800
