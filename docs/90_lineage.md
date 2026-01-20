@@ -850,3 +850,17 @@
   - Facts (summary_metadata.json): scale_n_atoms_max=800; scale_speedup_median_at_maxN=0.201066; scale_break_even_n_estimate=null; scale_speedup_verdict=FAIL_SPEEDUP_AT_SCALE
 - Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/160 (merge: e736d2b84e4fc9c3539f647d02f31a48d08b443c)
 - CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21166311914
+
+### 2026-01-20 - PHYSICS-P5.1-INTEGRATION-SCALE-LAW-1: freeze integration scale law (contract + gates + canonical artifacts)
+- Code PR (P5.1 law + contract tests): https://github.com/RobertPaulig/Geometric_table/pull/162 (merge: e7f576d7bfdbea31f8229ae90c5806ff7508331d)
+- CI run (3/3 ci/* on code merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21184133870
+- Live proof r2 (large-scale; integrator_mode=both; dos_eta=0.2):
+  - Law ref (from summary_metadata.json): docs/contracts/INTEGRATION_SCALE_CONTRACT.md @ e7f576d7bfdbea31f8229ae90c5806ff7508331d (p5.1.v1)
+  - Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/physics-operator-large-scale-2026-01-20-r2
+  - Publish run: https://github.com/RobertPaulig/Geometric_table/actions/runs/21184833947
+  - Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/physics-operator-large-scale-2026-01-20-r2/physics_large_scale_evidence_pack.zip
+  - SHA256(physics_large_scale_evidence_pack.zip): BB8A54751BFA98D8A68C719A19B7B8A0284977BED591459CF0D029878654F999 (verified by download)
+  - Evidence pack artifacts: fixtures_polymer_scale.csv, speedup_vs_n.csv, speedup_vs_n.md, integration_compare.csv, integration_speed_profile.csv, adaptive_integration_trace.csv, adaptive_integration_summary.json, summary_metadata.json
+  - Facts (summary_metadata.json): gate_n_min=200; integrator_correctness_pass_rate_at_scale=1.0; integrator_speedup_median_at_scale=0.11588066997158922; integrator_eval_ratio_median_at_scale=1.1962616822429906; integrator_correctness_verdict=PASS_CORRECTNESS_AT_SCALE; integrator_speedup_verdict=FAIL_SPEEDUP_AT_SCALE; scale_speedup_verdict=FAIL_SPEEDUP_AT_SCALE
+- Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/163 (merge: 1646c3bdbecf4cfb8113e54331b37457d5500ca0)
+- CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21185587833
