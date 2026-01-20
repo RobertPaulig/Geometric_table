@@ -1,0 +1,433 @@
+name: publish-physics-large-scale-proof
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+  statuses: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref to run on (branch, tag, or SHA). Example: main or 9c54b043..."
+        required: true
+        default: "main"
+      tag:
+        description: "Release tag to create/update. Must match: physics-operator-large-scale-YYYY-MM-DD(-rN)"
+        required: true
+      prerelease:
+        description: "Mark GitHub release as pre-release"
+        required: true
+        default: "true"
+      n_atoms_bins:
+        description: "Comma-separated N_atoms bins (P5 fixtures)"
+        required: true
+        default: "20,50,100,200,400,800"
+      samples_per_bin:
+        description: "Number of samples per N_atoms bin"
+        required: true
+        default: "10"
+      seed:
+        description: "Global seed for fixture generation"
+        required: true
+        default: "0"
+      curve_id:
+        description: "Curve id label written to metadata (informational)"
+        required: true
+        default: "dos_H"
+      energy_points:
+        description: "Baseline energy grid points"
+        required: true
+        default: "128"
+      dos_eta:
+        description: "DOS kernel width eta"
+        required: true
+        default: "0.05"
+      potential_scale_gamma:
+        description: "Global scale gamma for V (dimensionless)"
+        required: true
+        default: "1.0"
+      edge_weight_mode:
+        description: "Edge weighting mode (unweighted|bond_order|bond_order_delta_chi)"
+        required: true
+        default: "bond_order_delta_chi"
+      integrator_eps_abs:
+        description: "Adaptive abs tolerance"
+        required: true
+        default: "1e-6"
+      integrator_eps_rel:
+        description: "Adaptive rel tolerance"
+        required: true
+        default: "1e-4"
+      integrator_subdomains_max:
+        description: "Adaptive max subdomains"
+        required: true
+        default: "32"
+      integrator_poly_degree_max:
+        description: "Adaptive max polynomial degree"
+        required: true
+        default: "16"
+      integrator_quad_order_max:
+        description: "Adaptive max Gauss quad order"
+        required: true
+        default: "32"
+      integrator_eval_budget_max:
+        description: "Adaptive eval budget cap"
+        required: true
+        default: "256"
+      integrator_split_criterion:
+        description: "Adaptive split criterion label"
+        required: true
+        default: "curvature"
+      overhead_region_n_max:
+        description: "Overhead region threshold for verdict (NO_SPEEDUP_EXPECTED)"
+        required: true
+        default: "100"
+      gate_n_min:
+        description: "Minimum N_atoms bin for speedup gating"
+        required: true
+        default: "200"
+      speedup_gate_break_even:
+        description: "Speedup gate (break-even)"
+        required: true
+        default: "1.0"
+      speedup_gate_strong:
+        description: "Speedup gate (strong)"
+        required: true
+        default: "2.0"
+
+jobs:
+  build-pack:
+    runs-on: ubuntu-latest
+    outputs:
+      sha256: ${{ steps.hash.outputs.sha256 }}
+      source_sha: ${{ steps.meta.outputs.source_sha }}
+      asset_url: ${{ steps.meta.outputs.asset_url }}
+      facts_md: ${{ steps.facts.outputs.facts_md }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Validate tag format
+        run: |
+          echo "${{ inputs.tag }}" | grep -E '^physics-operator-large-scale-[0-9]{4}-[0-9]{2}-[0-9]{2}(-r[0-9]+)?$'
+
+      - name: Validate inputs
+        run: |
+          echo "${{ inputs.samples_per_bin }}" | grep -E '^[0-9]+$'
+          echo "${{ inputs.seed }}" | grep -E '^[0-9]+$'
+          echo "${{ inputs.energy_points }}" | grep -E '^[0-9]+$'
+          echo "${{ inputs.integrator_subdomains_max }}" | grep -E '^[0-9]+$'
+          echo "${{ inputs.integrator_poly_degree_max }}" | grep -E '^[0-9]+$'
+          echo "${{ inputs.integrator_quad_order_max }}" | grep -E '^[0-9]+$'
+          echo "${{ inputs.integrator_eval_budget_max }}" | grep -E '^[0-9]+$'
+          echo "${{ inputs.overhead_region_n_max }}" | grep -E '^[0-9]+$'
+          echo "${{ inputs.gate_n_min }}" | grep -E '^[0-9]+$'
+          echo "${{ inputs.dos_eta }}" | grep -E '^[0-9]+(\\.[0-9]+)?$'
+          echo "${{ inputs.potential_scale_gamma }}" | grep -E '^[0-9]+(\\.[0-9]+)?$'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Build P5 large-scale evidence pack
+        run: |
+          rm -rf out_physics_large_scale
+          mkdir -p out_physics_large_scale
+          python scripts/build_p5_large_scale_pack.py \
+            --out_dir out_physics_large_scale \
+            --n_atoms_bins "${{ inputs.n_atoms_bins }}" \
+            --samples_per_bin ${{ inputs.samples_per_bin }} \
+            --seed ${{ inputs.seed }} \
+            --curve_id "${{ inputs.curve_id }}" \
+            --energy_points ${{ inputs.energy_points }} \
+            --dos_eta ${{ inputs.dos_eta }} \
+            --potential_scale_gamma ${{ inputs.potential_scale_gamma }} \
+            --edge_weight_mode ${{ inputs.edge_weight_mode }} \
+            --integrator_eps_abs ${{ inputs.integrator_eps_abs }} \
+            --integrator_eps_rel ${{ inputs.integrator_eps_rel }} \
+            --integrator_subdomains_max ${{ inputs.integrator_subdomains_max }} \
+            --integrator_poly_degree_max ${{ inputs.integrator_poly_degree_max }} \
+            --integrator_quad_order_max ${{ inputs.integrator_quad_order_max }} \
+            --integrator_eval_budget_max ${{ inputs.integrator_eval_budget_max }} \
+            --integrator_split_criterion "${{ inputs.integrator_split_criterion }}" \
+            --overhead_region_n_max ${{ inputs.overhead_region_n_max }} \
+            --gate_n_min ${{ inputs.gate_n_min }} \
+            --speedup_gate_break_even ${{ inputs.speedup_gate_break_even }} \
+            --speedup_gate_strong ${{ inputs.speedup_gate_strong }}
+
+          cp out_physics_large_scale/evidence_pack.zip out_physics_large_scale/physics_large_scale_evidence_pack.zip
+
+      - name: Compute SHA256
+        id: hash
+        run: |
+          SHA256=$(sha256sum out_physics_large_scale/physics_large_scale_evidence_pack.zip | awk '{print toupper($1)}')
+          echo "sha256=$SHA256" >> "$GITHUB_OUTPUT"
+          echo "$SHA256  physics_large_scale_evidence_pack.zip" > out_physics_large_scale/physics_large_scale_evidence_pack.zip.sha256
+
+      - name: Prepare meta (asset URL, source SHA)
+        id: meta
+        run: |
+          SOURCE_SHA=$(git rev-parse HEAD)
+          echo "source_sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
+          ASSET_URL="https://github.com/${{ github.repository }}/releases/download/${{ inputs.tag }}/physics_large_scale_evidence_pack.zip"
+          echo "asset_url=$ASSET_URL" >> "$GITHUB_OUTPUT"
+
+      - name: "Gate: ERROR must be 0"
+        run: |
+          python - << 'PY'
+          import json
+
+          m = json.load(open("out_physics_large_scale/metrics.json", "r", encoding="utf-8"))
+          err = int(m.get("counts", {}).get("ERROR", 0))
+          assert err == 0, f"Gate-P5 failed: ERROR={err}"
+          PY
+
+      - name: Validate zip (no unpack)
+        run: |
+          python -m zipfile -t out_physics_large_scale/physics_large_scale_evidence_pack.zip
+          python -m zipfile -l out_physics_large_scale/physics_large_scale_evidence_pack.zip | grep -E "manifest.json|checksums.sha256|metrics.json|index.md|summary.csv|summary_metadata.json|fixtures_polymer_scale.csv|speedup_vs_n.csv|speedup_vs_n.md"
+
+      - name: Extract facts (from summary_metadata.json)
+        id: facts
+        run: |
+          python - << 'PY'
+          import json
+          import os
+
+          md = json.load(open("out_physics_large_scale/summary_metadata.json", "r", encoding="utf-8"))
+          bins = md.get("scale_bins", [])
+          lines = []
+          lines.append("  - scale (P5):")
+          lines.append(f"    - scale_n_atoms_min: {md.get('scale_n_atoms_min')}")
+          lines.append(f"    - scale_n_atoms_max: {md.get('scale_n_atoms_max')}")
+          lines.append(f"    - scale_overhead_region_n_max: {md.get('scale_overhead_region_n_max')}")
+          lines.append(f"    - scale_gate_n_min: {md.get('scale_gate_n_min')}")
+          lines.append(f"    - scale_break_even_n_estimate: {md.get('scale_break_even_n_estimate')}")
+          lines.append(f"    - scale_speedup_median_at_maxN: {md.get('scale_speedup_median_at_maxN')}")
+          lines.append(f"    - scale_speedup_verdict: {md.get('scale_speedup_verdict')}")
+          lines.append("    - bins:")
+          if isinstance(bins, list) and bins:
+            for b in bins:
+              if not isinstance(b, dict) or b.get("row_kind") != "bin":
+                continue
+              lines.append(
+                "      - n_atoms="
+                + str(b.get("n_atoms_bin"))
+                + f" n_samples={b.get('n_samples')} median_speedup={b.get('median_speedup')} median_eval_ratio={b.get('median_eval_ratio')} pass_rate={b.get('pass_rate')}"
+              )
+          else:
+            lines.append("      - (no bins)")
+          facts_md = "\n".join(lines) + "\n"
+          (open("out_physics_large_scale/physics_large_scale_facts.md", "w", encoding="utf-8")).write(facts_md)
+          print(facts_md)
+
+          gh_out = os.environ.get("GITHUB_OUTPUT")
+          if gh_out:
+            with open(gh_out, "a", encoding="utf-8") as f:
+              f.write("facts_md<<EOF\n")
+              f.write(facts_md)
+              f.write("EOF\n")
+          PY
+
+      - name: Write release notes
+        run: |
+          cat > release_notes.md << 'EOF'
+          PHYSICS-P5 large-scale proof (speedup vs N_atoms)
+
+          - Source ref: ${{ inputs.ref }}
+          - Inputs:
+            - n_atoms_bins: ${{ inputs.n_atoms_bins }}
+            - samples_per_bin: ${{ inputs.samples_per_bin }}
+            - seed: ${{ inputs.seed }}
+          - Operator:
+            - edge_weight_mode: ${{ inputs.edge_weight_mode }}
+            - potential_scale_gamma: ${{ inputs.potential_scale_gamma }} (dimensionless)
+          - Integration:
+            - integrator_mode: both
+            - energy_points: ${{ inputs.energy_points }}
+            - dos_eta: ${{ inputs.dos_eta }}
+            - eps_abs: ${{ inputs.integrator_eps_abs }}
+            - eps_rel: ${{ inputs.integrator_eps_rel }}
+            - subdomains_max: ${{ inputs.integrator_subdomains_max }}
+            - poly_degree_max: ${{ inputs.integrator_poly_degree_max }}
+            - quad_order_max: ${{ inputs.integrator_quad_order_max }}
+            - eval_budget_max: ${{ inputs.integrator_eval_budget_max }}
+            - split_criterion: ${{ inputs.integrator_split_criterion }}
+          - Pack: fixtures_polymer_scale.csv, speedup_vs_n.csv, speedup_vs_n.md, summary.csv, summary_metadata.json, metrics.json, manifest.json, checksums.sha256, physics_large_scale_evidence_pack.zip
+          - SHA256(physics_large_scale_evidence_pack.zip): ${{ steps.hash.outputs.sha256 }}
+          - Outcome (facts from summary_metadata.json):
+          ${{ steps.facts.outputs.facts_md }}
+          EOF
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: physics-large-scale-evidence-pack
+          path: |
+            out_physics_large_scale
+            release_notes.md
+
+  publish-release:
+    needs: [build-pack]
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: physics-large-scale-evidence-pack
+          path: .
+
+      - name: "Gate: required CI contexts must be success"
+        env:
+          SOURCE_SHA: ${{ needs.build-pack.outputs.source_sha }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python - << 'PY'
+          import json
+          import os
+          import sys
+          import urllib.request
+
+          repo = os.environ["GITHUB_REPOSITORY"]
+          sha = os.environ["SOURCE_SHA"]
+          token = os.environ["GITHUB_TOKEN"]
+
+          url = f"https://api.github.com/repos/{repo}/commits/{sha}/status"
+          req = urllib.request.Request(
+              url,
+              headers={
+                  "Authorization": f"token {token}",
+                  "Accept": "application/vnd.github+json",
+              },
+          )
+          with urllib.request.urlopen(req) as resp:
+              data = json.load(resp)
+
+          latest_by_context = {}
+          for st in data.get("statuses", []):
+              ctx = st.get("context", "")
+              if ctx and ctx not in latest_by_context:
+                  latest_by_context[ctx] = st.get("state", "")
+
+          required = ["ci/test", "ci/test-chem", "ci/docker"]
+          missing = [c for c in required if c not in latest_by_context]
+          bad = [c for c in required if latest_by_context.get(c) != "success"]
+
+          if missing or bad:
+              print("Gate-Required-Contexts failed")
+              print(f"source_sha={sha}")
+              print(f"missing={missing}")
+              print("states=" + json.dumps({c: latest_by_context.get(c) for c in required}, indent=2, sort_keys=True))
+              sys.exit(1)
+
+          print("Gate OK: required contexts success")
+          print(f"source_sha={sha}")
+          for c in required:
+              print(f"{c}=success")
+          PY
+
+      - name: Create/Update GitHub Release + upload asset
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag }}
+          target_commitish: ${{ needs.build-pack.outputs.source_sha }}
+          name: "PHYSICS-P5 large-scale proof"
+          body_path: release_notes.md
+          prerelease: ${{ inputs.prerelease }}
+          files: |
+            out_physics_large_scale/physics_large_scale_evidence_pack.zip
+            out_physics_large_scale/physics_large_scale_evidence_pack.zip.sha256
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  registry-pr:
+    needs: [build-pack, publish-release]
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: "main"
+
+      - name: Update artefacts registry (append)
+        run: |
+          mkdir -p docs
+          FILE="docs/artefacts_registry.md"
+          if [ ! -f "$FILE" ]; then
+            echo "# Artefacts Registry" > "$FILE"
+            echo "" >> "$FILE"
+          fi
+
+          cat >> "$FILE" << EOF
+
+          ## ${{ inputs.tag }}
+
+          - Source commit: ${{ needs.build-pack.outputs.source_sha }}
+          - Release asset: ${{ needs.build-pack.outputs.asset_url }}
+          - SHA256(physics_large_scale_evidence_pack.zip): ${{ needs.build-pack.outputs.sha256 }}
+          - Command:
+            python scripts/build_p5_large_scale_pack.py --out_dir out_physics_large_scale --n_atoms_bins "${{ inputs.n_atoms_bins }}" --samples_per_bin ${{ inputs.samples_per_bin }} --seed ${{ inputs.seed }} --curve_id "${{ inputs.curve_id }}" --energy_points ${{ inputs.energy_points }} --dos_eta ${{ inputs.dos_eta }} --potential_scale_gamma ${{ inputs.potential_scale_gamma }} --edge_weight_mode ${{ inputs.edge_weight_mode }} --integrator_eps_abs ${{ inputs.integrator_eps_abs }} --integrator_eps_rel ${{ inputs.integrator_eps_rel }} --integrator_subdomains_max ${{ inputs.integrator_subdomains_max }} --integrator_poly_degree_max ${{ inputs.integrator_poly_degree_max }} --integrator_quad_order_max ${{ inputs.integrator_quad_order_max }} --integrator_eval_budget_max ${{ inputs.integrator_eval_budget_max }} --integrator_split_criterion "${{ inputs.integrator_split_criterion }}" --overhead_region_n_max ${{ inputs.overhead_region_n_max }} --gate_n_min ${{ inputs.gate_n_min }} --speedup_gate_break_even ${{ inputs.speedup_gate_break_even }} --speedup_gate_strong ${{ inputs.speedup_gate_strong }}
+          - Outcome (facts from summary_metadata.json):
+          ${{ needs.build-pack.outputs.facts_md }}
+          EOF
+
+      - name: Create PR with registry update
+        id: registry_cpr
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: "automation/artefact-${{ inputs.tag }}"
+          title: "Add artefact registry entry for ${{ inputs.tag }}"
+          commit-message: "docs: add artefact registry entry for ${{ inputs.tag }}"
+          body: |
+            Automated update: appended artefact entry after publishing release asset.
+          base: "main"
+          add-paths: |
+            docs/artefacts_registry.md
+
+      - name: Trigger CI (pytest workflow_dispatch) for automation PR branch
+        if: steps.registry_cpr.outputs.pull-request-url != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          BRANCH: "automation/artefact-${{ inputs.tag }}"
+          PR_URL: ${{ steps.registry_cpr.outputs.pull-request-url }}
+        run: |
+          set -euo pipefail
+          echo "Automation PR: $PR_URL"
+          echo "Triggering pytest workflow on branch: $BRANCH"
+
+          gh workflow run pytest.yml --ref "$BRANCH" --repo "$REPO"
+
+          RUN_ID=""
+          for i in $(seq 1 30); do
+            RUN_ID=$(gh run list --workflow pytest.yml --branch "$BRANCH" --event workflow_dispatch --limit 1 --json databaseId --jq '.[0].databaseId' --repo "$REPO" 2>/dev/null || true)
+            if [ -n "$RUN_ID" ] && [ "$RUN_ID" != "null" ]; then
+              break
+            fi
+            sleep 2
+          done
+
+          if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
+            echo "ERROR: failed to locate dispatched pytest run"
+            gh run list --workflow pytest.yml --branch "$BRANCH" --limit 5 --repo "$REPO" || true
+            exit 1
+          fi
+
+          RUN_URL=$(gh run view "$RUN_ID" --json url --jq '.url' --repo "$REPO")
+          TESTED_SHA=$(gh run view "$RUN_ID" --json headSha --jq '.headSha' --repo "$REPO")
+          echo "pytest run url: $RUN_URL"
+          echo "tested_sha: $TESTED_SHA"
+
+          gh run watch "$RUN_ID" --exit-status --repo "$REPO"
+
