@@ -836,3 +836,17 @@
   - Facts (summary_metadata.json): integrator_valid_row_fraction=1.0; integrator_correctness_pass_rate=1.0; integrator_eval_ratio_median=1.9609375; integrator_speedup_median=0.282874; integrator_speedup_verdict=PASS_SCALING_READY; integrator_selected_fraction_baseline=1.0; integrator_selected_fraction_adaptive=0.0
 - Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/155 (merge: f956f427f2a52ea526b3e2c8d371a4f696b9762b)
 - CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21155008818
+
+### 2026-01-20 - PHYSICS-P5-LARGE-SCALE-PROOF-1: large-scale integration proof (speedup vs n_atoms)
+- Code PR (scale fixtures + speedup-vs-n evidence pack builder): https://github.com/RobertPaulig/Geometric_table/pull/157 (merge: 665343708c53828baa40144bf1dcd64cbc7c8fd9)
+- Publish workflow PR: https://github.com/RobertPaulig/Geometric_table/pull/158 (merge: c1e4df300883811021f818a527cdece7e1ecf38b)
+- Workflow fix PR (publish input validation): https://github.com/RobertPaulig/Geometric_table/pull/159 (merge: 77f98b9c5fd892a27c2c8cc929132824b36a4f77)
+- Live proof r1 (integrator_mode=both; dos_eta=0.2):
+  - Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/physics-operator-large-scale-2026-01-20-r1
+  - Publish run: https://github.com/RobertPaulig/Geometric_table/actions/runs/21166148106
+  - Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/physics-operator-large-scale-2026-01-20-r1/physics_large_scale_evidence_pack.zip
+  - SHA256(physics_large_scale_evidence_pack.zip): C651C583D893C37A91E25AFC5D3FD049933E7A8ABA3D6E5AE47E6DB57FFF6653 (verified by download)
+  - Evidence pack artifacts: fixtures_polymer_scale.csv, speedup_vs_n.csv, speedup_vs_n.md, summary_metadata.json
+  - Facts (summary_metadata.json): scale_n_atoms_max=800; scale_speedup_median_at_maxN=0.201066; scale_break_even_n_estimate=null; scale_speedup_verdict=FAIL_SPEEDUP_AT_SCALE
+- Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/160 (merge: e736d2b84e4fc9c3539f647d02f31a48d08b443c)
+- CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21166311914
