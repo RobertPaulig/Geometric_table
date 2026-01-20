@@ -58,6 +58,9 @@ def test_batch_writes_adaptive_integration_artifacts_in_both_mode(tmp_path: Path
     adaptive_summary_json = out_dir / "adaptive_integration_summary.json"
     compare_csv = out_dir / "integration_compare.csv"
     speed_profile_csv = out_dir / "integration_speed_profile.csv"
+    integration_profile_csv = out_dir / "integration_profile.csv"
+    integration_timing_breakdown_json = out_dir / "integration_timing_breakdown.json"
+    integrator_select_summary_json = out_dir / "integrator_select_summary.json"
     zip_path = out_dir / "evidence_pack.zip"
     meta_path = out_dir / "summary_metadata.json"
 
@@ -65,6 +68,9 @@ def test_batch_writes_adaptive_integration_artifacts_in_both_mode(tmp_path: Path
     assert adaptive_summary_json.exists()
     assert compare_csv.exists()
     assert speed_profile_csv.exists()
+    assert integration_profile_csv.exists()
+    assert integration_timing_breakdown_json.exists()
+    assert integrator_select_summary_json.exists()
     assert zip_path.exists()
     assert meta_path.exists()
 
@@ -78,6 +84,8 @@ def test_batch_writes_adaptive_integration_artifacts_in_both_mode(tmp_path: Path
     assert "integrator_verdict" in meta
     assert "integrator_eval_ratio_median" in meta
     assert "integrator_cache_hit_rate_median" in meta
+    assert "integrator_selected_fraction_baseline" in meta
+    assert "integrator_selected_fraction_adaptive" in meta
     assert "integrator_benchmark_curves" in meta
     assert "integrator_expected_rows" in meta
     assert "integrator_valid_rows" in meta
@@ -127,10 +135,33 @@ def test_batch_writes_adaptive_integration_artifacts_in_both_mode(tmp_path: Path
         rows = list(reader)
         assert rows
 
+    with integration_profile_csv.open("r", encoding="utf-8", newline="") as f:
+        reader = csv.DictReader(f)
+        assert reader.fieldnames is not None
+        for key in [
+            "curve_id",
+            "n_atoms",
+            "selected_mode",
+            "baseline_evals",
+            "adaptive_evals",
+            "baseline_walltime_ms",
+            "adaptive_walltime_ms",
+            "speedup",
+            "correct",
+            "reason",
+        ]:
+            assert key in reader.fieldnames
+        rows = list(reader)
+        assert rows
+        # Small systems should force baseline selection (P4.3R).
+        assert all(r.get("selected_mode") == "baseline" for r in rows)
+
     with zipfile.ZipFile(zip_path, "r") as zf:
         names = set(zf.namelist())
         assert "adaptive_integration_trace.csv" in names
         assert "adaptive_integration_summary.json" in names
         assert "integration_compare.csv" in names
         assert "integration_speed_profile.csv" in names
-
+        assert "integration_profile.csv" in names
+        assert "integration_timing_breakdown.json" in names
+        assert "integrator_select_summary.json" in names

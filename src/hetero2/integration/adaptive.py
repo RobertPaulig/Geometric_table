@@ -40,6 +40,7 @@ class _EvalCache:
         self.evals_total = 0
         self.requests_total = 0
         self.hits_total = 0
+        self.eval_walltime_ms_total = 0.0
 
     @staticmethod
     def _key(e: float) -> str:
@@ -65,7 +66,9 @@ class _EvalCache:
             # Deterministic ordering for evaluation and cache fill.
             ordered = sorted(missing.items(), key=lambda kv: kv[0])
             vals = np.array([v for _, v in ordered], dtype=float)
+            t0 = time.perf_counter()
             out = np.asarray(self._f(vals), dtype=float)
+            self.eval_walltime_ms_total += float((time.perf_counter() - t0) * 1000.0)
             if out.size != vals.size:
                 raise ValueError("adaptive integrator: evaluator returned wrong shape")
             for (k, _), y in zip(ordered, out.tolist(), strict=True):
@@ -307,6 +310,10 @@ def adaptive_approximate_on_grid(
         )
     )
     walltime_ms_total = float((time.perf_counter() - t_total) * 1000.0)
+    eval_walltime_ms_total = float(cache.eval_walltime_ms_total)
+    overhead_walltime_ms_total = float(walltime_ms_total - eval_walltime_ms_total)
+    if not math.isfinite(overhead_walltime_ms_total) or overhead_walltime_ms_total < 0.0:
+        overhead_walltime_ms_total = 0.0
 
     return AdaptiveCurveResult(
         values=values_out,
@@ -320,6 +327,8 @@ def adaptive_approximate_on_grid(
             "segments_used": int(len(accepted_sorted)),
             "evals_total": int(cache.evals_total),
             "walltime_ms_total": float(walltime_ms_total),
+            "eval_walltime_ms_total": float(eval_walltime_ms_total),
+            "overhead_walltime_ms_total": float(overhead_walltime_ms_total),
             "cache_hit_rate": float(cache.hit_rate),
         },
     )
