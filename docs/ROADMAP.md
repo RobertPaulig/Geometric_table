@@ -334,6 +334,29 @@ DoD:
 - Улучшение фиксируется на hard-bin метриках (не только overall), без ухудшения hardness coverage.
 - Замкнута цепочка publish→release(+sha256)→registry→lineage на main (3/3 ci/*).
 
+### PHYSICS-P5.1-INTEGRATION-SCALE-LAW-1: integration scale law (contract + gates + canonical evidence pack)
+Status: [ ] planned  [x] in-progress  [ ] done
+
+In flight:
+- PR #162: https://github.com/RobertPaulig/Geometric_table/pull/162
+
+Goal:
+- Freeze "what counts as a win" for integration scaling: correctness-first; speedup is evaluated only at scale (N_atoms >= gate_n_min); speedup<1 on small N is allowed (overhead region).
+
+Entry criteria:
+- P5 large-scale pack builder / publish workflow exists (speedup vs N_atoms).
+- CI gate infrastructure exists: `ci/test|ci/test-chem|ci/docker` (tested merge-ref).
+
+DoD (law is DONE only when the truth-chain is closed):
+- Contract doc merged to main: `docs/contracts/INTEGRATION_SCALE_CONTRACT.md` (p5.1.v1).
+- Evidence pack contains canonical artifacts (or `canonical_mapping.json`); `summary_metadata.json` includes `law_ref.*` and P5.1 verdict fields.
+- Contract-tests enforce: ZIP contents + required metadata fields + verdict logic (correctness gates speed metrics; scale-only gating).
+- Publish workflow has a fail-fast gate for P5.1 metadata/verdict (anti-drift).
+- Live proof chain-of-truth closed: publish-run -> release(zip+.sha256) -> registry PR -> lineage PR (append-only) -> main 3/3.
+
+Hard rule:
+- No new integration optimizations/claims until P5.1 is merged to main; speed metrics are NOT KPI if FAIL_CORRECTNESS_AT_SCALE.
+
 # ROADMAP — HETERO-2 как SaaS (Pfizer-ready evidence pipeline)
 
 Назначение: зафиксировать целевую картину SaaS и вести разработку через обязательные вехи (milestones).
