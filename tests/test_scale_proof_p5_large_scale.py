@@ -1,3 +1,5 @@
+import csv
+import io
 import json
 import zipfile
 from pathlib import Path
@@ -53,6 +55,7 @@ def test_p5_evidence_pack_contains_required_files_and_metadata(tmp_path: Path) -
             "fixtures_polymer_scale.csv",
             "speedup_vs_n.csv",
             "speedup_vs_n.md",
+            "timing_breakdown.csv",
             "summary.csv",
             "summary_metadata.json",
             "metrics.json",
@@ -73,4 +76,21 @@ def test_p5_evidence_pack_contains_required_files_and_metadata(tmp_path: Path) -
         assert meta["scale_gate_n_min"] == 200
         assert meta["potential_unit_model"] == "dimensionless"
         assert meta["scale_speedup_verdict"] in {"PASS_BREAK_EVEN", "PASS_SPEEDUP", "FAIL_SPEEDUP_AT_SCALE", "FAIL_CORRECTNESS_AT_SCALE"}
+
+        assert meta["cost_bottleneck_verdict_at_scale"] in {
+            "BOTTLENECK_IS_DOS_LDOS",
+            "BOTTLENECK_IS_INTEGRATOR",
+            "BOTTLENECK_IS_IO",
+            "MIXED",
+        }
+
+        timing_text = zf.read("timing_breakdown.csv").decode("utf-8")
+        r = csv.DictReader(io.StringIO(timing_text))
+        assert r.fieldnames is not None
+        for col in ["build_operator_ms", "dos_ldos_eval_ms", "integration_logic_ms", "io_ms", "total_ms"]:
+            assert col in r.fieldnames
+
+        rows = list(r)
+        assert any(row.get("row_kind") == "sample" for row in rows)
+        assert any(row.get("row_kind") == "bin" for row in rows)
 

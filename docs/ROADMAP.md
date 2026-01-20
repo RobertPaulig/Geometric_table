@@ -335,10 +335,14 @@ DoD:
 - Замкнута цепочка publish→release(+sha256)→registry→lineage на main (3/3 ci/*).
 
 ### PHYSICS-P5.1-INTEGRATION-SCALE-LAW-1: integration scale law (contract + gates + canonical evidence pack)
-Status: [ ] planned  [x] in-progress  [ ] done
+Status: [ ] planned  [ ] in-progress  [x] done
 
-In flight:
-- PR #162: https://github.com/RobertPaulig/Geometric_table/pull/162
+Closed:
+- PR #162 (code): https://github.com/RobertPaulig/Geometric_table/pull/162
+- Publish run (large-scale proof): https://github.com/RobertPaulig/Geometric_table/actions/runs/21184833947
+- Release r2 (zip+.sha256): https://github.com/RobertPaulig/Geometric_table/releases/tag/physics-operator-large-scale-2026-01-20-r2
+- PR #163 (registry): https://github.com/RobertPaulig/Geometric_table/pull/163
+- PR #164 (lineage): https://github.com/RobertPaulig/Geometric_table/pull/164
 
 Goal:
 - Freeze "what counts as a win" for integration scaling: correctness-first; speedup is evaluated only at scale (N_atoms >= gate_n_min); speedup<1 on small N is allowed (overhead region).
@@ -356,6 +360,25 @@ DoD (law is DONE only when the truth-chain is closed):
 
 Hard rule:
 - No new integration optimizations/claims until P5.1 is merged to main; speed metrics are NOT KPI if FAIL_CORRECTNESS_AT_SCALE.
+
+### PHYSICS-P5.2-COST-DECOMPOSITION-1: cost decomposition for integration runtime (timing breakdown + bottleneck verdict)
+Status: [ ] planned  [x] in-progress  [ ] done
+
+Goal:
+- Stop optimizing blind: decompose runtime per fixture into operator build vs DOS/LDOS eval vs integrator logic vs I/O, and publish a bottleneck verdict.
+
+Entry criteria:
+- PHYSICS-P5.1 is DONE on main (truth-chain closed; evidence pack + registry + lineage).
+- P5 large-scale pack builder / publish workflow exists (speedup vs N_atoms).
+
+DoD:
+- Evidence pack contains `timing_breakdown.csv` with per-sample rows and N_atoms-bin aggregates.
+- `timing_breakdown.csv` schema (per-sample): `build_operator_ms`, `dos_ldos_eval_ms`, `integration_logic_ms`, `io_ms`, `total_ms`.
+- `summary_metadata.json` includes a bottleneck verdict at scale: `BOTTLENECK_IS_DOS_LDOS | BOTTLENECK_IS_INTEGRATOR | BOTTLENECK_IS_IO | MIXED`.
+- Contract-tests / publish gates validate presence and schema of timing breakdown (anti-drift).
+
+Hard rule:
+- No new integration optimizations/claims until P5.2 is merged; next actions must be justified by the bottleneck verdict.
 
 # ROADMAP — HETERO-2 как SaaS (Pfizer-ready evidence pipeline)
 

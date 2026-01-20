@@ -293,7 +293,13 @@ def compute_p5_speedup_rows(
     *,
     fixtures: Sequence[PolymerScaleFixture],
     cfg: P5Config,
-) -> tuple[list[dict[str, object]], dict[str, object], list[dict[str, object]], list[dict[str, object]]]:
+) -> tuple[
+    list[dict[str, object]],
+    dict[str, object],
+    list[dict[str, object]],
+    list[dict[str, object]],
+    list[dict[str, object]],
+]:
     adaptive_cfg = AdaptiveIntegrationConfig(
         eps_abs=float(cfg.integrator_eps_abs),
         eps_rel=float(cfg.integrator_eps_rel),
@@ -307,7 +313,9 @@ def compute_p5_speedup_rows(
     adaptive_trace_rows: list[dict[str, object]] = []
     adaptive_summary_rows: list[dict[str, object]] = []
     sample_rows: list[dict[str, object]] = []
+    timing_sample_rows: list[dict[str, object]] = []
     for fx in fixtures:
+        t_build0 = time.perf_counter()
         diag, off, v0 = build_h_tridiagonal_chain(
             types_z=fx.types_z,
             edge_weight_mode=str(cfg.edge_weight_mode),
@@ -319,6 +327,7 @@ def compute_p5_speedup_rows(
             raise ValueError("Energy grid is empty (invalid eigenvalues range)")
         e_min = float(np.min(grid)) if grid.size else float("nan")
         e_max = float(np.max(grid)) if grid.size else float("nan")
+        build_operator_ms = float((time.perf_counter() - t_build0) * 1000.0)
 
         def _f(x: np.ndarray) -> np.ndarray:
             return compute_dos_curve(eigenvalues=eigvals, energy_grid=np.asarray(x, dtype=float), eta=float(cfg.dos_eta))
@@ -336,6 +345,8 @@ def compute_p5_speedup_rows(
             baseline_values=np.asarray(baseline_values, dtype=float),
         )
         adaptive_ms = float(res.summary.get("walltime_ms_total", float("nan")))
+        adaptive_eval_ms = float(res.summary.get("eval_walltime_ms_total", float("nan")))
+        adaptive_overhead_ms = float(res.summary.get("overhead_walltime_ms_total", float("nan")))
         adaptive_evals_total = int(res.summary.get("evals_total", 0) or 0)
         segments_used = int(res.summary.get("segments_used", 0) or 0)
         cache_hit_rate = float(res.summary.get("cache_hit_rate", float("nan")))
@@ -423,6 +434,30 @@ def compute_p5_speedup_rows(
                 "correctness_pass": bool(correctness_pass),
                 "eigs_checksum": str(curve_checksum_sha256(energy_grid=list(range(int(eigvals.size))), values=[float(x) for x in eigvals.tolist()])),
                 "v0_checksum": str(curve_checksum_sha256(energy_grid=list(range(int(v0.size))), values=[float(x) for x in v0.tolist()])),
+            }
+        )
+
+        dos_ldos_eval_ms = float(baseline_ms + adaptive_eval_ms) if math.isfinite(adaptive_eval_ms) else float("nan")
+        integration_logic_ms = float(adaptive_overhead_ms) if math.isfinite(adaptive_overhead_ms) else float("nan")
+        total_ms_no_io = float(build_operator_ms + dos_ldos_eval_ms + integration_logic_ms) if math.isfinite(dos_ldos_eval_ms) and math.isfinite(integration_logic_ms) else float("nan")
+        timing_sample_rows.append(
+            {
+                "row_kind": "sample",
+                "fixture_id": str(fx.fixture_id),
+                "n_atoms": int(fx.n_atoms),
+                "build_operator_ms": float(build_operator_ms),
+                "dos_ldos_eval_ms": float(dos_ldos_eval_ms),
+                "integration_logic_ms": float(integration_logic_ms),
+                "io_ms": 0.0,
+                "total_ms": float(total_ms_no_io),
+                "baseline_walltime_ms": float(baseline_ms),
+                "adaptive_walltime_ms": float(adaptive_ms),
+                "adaptive_eval_walltime_ms": float(adaptive_eval_ms),
+                "adaptive_overhead_walltime_ms": float(adaptive_overhead_ms),
+                "baseline_points": int(baseline_points),
+                "adaptive_evals_total": int(adaptive_evals_total),
+                "speedup": float(speedup),
+                "eval_ratio": float(eval_ratio),
             }
         )
 
@@ -575,7 +610,7 @@ def compute_p5_speedup_rows(
         "scale_bins": bin_rows,
     }
 
-    return sample_rows + bin_rows, metadata, adaptive_trace_rows, adaptive_summary_rows
+    return sample_rows + bin_rows, metadata, adaptive_trace_rows, adaptive_summary_rows, timing_sample_rows
 
 
 def write_p5_evidence_pack(
@@ -605,7 +640,7 @@ def write_p5_evidence_pack(
             )
 
     t0 = time.perf_counter()
-    rows, metadata, adaptive_trace_rows, adaptive_summary_rows = compute_p5_speedup_rows(fixtures=fixtures, cfg=cfg)
+    rows, metadata, adaptive_trace_rows, adaptive_summary_rows, timing_sample_rows = compute_p5_speedup_rows(fixtures=fixtures, cfg=cfg)
     runtime_s = float(time.perf_counter() - t0)
 
     speedup_vs_n_csv = out_dir / "speedup_vs_n.csv"
@@ -614,10 +649,13 @@ def write_p5_evidence_pack(
     speed_profile_csv = out_dir / "integration_speed_profile.csv"
     adaptive_trace_csv = out_dir / "adaptive_integration_trace.csv"
     adaptive_summary_json = out_dir / "adaptive_integration_summary.json"
+    timing_breakdown_csv = out_dir / "timing_breakdown.csv"
     summary_csv = out_dir / "summary.csv"
     summary_metadata_json = out_dir / "summary_metadata.json"
     metrics_json = out_dir / "metrics.json"
     index_md = out_dir / "index.md"
+
+    io_t0 = time.perf_counter()
 
     fieldnames = sorted({k for row in rows for k in row.keys()})
     speedup_vs_n_csv.write_text("", encoding="utf-8")
@@ -654,6 +692,7 @@ def write_p5_evidence_pack(
                 "Outputs:",
                 "- fixtures_polymer_scale.csv (input fixtures)",
                 "- speedup_vs_n.csv (samples + bin aggregates)",
+                "- timing_breakdown.csv (cost decomposition; samples + bin aggregates)",
                 "- integration_compare.csv (baseline vs adaptive correctness + timing)",
                 "- integration_speed_profile.csv (eval ratio + speedup per sample)",
                 "- adaptive_integration_trace.csv (segment trace; audit)",
@@ -812,6 +851,91 @@ def write_p5_evidence_pack(
                 }
             )
 
+    io_ms_total_estimate = float((time.perf_counter() - io_t0) * 1000.0)
+    n_timing_samples = int(sum(1 for r in timing_sample_rows if r.get("row_kind") == "sample"))
+    io_ms_per_sample_estimate = float(io_ms_total_estimate / n_timing_samples) if n_timing_samples > 0 else 0.0
+
+    for r in timing_sample_rows:
+        if r.get("row_kind") != "sample":
+            continue
+        r["io_ms"] = float(io_ms_per_sample_estimate)
+        b = float(r.get("build_operator_ms", float("nan")))
+        d = float(r.get("dos_ldos_eval_ms", float("nan")))
+        i = float(r.get("integration_logic_ms", float("nan")))
+        io = float(r.get("io_ms", float("nan")))
+        r["total_ms"] = float(b + d + i + io) if all(math.isfinite(x) for x in [b, d, i, io]) else float("nan")
+
+    timing_by_n: dict[int, list[dict[str, object]]] = {}
+    for r in timing_sample_rows:
+        if r.get("row_kind") != "sample":
+            continue
+        n = int(r.get("n_atoms", 0) or 0)
+        timing_by_n.setdefault(n, []).append(r)
+
+    timing_bin_rows: list[dict[str, object]] = []
+    for n in sorted(timing_by_n.keys()):
+        rows_n = timing_by_n[n]
+        timing_bin_rows.append(
+            {
+                "row_kind": "bin",
+                "n_atoms_bin": int(n),
+                "n_samples": int(len(rows_n)),
+                "median_build_operator_ms": float(_median([float(x.get("build_operator_ms", float("nan"))) for x in rows_n])),
+                "median_dos_ldos_eval_ms": float(_median([float(x.get("dos_ldos_eval_ms", float("nan"))) for x in rows_n])),
+                "median_integration_logic_ms": float(_median([float(x.get("integration_logic_ms", float("nan"))) for x in rows_n])),
+                "median_io_ms": float(_median([float(x.get("io_ms", float("nan"))) for x in rows_n])),
+                "median_total_ms": float(_median([float(x.get("total_ms", float("nan"))) for x in rows_n])),
+            }
+        )
+
+    timing_rows = timing_sample_rows + timing_bin_rows
+    timing_fields = sorted({k for row in timing_rows for k in row.keys()})
+    timing_breakdown_csv.write_text("", encoding="utf-8")
+    with timing_breakdown_csv.open("w", encoding="utf-8", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=timing_fields)
+        w.writeheader()
+        for r in timing_rows:
+            w.writerow(r)
+
+    scale_timing_samples = [r for r in timing_sample_rows if int(r.get("n_atoms", 0) or 0) >= int(cfg.gate_n_min)]
+    build_med = float(_median([float(r.get("build_operator_ms", float("nan"))) for r in scale_timing_samples]))
+    dos_med = float(_median([float(r.get("dos_ldos_eval_ms", float("nan"))) for r in scale_timing_samples]))
+    integ_med = float(_median([float(r.get("integration_logic_ms", float("nan"))) for r in scale_timing_samples]))
+    io_med = float(_median([float(r.get("io_ms", float("nan"))) for r in scale_timing_samples]))
+    total_med = float(_median([float(r.get("total_ms", float("nan"))) for r in scale_timing_samples]))
+
+    denom_kpi = float(dos_med + integ_med + io_med) if all(math.isfinite(x) for x in [dos_med, integ_med, io_med]) else float("nan")
+    share_dos = float(dos_med / denom_kpi) if math.isfinite(denom_kpi) and denom_kpi > 0.0 else float("nan")
+    share_integ = float(integ_med / denom_kpi) if math.isfinite(denom_kpi) and denom_kpi > 0.0 else float("nan")
+    share_io = float(io_med / denom_kpi) if math.isfinite(denom_kpi) and denom_kpi > 0.0 else float("nan")
+
+    bottleneck_verdict = "MIXED"
+    if math.isfinite(share_dos) and math.isfinite(share_integ) and math.isfinite(share_io):
+        top = max((share_dos, "BOTTLENECK_IS_DOS_LDOS"), (share_integ, "BOTTLENECK_IS_INTEGRATOR"), (share_io, "BOTTLENECK_IS_IO"), key=lambda x: x[0])
+        bottleneck_verdict = str(top[1]) if float(top[0]) >= 0.6 else "MIXED"
+
+    denom_total = float(build_med + dos_med + integ_med + io_med) if all(math.isfinite(x) for x in [build_med, dos_med, integ_med, io_med]) else float("nan")
+    frac_build = float(build_med / denom_total) if math.isfinite(denom_total) and denom_total > 0.0 else float("nan")
+    frac_dos = float(dos_med / denom_total) if math.isfinite(denom_total) and denom_total > 0.0 else float("nan")
+    frac_integ = float(integ_med / denom_total) if math.isfinite(denom_total) and denom_total > 0.0 else float("nan")
+    frac_io = float(io_med / denom_total) if math.isfinite(denom_total) and denom_total > 0.0 else float("nan")
+
+    metadata["cost_bottleneck_verdict_at_scale"] = str(bottleneck_verdict)
+    metadata["cost_median_build_operator_ms_at_scale"] = float(build_med)
+    metadata["cost_median_dos_ldos_eval_ms_at_scale"] = float(dos_med)
+    metadata["cost_median_integration_logic_ms_at_scale"] = float(integ_med)
+    metadata["cost_median_io_ms_at_scale_estimate"] = float(io_med)
+    metadata["cost_median_total_ms_at_scale_estimate"] = float(total_med)
+    metadata["cost_fraction_build_operator_at_scale_estimate"] = float(frac_build)
+    metadata["cost_fraction_dos_ldos_eval_at_scale_estimate"] = float(frac_dos)
+    metadata["cost_fraction_integration_logic_at_scale_estimate"] = float(frac_integ)
+    metadata["cost_fraction_io_at_scale_estimate"] = float(frac_io)
+    metadata["cost_share_dos_ldos_eval_among_kpi_at_scale_estimate"] = float(share_dos)
+    metadata["cost_share_integration_logic_among_kpi_at_scale_estimate"] = float(share_integ)
+    metadata["cost_share_io_among_kpi_at_scale_estimate"] = float(share_io)
+    metadata["cost_io_walltime_ms_total_estimate"] = float(io_ms_total_estimate)
+    metadata["cost_io_walltime_ms_per_sample_estimate"] = float(io_ms_per_sample_estimate)
+
     summary_metadata_json.write_text(json.dumps(metadata, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
 
     # Metrics: keep the minimal "counts" gate compatible with existing publish workflows.
@@ -841,6 +965,7 @@ def write_p5_evidence_pack(
                 "- fixtures: ./fixtures_polymer_scale.csv",
                 "- speedup vs N: ./speedup_vs_n.csv",
                 "- report: ./speedup_vs_n.md",
+                "- timing breakdown: ./timing_breakdown.csv",
                 "- integration compare: ./integration_compare.csv",
                 "- integration speed profile: ./integration_speed_profile.csv",
                 "- adaptive trace: ./adaptive_integration_trace.csv",
