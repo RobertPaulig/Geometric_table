@@ -41,6 +41,8 @@ def main() -> int:
     p.add_argument("--integrator_split_criterion", default="curvature", help="Adaptive split criterion label.")
     p.add_argument("--overhead_region_n_max", type=int, default=100, help="Overhead region threshold for verdict.")
     p.add_argument("--gate_n_min", type=int, default=200, help="Minimum N_atoms bin for speedup gating.")
+    p.add_argument("--correctness_gate_rate", type=float, default=1.0, help="Correctness pass-rate gate at scale.")
+    p.add_argument("--min_scale_samples", type=int, default=5, help="Minimum scale samples for speedup verdict.")
     p.add_argument("--speedup_gate_break_even", type=float, default=1.0, help="Speedup gate (break-even).")
     p.add_argument("--speedup_gate_strong", type=float, default=2.0, help="Speedup gate (strong).")
     args = p.parse_args()
@@ -66,6 +68,8 @@ def main() -> int:
         integrator_split_criterion=str(args.integrator_split_criterion),
         overhead_region_n_max=int(args.overhead_region_n_max),
         gate_n_min=int(args.gate_n_min),
+        correctness_gate_rate=float(args.correctness_gate_rate),
+        min_scale_samples=int(args.min_scale_samples),
         speedup_gate_break_even=float(args.speedup_gate_break_even),
         speedup_gate_strong=float(args.speedup_gate_strong),
     )

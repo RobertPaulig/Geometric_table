@@ -57,6 +57,8 @@ class P5Config:
     integrator_split_criterion: str
     overhead_region_n_max: int
     gate_n_min: int
+    correctness_gate_rate: float
+    min_scale_samples: int
     speedup_gate_break_even: float
     speedup_gate_strong: float
 
@@ -116,6 +118,25 @@ def _write_manifest(out_dir: Path, *, config: dict[str, object], files: list[dic
         "files": sorted(list(files), key=lambda x: str(x.get("path", ""))),
     }
     (out_dir / "manifest.json").write_text(json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+
+
+def _detect_git_sha() -> str:
+    sha = str(os.environ.get("GITHUB_SHA") or "").strip()
+    if sha:
+        return sha
+
+    try:
+        import subprocess
+
+        repo_root = Path(__file__).resolve().parents[2]
+        out = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo_root, stderr=subprocess.DEVNULL, text=True)
+        sha = str(out or "").strip()
+        if sha:
+            return sha
+    except Exception:
+        pass
+
+    return "UNKNOWN"
 
 
 def _median(values: Iterable[float]) -> float:
@@ -272,7 +293,7 @@ def compute_p5_speedup_rows(
     *,
     fixtures: Sequence[PolymerScaleFixture],
     cfg: P5Config,
-) -> tuple[list[dict[str, object]], dict[str, object]]:
+) -> tuple[list[dict[str, object]], dict[str, object], list[dict[str, object]], list[dict[str, object]]]:
     adaptive_cfg = AdaptiveIntegrationConfig(
         eps_abs=float(cfg.integrator_eps_abs),
         eps_rel=float(cfg.integrator_eps_rel),
@@ -283,6 +304,8 @@ def compute_p5_speedup_rows(
         split_criterion=str(cfg.integrator_split_criterion),
     )
 
+    adaptive_trace_rows: list[dict[str, object]] = []
+    adaptive_summary_rows: list[dict[str, object]] = []
     sample_rows: list[dict[str, object]] = []
     for fx in fixtures:
         diag, off, v0 = build_h_tridiagonal_chain(
@@ -294,6 +317,8 @@ def compute_p5_speedup_rows(
         grid = _auto_energy_grid(eigenvalues=eigvals, energy_points=int(cfg.energy_points), eta=float(cfg.dos_eta))
         if grid.size == 0:
             raise ValueError("Energy grid is empty (invalid eigenvalues range)")
+        e_min = float(np.min(grid)) if grid.size else float("nan")
+        e_max = float(np.max(grid)) if grid.size else float("nan")
 
         def _f(x: np.ndarray) -> np.ndarray:
             return compute_dos_curve(eigenvalues=eigvals, energy_grid=np.asarray(x, dtype=float), eta=float(cfg.dos_eta))
@@ -319,13 +344,51 @@ def compute_p5_speedup_rows(
         base_arr = np.asarray(baseline_values, dtype=float)
         adapt_arr = np.asarray(res.values, dtype=float)
         base_value = float(np.max(np.abs(base_arr))) if base_arr.size else float("nan")
+        adapt_value = float(np.max(np.abs(adapt_arr))) if adapt_arr.size else float("nan")
         abs_err = float(np.max(np.abs(adapt_arr - base_arr))) if base_arr.size and adapt_arr.size else float("nan")
+        denom = abs(float(base_value)) + 1e-12
+        rel_err = float(abs_err / denom) if math.isfinite(float(abs_err)) else float("nan")
         tol = float(cfg.integrator_eps_abs) + float(cfg.integrator_eps_rel) * abs(float(base_value)) if math.isfinite(float(base_value)) else float("nan")
         correctness_pass = bool(math.isfinite(float(abs_err)) and math.isfinite(float(tol)) and float(abs_err) <= float(tol))
 
         baseline_points = int(grid.size)
-        eval_ratio = float(adaptive_evals_total) / float(baseline_points) if baseline_points > 0 else float("nan")
+        eval_ratio = float(baseline_points) / float(adaptive_evals_total) if baseline_points > 0 and adaptive_evals_total > 0 else float("nan")
         speedup = float(baseline_ms / adaptive_ms) if adaptive_ms and adaptive_ms > 0.0 and math.isfinite(adaptive_ms) else float("nan")
+
+        for tr in res.trace:
+            adaptive_trace_rows.append(
+                {
+                    "fixture_id": str(fx.fixture_id),
+                    "curve_id": str(cfg.curve_id),
+                    "n_atoms": int(fx.n_atoms),
+                    "segment_id": int(tr.segment_id),
+                    "E_left": float(tr.e_left),
+                    "E_right": float(tr.e_right),
+                    "n_probe_points": int(tr.n_probe_points),
+                    "poly_degree": int(tr.poly_degree),
+                    "quad_order": int(tr.quad_order),
+                    "n_function_evals": int(tr.n_function_evals),
+                    "error_est": float(tr.error_est),
+                    "walltime_ms_segment": float(tr.walltime_ms_segment),
+                    "split_reason": str(tr.split_reason),
+                }
+            )
+
+        adaptive_summary_rows.append(
+            {
+                "fixture_id": str(fx.fixture_id),
+                "curve_id": str(cfg.curve_id),
+                "n_atoms": int(fx.n_atoms),
+                "baseline_points": int(baseline_points),
+                "adaptive_evals_total": int(adaptive_evals_total),
+                "eval_ratio": float(eval_ratio),
+                "segments_used": int(segments_used),
+                "cache_hit_rate": float(cache_hit_rate),
+                "adaptive_verdict_row": str(adaptive_verdict_row),
+                "energy_min": float(e_min),
+                "energy_max": float(e_max),
+            }
+        )
 
         sample_rows.append(
             {
@@ -341,6 +404,8 @@ def compute_p5_speedup_rows(
                 "potential_scale_gamma": float(cfg.potential_scale_gamma),
                 "dos_eta": float(cfg.dos_eta),
                 "energy_points": int(baseline_points),
+                "energy_min": float(e_min),
+                "energy_max": float(e_max),
                 "baseline_walltime_ms": float(baseline_ms),
                 "adaptive_walltime_ms": float(adaptive_ms),
                 "speedup": float(speedup),
@@ -350,7 +415,10 @@ def compute_p5_speedup_rows(
                 "segments_used": int(segments_used),
                 "cache_hit_rate": float(cache_hit_rate),
                 "adaptive_verdict_row": str(adaptive_verdict_row),
+                "baseline_value": float(base_value),
+                "adaptive_value": float(adapt_value),
                 "abs_err": float(abs_err),
+                "rel_err": float(rel_err),
                 "tol": float(tol),
                 "correctness_pass": bool(correctness_pass),
                 "eigs_checksum": str(curve_checksum_sha256(energy_grid=list(range(int(eigvals.size))), values=[float(x) for x in eigvals.tolist()])),
@@ -407,13 +475,77 @@ def compute_p5_speedup_rows(
     elif math.isfinite(max_bin_speed) and max_bin_speed >= float(cfg.speedup_gate_break_even):
         scale_speedup_verdict = "PASS_BREAK_EVEN"
 
+    energy_mins = [float(r.get("energy_min", float("nan"))) for r in sample_rows]
+    energy_maxs = [float(r.get("energy_max", float("nan"))) for r in sample_rows]
+    energy_min_global = float(min(x for x in energy_mins if math.isfinite(float(x)))) if any(math.isfinite(float(x)) for x in energy_mins) else float("nan")
+    energy_max_global = float(max(x for x in energy_maxs if math.isfinite(float(x)))) if any(math.isfinite(float(x)) for x in energy_maxs) else float("nan")
+
+    scale_samples = [r for r in sample_rows if int(r.get("n_atoms", 0) or 0) >= int(cfg.gate_n_min)]
+    n_scale = int(len(scale_samples))
+    pass_rate_at_scale = float(sum(1 for r in scale_samples if bool(r.get("correctness_pass", False))) / n_scale) if n_scale > 0 else float("nan")
+    speedup_median_at_scale = float(_median([float(r.get("speedup", float("nan"))) for r in scale_samples]))
+    eval_ratio_median_at_scale = float(_median([float(r.get("eval_ratio", float("nan"))) for r in scale_samples]))
+
+    correctness_gate_rate = float(cfg.correctness_gate_rate)
+    integrator_correctness_verdict = "PASS_CORRECTNESS_AT_SCALE" if math.isfinite(pass_rate_at_scale) and pass_rate_at_scale >= correctness_gate_rate else "FAIL_CORRECTNESS_AT_SCALE"
+
+    integrator_speedup_verdict = "NOT_VALID_DUE_TO_CORRECTNESS"
+    integrator_verdict_reason = f"FAIL: correctness_verdict={integrator_correctness_verdict}"
+    if integrator_correctness_verdict == "PASS_CORRECTNESS_AT_SCALE":
+        if n_scale < int(cfg.min_scale_samples):
+            integrator_speedup_verdict = "INCONCLUSIVE_NOT_ENOUGH_SCALE_SAMPLES"
+            integrator_verdict_reason = f"INCONCLUSIVE: |S|={n_scale} < min_scale_samples={int(cfg.min_scale_samples)} (N>=gate_n_min={int(cfg.gate_n_min)})"
+        else:
+            gate_speedup = float(cfg.speedup_gate_break_even)  # break-even by default (1.0)
+            if math.isfinite(speedup_median_at_scale) and speedup_median_at_scale >= gate_speedup:
+                integrator_speedup_verdict = "PASS_SPEEDUP_AT_SCALE"
+                integrator_verdict_reason = f"PASS: correctness ok at scale; speedup_median_at_scale={speedup_median_at_scale} >= {gate_speedup}"
+            else:
+                integrator_speedup_verdict = "FAIL_SPEEDUP_AT_SCALE"
+                integrator_verdict_reason = f"FAIL: correctness ok at scale; speedup_median_at_scale={speedup_median_at_scale} < {gate_speedup}"
+    else:
+        integrator_speedup_verdict = "NOT_VALID_DUE_TO_CORRECTNESS"
+        integrator_verdict_reason = (
+            f"NOT_VALID: correctness_pass_rate_at_scale={pass_rate_at_scale} < correctness_gate_rate={correctness_gate_rate} (N>=gate_n_min={int(cfg.gate_n_min)})"
+        )
+
+    valid_flags = []
+    for r in sample_rows:
+        baseline_ms = float(r.get("baseline_walltime_ms", float("nan")))
+        adaptive_ms = float(r.get("adaptive_walltime_ms", float("nan")))
+        baseline_points = int(r.get("baseline_points", 0) or 0)
+        adaptive_evals = int(r.get("adaptive_evals_total", 0) or 0)
+        abs_err = float(r.get("abs_err", float("nan")))
+        tol = float(r.get("tol", float("nan")))
+        valid_flags.append(
+            bool(
+                math.isfinite(baseline_ms)
+                and math.isfinite(adaptive_ms)
+                and adaptive_ms > 0.0
+                and baseline_points > 0
+                and adaptive_evals > 0
+                and math.isfinite(abs_err)
+                and math.isfinite(tol)
+            )
+        )
+    integrator_valid_row_fraction = float(sum(1 for x in valid_flags if x) / len(valid_flags)) if valid_flags else float("nan")
+
     metadata: dict[str, object] = {
         "schema_version": "hetero2_scale_speedup_metadata.v1",
+        "law_ref": {
+            "contract_path": "docs/contracts/INTEGRATION_SCALE_CONTRACT.md",
+            "contract_commit": _detect_git_sha(),
+            "contract_version": "p5.1.v1",
+        },
         "curve_id": str(cfg.curve_id),
         "edge_weight_mode": str(cfg.edge_weight_mode),
         "potential_scale_gamma": float(cfg.potential_scale_gamma),
         "potential_unit_model": "dimensionless",
         "integrator_mode": "both",
+        "integrator_energy_min": float(energy_min_global),
+        "integrator_energy_max": float(energy_max_global),
+        "integrator_energy_points": int(cfg.energy_points),
+        "integrator_eta": float(cfg.dos_eta),
         "integrator_eps_abs": float(cfg.integrator_eps_abs),
         "integrator_eps_rel": float(cfg.integrator_eps_rel),
         "integrator_subdomains_max": int(cfg.integrator_subdomains_max),
@@ -421,6 +553,16 @@ def compute_p5_speedup_rows(
         "integrator_quad_order_max": int(cfg.integrator_quad_order_max),
         "integrator_eval_budget_max": int(cfg.integrator_eval_budget_max),
         "integrator_split_criterion": str(cfg.integrator_split_criterion),
+        "gate_n_min": int(cfg.gate_n_min),
+        "correctness_gate_rate": float(cfg.correctness_gate_rate),
+        "min_scale_samples": int(cfg.min_scale_samples),
+        "integrator_valid_row_fraction": float(integrator_valid_row_fraction),
+        "integrator_correctness_pass_rate_at_scale": float(pass_rate_at_scale),
+        "integrator_speedup_median_at_scale": float(speedup_median_at_scale),
+        "integrator_eval_ratio_median_at_scale": float(eval_ratio_median_at_scale),
+        "integrator_correctness_verdict": str(integrator_correctness_verdict),
+        "integrator_speedup_verdict": str(integrator_speedup_verdict),
+        "integrator_verdict_reason": str(integrator_verdict_reason),
         "scale_n_atoms_min": int(min(int(x) for x in by_n.keys())),
         "scale_n_atoms_max": int(max_n),
         "scale_overhead_region_n_max": int(cfg.overhead_region_n_max),
@@ -433,7 +575,7 @@ def compute_p5_speedup_rows(
         "scale_bins": bin_rows,
     }
 
-    return sample_rows + bin_rows, metadata
+    return sample_rows + bin_rows, metadata, adaptive_trace_rows, adaptive_summary_rows
 
 
 def write_p5_evidence_pack(
@@ -463,11 +605,15 @@ def write_p5_evidence_pack(
             )
 
     t0 = time.perf_counter()
-    rows, metadata = compute_p5_speedup_rows(fixtures=fixtures, cfg=cfg)
+    rows, metadata, adaptive_trace_rows, adaptive_summary_rows = compute_p5_speedup_rows(fixtures=fixtures, cfg=cfg)
     runtime_s = float(time.perf_counter() - t0)
 
     speedup_vs_n_csv = out_dir / "speedup_vs_n.csv"
     speedup_vs_n_md = out_dir / "speedup_vs_n.md"
+    compare_csv = out_dir / "integration_compare.csv"
+    speed_profile_csv = out_dir / "integration_speed_profile.csv"
+    adaptive_trace_csv = out_dir / "adaptive_integration_trace.csv"
+    adaptive_summary_json = out_dir / "adaptive_integration_summary.json"
     summary_csv = out_dir / "summary.csv"
     summary_metadata_json = out_dir / "summary_metadata.json"
     metrics_json = out_dir / "metrics.json"
@@ -508,11 +654,124 @@ def write_p5_evidence_pack(
                 "Outputs:",
                 "- fixtures_polymer_scale.csv (input fixtures)",
                 "- speedup_vs_n.csv (samples + bin aggregates)",
+                "- integration_compare.csv (baseline vs adaptive correctness + timing)",
+                "- integration_speed_profile.csv (eval ratio + speedup per sample)",
+                "- adaptive_integration_trace.csv (segment trace; audit)",
+                "- adaptive_integration_summary.json (per-sample integration summary; audit)",
                 "- summary_metadata.json (scale verdict + config)",
                 "",
             ]
         )
         + "\n",
+        encoding="utf-8",
+    )
+
+    # Integration audit artifacts (P5.1): compare + speed profile + adaptive trace/summary.
+    compare_fields = [
+        "fixture_id",
+        "curve_id",
+        "baseline_value",
+        "adaptive_value",
+        "abs_err",
+        "rel_err",
+        "pass_tolerance",
+        "baseline_walltime_ms",
+        "adaptive_walltime_ms",
+        "speedup",
+        "adaptive_verdict_row",
+    ]
+    compare_csv.write_text("", encoding="utf-8")
+    with compare_csv.open("w", encoding="utf-8", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=compare_fields)
+        w.writeheader()
+        for row in rows:
+            if row.get("row_kind") != "sample":
+                continue
+            w.writerow(
+                {
+                    "fixture_id": row.get("id", ""),
+                    "curve_id": row.get("curve_id", ""),
+                    "baseline_value": row.get("baseline_value", ""),
+                    "adaptive_value": row.get("adaptive_value", ""),
+                    "abs_err": row.get("abs_err", ""),
+                    "rel_err": row.get("rel_err", ""),
+                    "pass_tolerance": row.get("correctness_pass", ""),
+                    "baseline_walltime_ms": row.get("baseline_walltime_ms", ""),
+                    "adaptive_walltime_ms": row.get("adaptive_walltime_ms", ""),
+                    "speedup": row.get("speedup", ""),
+                    "adaptive_verdict_row": row.get("adaptive_verdict_row", ""),
+                }
+            )
+
+    speed_fields = [
+        "fixture_id",
+        "curve_id",
+        "baseline_points",
+        "adaptive_evals_total",
+        "eval_ratio",
+        "baseline_walltime_ms",
+        "adaptive_walltime_ms",
+        "speedup",
+        "cache_hit_rate",
+        "segments_used",
+        "adaptive_verdict_row",
+        "row_verdict",
+    ]
+    speed_profile_csv.write_text("", encoding="utf-8")
+    with speed_profile_csv.open("w", encoding="utf-8", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=speed_fields)
+        w.writeheader()
+        for row in rows:
+            if row.get("row_kind") != "sample":
+                continue
+            ok = bool(row.get("correctness_pass", False)) and str(row.get("adaptive_verdict_row", "")) not in {"FAIL_NUMERICAL"}
+            w.writerow(
+                {
+                    "fixture_id": row.get("id", ""),
+                    "curve_id": row.get("curve_id", ""),
+                    "baseline_points": row.get("baseline_points", ""),
+                    "adaptive_evals_total": row.get("adaptive_evals_total", ""),
+                    "eval_ratio": row.get("eval_ratio", ""),
+                    "baseline_walltime_ms": row.get("baseline_walltime_ms", ""),
+                    "adaptive_walltime_ms": row.get("adaptive_walltime_ms", ""),
+                    "speedup": row.get("speedup", ""),
+                    "cache_hit_rate": row.get("cache_hit_rate", ""),
+                    "segments_used": row.get("segments_used", ""),
+                    "adaptive_verdict_row": row.get("adaptive_verdict_row", ""),
+                    "row_verdict": "OK" if ok else "ERROR",
+                }
+            )
+
+    adaptive_trace_fields = [
+        "fixture_id",
+        "curve_id",
+        "n_atoms",
+        "segment_id",
+        "E_left",
+        "E_right",
+        "n_probe_points",
+        "poly_degree",
+        "quad_order",
+        "n_function_evals",
+        "error_est",
+        "walltime_ms_segment",
+        "split_reason",
+    ]
+    adaptive_trace_csv.write_text("", encoding="utf-8")
+    with adaptive_trace_csv.open("w", encoding="utf-8", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=adaptive_trace_fields)
+        w.writeheader()
+        for tr in adaptive_trace_rows:
+            w.writerow({k: tr.get(k, "") for k in adaptive_trace_fields})
+
+    adaptive_summary_payload: dict[str, object] = {
+        "schema_version": "hetero2_adaptive_integration_summary.v1",
+        "curve_id": str(cfg.curve_id),
+        "integrator_mode": "both",
+        "samples": adaptive_summary_rows,
+    }
+    adaptive_summary_json.write_text(
+        json.dumps(adaptive_summary_payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
         encoding="utf-8",
     )
 
@@ -582,6 +841,10 @@ def write_p5_evidence_pack(
                 "- fixtures: ./fixtures_polymer_scale.csv",
                 "- speedup vs N: ./speedup_vs_n.csv",
                 "- report: ./speedup_vs_n.md",
+                "- integration compare: ./integration_compare.csv",
+                "- integration speed profile: ./integration_speed_profile.csv",
+                "- adaptive trace: ./adaptive_integration_trace.csv",
+                "- adaptive integration summary: ./adaptive_integration_summary.json",
                 "- metadata: ./summary_metadata.json",
                 "- metrics: ./metrics.json",
                 "",
@@ -613,6 +876,8 @@ def write_p5_evidence_pack(
                 "integrator_split_criterion": str(cfg.integrator_split_criterion),
                 "overhead_region_n_max": int(cfg.overhead_region_n_max),
                 "gate_n_min": int(cfg.gate_n_min),
+                "correctness_gate_rate": float(cfg.correctness_gate_rate),
+                "min_scale_samples": int(cfg.min_scale_samples),
             }
         },
         files=file_infos,
