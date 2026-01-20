@@ -195,7 +195,7 @@ jobs:
       - name: Validate zip (no unpack)
         run: |
           python -m zipfile -t out_physics_large_scale/physics_large_scale_evidence_pack.zip
-          python -m zipfile -l out_physics_large_scale/physics_large_scale_evidence_pack.zip | grep -E "manifest.json|checksums.sha256|metrics.json|index.md|summary.csv|summary_metadata.json|fixtures_polymer_scale.csv|speedup_vs_n.csv|speedup_vs_n.md|integration_compare.csv|integration_speed_profile.csv|adaptive_integration_trace.csv|adaptive_integration_summary.json"
+          python -m zipfile -l out_physics_large_scale/physics_large_scale_evidence_pack.zip | grep -E "manifest.json|checksums.sha256|metrics.json|index.md|summary.csv|summary_metadata.json|fixtures_polymer_scale.csv|speedup_vs_n.csv|speedup_vs_n.md|timing_breakdown.csv|integration_compare.csv|integration_speed_profile.csv|adaptive_integration_trace.csv|adaptive_integration_summary.json"
 
       - name: "Gate: P5.1 contract metadata/verdict"
         run: |
@@ -259,6 +259,38 @@ jobs:
               assert math.isfinite(sp_med), "speedup_median_at_scale must be finite when |S| is sufficient"
               expected = "PASS_SPEEDUP_AT_SCALE" if sp_med >= speedup_gate else "FAIL_SPEEDUP_AT_SCALE"
               assert sp_v == expected, f"speedup_verdict mismatch: got={sp_v} expected={expected} gate={speedup_gate} median={sp_med}"
+          PY
+
+      - name: "Gate: P5.2 timing breakdown schema"
+        run: |
+          python - << 'PY'
+          import csv
+          import json
+
+          meta = json.load(open("out_physics_large_scale/summary_metadata.json", "r", encoding="utf-8"))
+          assert meta.get("cost_bottleneck_verdict_at_scale") in {
+            "BOTTLENECK_IS_DOS_LDOS",
+            "BOTTLENECK_IS_INTEGRATOR",
+            "BOTTLENECK_IS_IO",
+            "MIXED",
+          }
+
+          required_cols = {"build_operator_ms", "dos_ldos_eval_ms", "integration_logic_ms", "io_ms", "total_ms"}
+          has_sample = False
+          has_bin = False
+          with open("out_physics_large_scale/timing_breakdown.csv", "r", encoding="utf-8", newline="") as f:
+            r = csv.DictReader(f)
+            assert r.fieldnames is not None, "timing_breakdown.csv must have a header"
+            missing = sorted(required_cols.difference(set(r.fieldnames)))
+            assert not missing, f"Missing required columns in timing_breakdown.csv: {missing}"
+            for row in r:
+              kind = str(row.get("row_kind") or "")
+              if kind == "sample":
+                has_sample = True
+              if kind == "bin":
+                has_bin = True
+          assert has_sample, "timing_breakdown.csv must contain sample rows"
+          assert has_bin, "timing_breakdown.csv must contain bin aggregate rows"
           PY
 
       - name: Extract facts (from summary_metadata.json)
