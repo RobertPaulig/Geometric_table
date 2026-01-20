@@ -293,6 +293,34 @@ jobs:
           assert has_bin, "timing_breakdown.csv must contain bin aggregate rows"
           PY
 
+      - name: "Gate: P5.3 integration_logic KPI fields"
+        run: |
+          python - << 'PY'
+          import json
+          import math
+
+          md = json.load(open("out_physics_large_scale/summary_metadata.json", "r", encoding="utf-8"))
+          required = [
+            "cost_median_integration_logic_ms_at_scale_before",
+            "cost_median_integration_logic_ms_at_scale_after",
+            "cost_integration_logic_speedup_at_scale",
+            "cost_integration_logic_opt_verdict_at_scale",
+          ]
+          missing = [k for k in required if k not in md]
+          assert not missing, f"Missing required P5.3 metadata keys: {missing}"
+
+          verdict = str(md.get("cost_integration_logic_opt_verdict_at_scale") or "")
+          assert verdict in {"PASS", "FAIL", "INCONCLUSIVE"}
+
+          before = float(md.get("cost_median_integration_logic_ms_at_scale_before", float("nan")))
+          after = float(md.get("cost_median_integration_logic_ms_at_scale_after", float("nan")))
+          speed = float(md.get("cost_integration_logic_speedup_at_scale", float("nan")))
+          if math.isfinite(before) and math.isfinite(after) and after > 0.0:
+            expected = before / after
+            assert math.isfinite(speed), "P5.3 speedup must be finite when before/after are finite"
+            assert abs(speed - expected) <= 1e-9 * max(1.0, abs(expected)), f"P5.3 speedup mismatch: got={speed} expected={expected}"
+          PY
+
       - name: Extract facts (from summary_metadata.json)
         id: facts
         run: |
@@ -318,6 +346,14 @@ jobs:
           lines.append(f"    - integrator_correctness_verdict: {md.get('integrator_correctness_verdict')}")
           lines.append(f"    - integrator_speedup_verdict: {md.get('integrator_speedup_verdict')}")
           lines.append(f"    - integrator_verdict_reason: {md.get('integrator_verdict_reason')}")
+          lines.append("  - cost (P5.2/P5.3):")
+          lines.append(f"    - cost_bottleneck_verdict_at_scale: {md.get('cost_bottleneck_verdict_at_scale')}")
+          lines.append(f"    - cost_median_dos_ldos_eval_ms_at_scale: {md.get('cost_median_dos_ldos_eval_ms_at_scale')}")
+          lines.append(f"    - cost_median_integration_logic_ms_at_scale: {md.get('cost_median_integration_logic_ms_at_scale')}")
+          lines.append(f"    - cost_median_integration_logic_ms_at_scale_before: {md.get('cost_median_integration_logic_ms_at_scale_before')}")
+          lines.append(f"    - cost_median_integration_logic_ms_at_scale_after: {md.get('cost_median_integration_logic_ms_at_scale_after')}")
+          lines.append(f"    - cost_integration_logic_speedup_at_scale: {md.get('cost_integration_logic_speedup_at_scale')}")
+          lines.append(f"    - cost_integration_logic_opt_verdict_at_scale: {md.get('cost_integration_logic_opt_verdict_at_scale')}")
           lines.append("  - scale (P5):")
           lines.append(f"    - scale_n_atoms_min: {md.get('scale_n_atoms_min')}")
           lines.append(f"    - scale_n_atoms_max: {md.get('scale_n_atoms_max')}")
@@ -374,7 +410,7 @@ jobs:
             - quad_order_max: ${{ inputs.integrator_quad_order_max }}
             - eval_budget_max: ${{ inputs.integrator_eval_budget_max }}
             - split_criterion: ${{ inputs.integrator_split_criterion }}
-          - Pack: fixtures_polymer_scale.csv, speedup_vs_n.csv, speedup_vs_n.md, integration_compare.csv, integration_speed_profile.csv, adaptive_integration_trace.csv, adaptive_integration_summary.json, summary.csv, summary_metadata.json, metrics.json, manifest.json, checksums.sha256, physics_large_scale_evidence_pack.zip
+          - Pack: fixtures_polymer_scale.csv, speedup_vs_n.csv, speedup_vs_n.md, timing_breakdown.csv, integration_compare.csv, integration_speed_profile.csv, adaptive_integration_trace.csv, adaptive_integration_summary.json, summary.csv, summary_metadata.json, metrics.json, manifest.json, checksums.sha256, physics_large_scale_evidence_pack.zip
           - SHA256(physics_large_scale_evidence_pack.zip): ${{ steps.hash.outputs.sha256 }}
           - Outcome (facts from summary_metadata.json):
           ${{ steps.facts.outputs.facts_md }}
