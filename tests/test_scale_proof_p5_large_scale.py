@@ -39,6 +39,8 @@ def test_p5_evidence_pack_contains_required_files_and_metadata(tmp_path: Path) -
         integrator_split_criterion="max_abs_error",
         overhead_region_n_max=50,
         gate_n_min=200,
+        correctness_gate_rate=1.0,
+        min_scale_samples=2,
         speedup_gate_break_even=1.0,
         speedup_gate_strong=2.0,
     )
@@ -62,6 +64,8 @@ def test_p5_evidence_pack_contains_required_files_and_metadata(tmp_path: Path) -
 
         meta = json.loads(zf.read("summary_metadata.json").decode("utf-8"))
         assert meta["schema_version"] == "hetero2_scale_speedup_metadata.v1"
+        assert meta["law_ref"]["contract_path"] == "docs/contracts/INTEGRATION_SCALE_CONTRACT.md"
+        assert meta["law_ref"]["contract_version"] == "p5.1.v1"
         assert meta["curve_id"] == "dos_H"
         assert meta["integrator_mode"] == "both"
         assert meta["scale_n_atoms_min"] == 20
