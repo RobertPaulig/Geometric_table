@@ -822,3 +822,17 @@
   - integrator_verdict=SUCCESS; integrator_correctness_pass_rate=1.0; integrator_eval_ratio_median=1.9609375; integrator_speedup_median=0.203809; integrator_speedup_verdict=FAIL_SPEEDUP
 - Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/152 (merge: 7754ac0a2dcb91dcd540a38a2ab9e2d05669b175)
 - CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21153056730
+
+### 2026-01-20 - P4.3R INSTRUMENT+SELECT-TRUTH-1: integration profiling + mode selector (baseline for small n_atoms)
+- Code PR: https://github.com/RobertPaulig/Geometric_table/pull/154 (merge: f2950c205da43a09e95bd0a4de9ebd0c994b6817)
+- CI run (3/3 ci/* on code merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21154789330
+- Live proof r1 (stress pack; integrator_mode=both; selector enabled):
+  - Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/physics-operator-integration-select-truth-2026-01-20-r1
+  - Source commit: f2950c205da43a09e95bd0a4de9ebd0c994b6817
+  - Publish run: https://github.com/RobertPaulig/Geometric_table/actions/runs/21154848940
+  - Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/physics-operator-integration-select-truth-2026-01-20-r1/evidence_pack.zip
+  - SHA256(evidence_pack.zip): AC47AD2A3BC3D8EDE69CF804D8B3A2B7F5664127E6F8EA69F538D135B9A9AFAA (verified by download)
+  - Evidence pack artifacts: integration_profile.csv, integration_timing_breakdown.json, integrator_select_summary.json, summary_metadata.json
+  - Facts (summary_metadata.json): integrator_valid_row_fraction=1.0; integrator_correctness_pass_rate=1.0; integrator_eval_ratio_median=1.9609375; integrator_speedup_median=0.282874; integrator_speedup_verdict=PASS_SCALING_READY; integrator_selected_fraction_baseline=1.0; integrator_selected_fraction_adaptive=0.0
+- Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/155 (merge: f956f427f2a52ea526b3e2c8d371a4f696b9762b)
+- CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21155008818
