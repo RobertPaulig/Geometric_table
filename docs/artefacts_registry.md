@@ -968,3 +968,27 @@ separation facts (computed on status==OK rows only):
 - SHA256(evidence_pack.zip): AC47AD2A3BC3D8EDE69CF804D8B3A2B7F5664127E6F8EA69F538D135B9A9AFAA
 - Command:
   hetero2-batch --input stress.csv --out_dir out_stress --artifacts light --score_mode mock --k_decoys 2 --workers 1 --timeout_s 60 --maxtasksperchild 100 --seed_strategy per_row --seed 0 --physics_mode both --edge_weight_mode unweighted --potential_mode static --scf_max_iter 50 --scf_tol 1e-6 --scf_damping 0.5 --scf_occ_k 5 --scf_tau 1.0 --integrator_mode both --integrator_eps_abs 1e-6 --integrator_eps_rel 1e-4 --integrator_subdomains_max 64 --integrator_poly_degree_max 8 --integrator_quad_order_max 16 --integrator_eval_budget_max 4096 --integrator_split_criterion max_abs_error --zip_pack
+
+## physics-operator-large-scale-2026-01-20-r1
+
+- Source commit: 77f98b9c5fd892a27c2c8cc929132824b36a4f77
+- Release asset: https://github.com/RobertPaulig/Geometric_table/releases/download/physics-operator-large-scale-2026-01-20-r1/physics_large_scale_evidence_pack.zip
+- SHA256(physics_large_scale_evidence_pack.zip): C651C583D893C37A91E25AFC5D3FD049933E7A8ABA3D6E5AE47E6DB57FFF6653
+- Command:
+  python scripts/build_p5_large_scale_pack.py --out_dir out_physics_large_scale --n_atoms_bins "20,50,100,200,400,800" --samples_per_bin 10 --seed 0 --curve_id "dos_H" --energy_points 128 --dos_eta 0.2 --potential_scale_gamma 1.0 --edge_weight_mode bond_order_delta_chi --integrator_eps_abs 1e-6 --integrator_eps_rel 1e-4 --integrator_subdomains_max 32 --integrator_poly_degree_max 16 --integrator_quad_order_max 32 --integrator_eval_budget_max 256 --integrator_split_criterion "curvature" --overhead_region_n_max 100 --gate_n_min 200 --speedup_gate_break_even 1.0 --speedup_gate_strong 2.0
+- Outcome (facts from summary_metadata.json):
+  - scale (P5):
+    - scale_n_atoms_min: 20
+    - scale_n_atoms_max: 800
+    - scale_overhead_region_n_max: 100
+    - scale_gate_n_min: 200
+    - scale_break_even_n_estimate: None
+    - scale_speedup_median_at_maxN: 0.201066376990021
+    - scale_speedup_verdict: FAIL_SPEEDUP_AT_SCALE
+    - bins:
+      - n_atoms=20 n_samples=10 median_speedup=0.00866924220751798 median_eval_ratio=1.390625 pass_rate=1.0
+      - n_atoms=50 n_samples=10 median_speedup=0.015964776349234544 median_eval_ratio=0.8359375 pass_rate=1.0
+      - n_atoms=100 n_samples=10 median_speedup=0.02442258179220877 median_eval_ratio=0.8359375 pass_rate=1.0
+      - n_atoms=200 n_samples=10 median_speedup=0.03720015333905859 median_eval_ratio=0.8359375 pass_rate=1.0
+      - n_atoms=400 n_samples=10 median_speedup=0.06403126872207464 median_eval_ratio=0.8359375 pass_rate=1.0
+      - n_atoms=800 n_samples=10 median_speedup=0.201066376990021 median_eval_ratio=0.8359375 pass_rate=1.0
