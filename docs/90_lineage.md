@@ -923,3 +923,17 @@
   - Facts (summary_metadata.json): gate_n_min=200; integrator_correctness_verdict=PASS_CORRECTNESS_AT_SCALE; integrator_speedup_median_at_scale=0.12003553852247553; topology_hardness_verdict=NO_SPEEDUP_YET; topology_ring_cost_gap_verdict_at_scale=RING_SLOWER_DUE_TO_BUILD_OPERATOR; cost_median_total_ms_at_scale_polymer_estimate=7.468396366668155; cost_median_total_ms_at_scale_ring_estimate=8.9061203666598; cost_ratio_ring_vs_polymer_total_ms_at_scale_estimate=1.192507725809557
 - Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/177 (merge: f534b1fab00dfdb64e982d7ef1e963e2dee37cf1)
 - CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21208898844
+
+### 2026-01-21 - PHYSICS-P5.6-RING-SPEEDUP-LAW-1: ring speedup law (contract + gates; registry-grade ring KPI)
+- Code PR (ring speedup contract + P5.6 gates): https://github.com/RobertPaulig/Geometric_table/pull/179 (merge: 4b4c33eb82673b214ac9ad8e50f5f0d64791dec0)
+- CI run (3/3 ci/* on code merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21211015374
+- Ring law ref: docs/contracts/RING_SPEEDUP_CONTRACT.md @ 4b4c33eb82673b214ac9ad8e50f5f0d64791dec0 (p5.6.v1)
+- Live proof r7 (large-scale; integrator_mode=both; dos_eta=0.2):
+  - Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/physics-operator-large-scale-2026-01-20-r7
+  - Publish run: https://github.com/RobertPaulig/Geometric_table/actions/runs/21211317639
+  - Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/physics-operator-large-scale-2026-01-20-r7/physics_large_scale_evidence_pack.zip
+  - SHA256(physics_large_scale_evidence_pack.zip): D9DF8097C8C6EA639400ACBCC80F32694E02550C68E3DDBF07911C8683F12666 (verified by download)
+  - Evidence pack artifacts: speedup_vs_n_by_family.csv, timing_breakdown_by_family.csv, summary_metadata.json
+  - Facts (summary_metadata.json): ring_speedup_median_at_scale=0.09713153126539123; ring_eval_ratio_median_at_scale=0.8951048951048951; ring_correctness_pass_rate_at_scale=1.0; ring_speedup_verdict_at_scale=NO_SPEEDUP_YET; topology_ring_cost_gap_verdict_at_scale=RING_SLOWER_DUE_TO_BUILD_OPERATOR
+- Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/181 (merge: fda19830603ee43982803a5db38c78f72db3fd9e)
+- CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21211537548
