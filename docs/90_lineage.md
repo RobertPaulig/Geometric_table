@@ -965,3 +965,14 @@
   - Facts (summary_metadata.json): integrator_correctness_verdict=PASS_CORRECTNESS_AT_SCALE; topology_ring_cost_gap_verdict_at_scale=RING_SLOWER_DUE_TO_INTEGRATION_LOGIC; cost_ratio_ring_vs_polymer_integration_logic_ms_at_scale=1.2641339636812614; cost_median_integration_logic_ms_at_scale_ring_before=2.6423465000817714; cost_median_integration_logic_ms_at_scale_ring_after=3.0608639999840648; cost_integration_logic_speedup_at_scale_ring=0.8632681818256308; cost_integration_logic_opt_verdict_at_scale_ring=FAIL; ring_speedup_median_at_scale=0.08512662027971973; ring_speedup_verdict_at_scale=NO_SPEEDUP_YET; cost_ratio_ring_vs_polymer_build_operator_ms_at_scale=1.130292975349101; cost_ratio_ring_vs_polymer_total_ms_at_scale_estimate=1.1967770953457784
 - Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/188 (merge: 017445dd55c54c3143fcaeb49e818f4b12550429)
 - CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21219765841
+
+### 2026-01-21 - VALUE-M1 ring-suite evidence pack (chem coverage; ERROR=0)
+- Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/value-ring-suite-2026-01-21
+- Source commit: 632d5f1b231288ae1308a338cf52f9299eec70db
+- Publish run: https://github.com/RobertPaulig/Geometric_table/actions/runs/21222158878
+- Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/value-ring-suite-2026-01-21/value_ring_suite_evidence_pack.zip
+- SHA256(value_ring_suite_evidence_pack.zip): 97A3181F897A89A0559E0099A40AF7537D8A7E08A5B3D7D6377514E042E27509 (verified by download)
+- Facts (summary.csv): rows_total=200; status_counts OK=200, SKIP=0, ERROR=0; top_skip_reasons=(none); share_rows_with_n_decoys_gt_0=1.000 (100%)
+- Decoy strategy distribution (summary.csv): rewire_strict_v1=60; rewire_relax_a_v1=40; rewire_fallback_aromatic_as_single_v1=100
+- Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/190 (merge: d5bd4a15d7b51167556f03d143078d71f8d92f31)
+- CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21222210835
