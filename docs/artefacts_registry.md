@@ -1378,3 +1378,79 @@ separation facts (computed on status==OK rows only):
       - n_atoms=200 n_samples=20 median_speedup=0.06266050225755272 median_eval_ratio=0.9143323638961172 pass_rate=1.0
       - n_atoms=400 n_samples=20 median_speedup=0.12719779730605427 median_eval_ratio=1.148005148005148 pass_rate=1.0
       - n_atoms=800 n_samples=20 median_speedup=0.3147446816387783 median_eval_ratio=1.1378002528445006 pass_rate=1.0
+
+## physics-operator-large-scale-2026-01-20-r9
+
+- Source commit: d5be05323c4de4954d4570785d0cf4a2fd61fa37
+- Release asset: https://github.com/RobertPaulig/Geometric_table/releases/download/physics-operator-large-scale-2026-01-20-r9/physics_large_scale_evidence_pack.zip
+- SHA256(physics_large_scale_evidence_pack.zip): E1381DC4DB2D099C69973370BE4C53CC6390FAE23CF960217DC500B599DC713B
+- Command:
+  python scripts/build_p5_large_scale_pack.py --out_dir out_physics_large_scale --n_atoms_bins "20,50,100,200,400,800" --samples_per_bin 10 --seed 0 --curve_id "dos_H" --energy_points 128 --dos_eta 0.2 --potential_scale_gamma 1.0 --edge_weight_mode bond_order_delta_chi --integrator_eps_abs 1e-6 --integrator_eps_rel 1e-4 --integrator_subdomains_max 32 --integrator_poly_degree_max 16 --integrator_quad_order_max 32 --integrator_eval_budget_max 256 --integrator_split_criterion "curvature" --overhead_region_n_max 100 --gate_n_min 200 --speedup_gate_break_even 1.0 --speedup_gate_strong 2.0
+- Outcome (facts from summary_metadata.json):
+  - law_ref:
+    - contract_path: docs/contracts/INTEGRATION_SCALE_CONTRACT.md
+    - contract_commit: d5be05323c4de4954d4570785d0cf4a2fd61fa37
+    - contract_version: p5.1.v1
+  - integrator (P5.1):
+    - gate_n_min: 200
+    - correctness_gate_rate: 1.0
+    - min_scale_samples: 5
+    - integrator_correctness_pass_rate_at_scale: 1.0
+    - integrator_speedup_median_at_scale: 0.10289085018839059
+    - integrator_eval_ratio_median_at_scale: 1.1327433628318584
+    - integrator_correctness_verdict: PASS_CORRECTNESS_AT_SCALE
+    - integrator_speedup_verdict: FAIL_SPEEDUP_AT_SCALE
+    - integrator_verdict_reason: FAIL: correctness ok at scale; speedup_median_at_scale=0.10289085018839059 < 1.0
+  - cost (P5.2/P5.3):
+    - cost_bottleneck_verdict_at_scale: MIXED
+    - cost_median_dos_ldos_eval_ms_at_scale: 2.368375000010303
+    - cost_median_integration_logic_ms_at_scale: 2.4908904999989545
+    - cost_median_integration_logic_ms_at_scale_before: 4.544935500007341
+    - cost_median_integration_logic_ms_at_scale_after: 2.4908904999989545
+    - cost_integration_logic_speedup_at_scale: 1.824622760418111
+    - cost_integration_logic_opt_verdict_at_scale: PASS
+  - topology (P5.4):
+    - topology_families: ['polymer', 'ring']
+    - topology_gate_n_min: 200
+    - speedup_median_at_scale_polymer: 0.10562706901479679
+    - speedup_verdict_at_scale_polymer: FAIL_SPEEDUP_AT_SCALE
+    - speedup_median_at_scale_ring: 0.08512662027971973
+    - speedup_verdict_at_scale_ring: FAIL_SPEEDUP_AT_SCALE
+    - topology_hardness_verdict: NO_SPEEDUP_YET
+    - topology_hardness_reason: polymer(verdict=FAIL_SPEEDUP_AT_SCALE, median=0.10562706901479679) ring(verdict=FAIL_SPEEDUP_AT_SCALE, median=0.08512662027971973) gate_n_min=200
+  - topology cost (P5.5):
+    - pack contains timing_breakdown_by_family.csv
+    - cost_median_total_ms_at_scale_polymer_estimate: 7.4300517416702405
+    - cost_median_total_ms_at_scale_ring_estimate: 8.892115741664952
+    - cost_ratio_ring_vs_polymer_total_ms_at_scale_estimate: 1.1967770953457784
+    - topology_ring_cost_gap_verdict_at_scale: RING_SLOWER_DUE_TO_INTEGRATION_LOGIC
+    - topology_ring_cost_gap_reason_at_scale: scale_n_min=200 polymer_n=30 ring_n=30 ratio_total=1.1967770953457784 ratio_build=1.130292975349101 ratio_dos=1.221658910025633 ratio_integration_logic=1.2641339636812614 ratio_io=1.0
+  - integration_logic (ring) KPI (P5.8):
+    - cost_ratio_ring_vs_polymer_integration_logic_ms_at_scale: 1.2641339636812614
+    - cost_median_integration_logic_ms_at_scale_ring_before: 2.6423465000817714
+    - cost_median_integration_logic_ms_at_scale_ring_after: 3.0608639999840648
+    - cost_integration_logic_speedup_at_scale_ring: 0.8632681818256308
+    - cost_integration_logic_opt_verdict_at_scale_ring: FAIL
+    - topology_ring_cost_gap_verdict_at_scale: RING_SLOWER_DUE_TO_INTEGRATION_LOGIC
+  - ring speedup law (P5.6):
+    - ring_speedup_median_at_scale: 0.08512662027971973
+    - ring_eval_ratio_median_at_scale: 0.8951048951048951
+    - ring_correctness_pass_rate_at_scale: 1.0
+    - ring_speedup_verdict_at_scale: NO_SPEEDUP_YET
+    - ring_speedup_verdict_reason_at_scale: gate_n_min=200 min_scale_samples=5 ring_n=30 correctness_gate_rate=1.0 ring_pass_rate=1.0 ring_median_speedup=0.08512662027971973 polymer_median_speedup=0.10562706901479679 gate_speedup=1.0 ring_cost_gap_verdict=RING_SLOWER_DUE_TO_INTEGRATION_LOGIC
+    - topology_ring_cost_gap_verdict_at_scale: RING_SLOWER_DUE_TO_INTEGRATION_LOGIC
+  - scale (P5):
+    - scale_n_atoms_min: 20
+    - scale_n_atoms_max: 800
+    - scale_overhead_region_n_max: 100
+    - scale_gate_n_min: 200
+    - scale_break_even_n_estimate: None
+    - scale_speedup_median_at_maxN: 0.2855233217418385
+    - scale_speedup_verdict: FAIL_SPEEDUP_AT_SCALE
+    - bins:
+      - n_atoms=20 n_samples=20 median_speedup=0.01400078103187933 median_eval_ratio=0.8889317578972751 pass_rate=1.0
+      - n_atoms=50 n_samples=20 median_speedup=0.02627283859063287 median_eval_ratio=1.1428571428571428 pass_rate=1.0
+      - n_atoms=100 n_samples=20 median_speedup=0.0397502243125315 median_eval_ratio=1.1428571428571428 pass_rate=1.0
+      - n_atoms=200 n_samples=20 median_speedup=0.05476953125070314 median_eval_ratio=0.9143323638961172 pass_rate=1.0
+      - n_atoms=400 n_samples=20 median_speedup=0.10289085018839059 median_eval_ratio=1.148005148005148 pass_rate=1.0
+      - n_atoms=800 n_samples=20 median_speedup=0.2855233217418385 median_eval_ratio=1.1378002528445006 pass_rate=1.0
