@@ -878,3 +878,20 @@
   - Facts (summary_metadata.json): gate_n_min=200; integrator_correctness_verdict=PASS_CORRECTNESS_AT_SCALE; integrator_speedup_median_at_scale=0.11754749203803679; integrator_speedup_verdict=FAIL_SPEEDUP_AT_SCALE; cost_bottleneck_verdict_at_scale=BOTTLENECK_IS_INTEGRATOR; cost_median_dos_ldos_eval_ms_at_scale=2.487639000023023; cost_median_integration_logic_ms_at_scale=4.544935500007341
 - Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/166 (merge: 53307fe347c20a195b39cea181dce2619d17ddde)
 - CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21188380534
+
+### 2026-01-21 - PHYSICS-P5.3-INTEGRATION-LOGIC-OPT-1: optimize integration_logic runtime (P5.3 KPI fields + publish gate)
+- Code PR (integration_logic optimization + KPI gates): https://github.com/RobertPaulig/Geometric_table/pull/169 (merge: 540a46511a1275fa8358aac00cd2e85cb36092a5)
+- CI run (3/3 ci/* on code merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21193354363
+- Live proof r4 (large-scale; integrator_mode=both; dos_eta=0.2):
+  - Law ref (from summary_metadata.json): docs/contracts/INTEGRATION_SCALE_CONTRACT.md @ 540a46511a1275fa8358aac00cd2e85cb36092a5 (p5.1.v1)
+  - Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/physics-operator-large-scale-2026-01-20-r4
+  - Publish run: https://github.com/RobertPaulig/Geometric_table/actions/runs/21193382219
+  - Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/physics-operator-large-scale-2026-01-20-r4/physics_large_scale_evidence_pack.zip
+  - SHA256(physics_large_scale_evidence_pack.zip): 94DE3D0A457F8A2129DBE2A577291862B60486F5959AC1D03FCF4D239CFD75A9 (verified by download)
+  - Evidence pack artifacts: fixtures_polymer_scale.csv, speedup_vs_n.csv, speedup_vs_n.md, timing_breakdown.csv, integration_compare.csv, integration_speed_profile.csv, adaptive_integration_trace.csv, adaptive_integration_summary.json, summary_metadata.json
+  - Facts (summary_metadata.json): gate_n_min=200; integrator_correctness_verdict=PASS_CORRECTNESS_AT_SCALE; integrator_speedup_median_at_scale=0.21174035241485198; integrator_eval_ratio_median_at_scale=1.1531531531531531; integrator_speedup_verdict=FAIL_SPEEDUP_AT_SCALE; cost_bottleneck_verdict_at_scale=MIXED; cost_median_dos_ldos_eval_ms_at_scale=2.5924949999875935; cost_median_integration_logic_ms_at_scale=2.218445499991617; cost_median_integration_logic_ms_at_scale_before=4.544935500007341; cost_median_integration_logic_ms_at_scale_after=2.218445499991617; cost_integration_logic_speedup_at_scale=2.048702796631477; cost_integration_logic_opt_verdict_at_scale=PASS
+  - P5.3 KPI thresholds (registry rails): cost_integration_logic_speedup_gate_break_even=1.0; cost_integration_logic_speedup_gate_strong=2.0
+- Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/171 (merge: 2bf2e6da7b8423118ebb67967d2fec81a0e0ccf7)
+- CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21193563936
+- Registry addendum PR (P5.3 thresholds): https://github.com/RobertPaulig/Geometric_table/pull/172 (merge: 993f6f303462f33b106206cd6fb15dbcde89b28b)
+- CI run (3/3 ci/* on addendum merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21193677005
