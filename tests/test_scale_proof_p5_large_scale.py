@@ -83,6 +83,13 @@ def test_p5_evidence_pack_contains_required_files_and_metadata(tmp_path: Path) -
             "BOTTLENECK_IS_IO",
             "MIXED",
         }
+        assert meta["cost_integration_logic_opt_verdict_at_scale"] in {"PASS", "FAIL", "INCONCLUSIVE"}
+        for k in [
+            "cost_median_integration_logic_ms_at_scale_before",
+            "cost_median_integration_logic_ms_at_scale_after",
+            "cost_integration_logic_speedup_at_scale",
+        ]:
+            assert k in meta
 
         timing_text = zf.read("timing_breakdown.csv").decode("utf-8")
         r = csv.DictReader(io.StringIO(timing_text))
@@ -93,4 +100,37 @@ def test_p5_evidence_pack_contains_required_files_and_metadata(tmp_path: Path) -
         rows = list(r)
         assert any(row.get("row_kind") == "sample" for row in rows)
         assert any(row.get("row_kind") == "bin" for row in rows)
+
+
+def test_p5_correctness_passes_at_scale_for_eta_0_2(tmp_path: Path) -> None:
+    out_dir = tmp_path / "out"
+    cfg = P5Config(
+        n_atoms_bins=(20, 200),
+        samples_per_bin=1,
+        seed=0,
+        curve_id="dos_H",
+        energy_points=32,
+        dos_eta=0.2,
+        potential_scale_gamma=1.0,
+        edge_weight_mode="bond_order_delta_chi",
+        integrator_eps_abs=1e-6,
+        integrator_eps_rel=1e-4,
+        integrator_subdomains_max=16,
+        integrator_poly_degree_max=8,
+        integrator_quad_order_max=16,
+        integrator_eval_budget_max=256,
+        integrator_split_criterion="max_abs_error",
+        overhead_region_n_max=50,
+        gate_n_min=200,
+        correctness_gate_rate=1.0,
+        min_scale_samples=1,
+        speedup_gate_break_even=1.0,
+        speedup_gate_strong=2.0,
+    )
+    zip_path = write_p5_evidence_pack(out_dir=out_dir, cfg=cfg)
+    assert zip_path.exists()
+
+    with zipfile.ZipFile(zip_path, "r") as zf:
+        meta = json.loads(zf.read("summary_metadata.json").decode("utf-8"))
+        assert meta["integrator_correctness_verdict"] == "PASS_CORRECTNESS_AT_SCALE"
 

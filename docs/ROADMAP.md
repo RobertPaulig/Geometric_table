@@ -362,7 +362,15 @@ Hard rule:
 - No new integration optimizations/claims until P5.1 is merged to main; speed metrics are NOT KPI if FAIL_CORRECTNESS_AT_SCALE.
 
 ### PHYSICS-P5.2-COST-DECOMPOSITION-1: cost decomposition for integration runtime (timing breakdown + bottleneck verdict)
-Status: [ ] planned  [x] in-progress  [ ] done
+Status: [ ] planned  [ ] in-progress  [x] done
+
+Closed:
+- PR #165 (code): https://github.com/RobertPaulig/Geometric_table/pull/165
+- Publish run r3 (large-scale proof): https://github.com/RobertPaulig/Geometric_table/actions/runs/21188218951
+- Release r3 (zip+.sha256): https://github.com/RobertPaulig/Geometric_table/releases/tag/physics-operator-large-scale-2026-01-20-r3
+- PR #166 (registry): https://github.com/RobertPaulig/Geometric_table/pull/166
+- PR #167 (lineage): https://github.com/RobertPaulig/Geometric_table/pull/167
+- PR #168 (registry addendum: P5.2 cost facts): https://github.com/RobertPaulig/Geometric_table/pull/168
 
 Goal:
 - Stop optimizing blind: decompose runtime per fixture into operator build vs DOS/LDOS eval vs integrator logic vs I/O, and publish a bottleneck verdict.
@@ -379,6 +387,27 @@ DoD:
 
 Hard rule:
 - No new integration optimizations/claims until P5.2 is merged; next actions must be justified by the bottleneck verdict.
+
+### PHYSICS-P5.3-INTEGRATION-LOGIC-OPT-1: integration logic optimization (reduce integration_logic_ms; KPI + gates)
+Status: [ ] planned  [x] in-progress  [ ] done
+
+Goal:
+- Optimize only integration_logic (adaptive integrator overhead), because P5.2 bottleneck verdict at scale is `BOTTLENECK_IS_INTEGRATOR`.
+
+Entry criteria:
+- PHYSICS-P5.2 truth-chain is DONE (publish-run → release(zip+.sha256) → registry + lineage on main).
+
+DoD:
+- Integration correctness at scale stays PASS (P5.1 correctness verdict unchanged).
+- Evidence pack metadata includes new P5.3 KPI fields:
+  - `cost_median_integration_logic_ms_at_scale_before`
+  - `cost_median_integration_logic_ms_at_scale_after`
+  - `cost_integration_logic_speedup_at_scale`
+  - `cost_integration_logic_opt_verdict_at_scale = PASS|FAIL|INCONCLUSIVE`
+- Contract-tests and publish gates validate presence of the P5.3 fields (anti-drift) and keep `timing_breakdown.csv` schema intact.
+
+Hard rule:
+- No other integration optimizations/claims until P5.3 is merged and truth-chain is closed.
 
 # ROADMAP — HETERO-2 как SaaS (Pfizer-ready evidence pipeline)
 

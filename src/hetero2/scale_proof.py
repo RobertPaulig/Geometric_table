@@ -936,6 +936,36 @@ def write_p5_evidence_pack(
     metadata["cost_io_walltime_ms_total_estimate"] = float(io_ms_total_estimate)
     metadata["cost_io_walltime_ms_per_sample_estimate"] = float(io_ms_per_sample_estimate)
 
+    # P5.3 KPI: compare integration_logic_ms at scale against a pinned baseline ("before") and
+    # record a simple verdict for the optimization step.
+    integration_logic_before_ms_at_scale = 4.544935500007341  # P5.2 truth r3 baseline (registry-grade)
+    before_override = str(os.environ.get("P5_COST_INTEGRATION_LOGIC_MS_AT_SCALE_BEFORE") or "").strip()
+    if before_override:
+        try:
+            integration_logic_before_ms_at_scale = float(before_override)
+        except ValueError:
+            pass
+
+    integration_logic_after_ms_at_scale = float(integ_med)
+    integration_logic_speedup_at_scale = (
+        float(integration_logic_before_ms_at_scale) / float(integration_logic_after_ms_at_scale)
+        if math.isfinite(float(integration_logic_before_ms_at_scale))
+        and math.isfinite(float(integration_logic_after_ms_at_scale))
+        and float(integration_logic_after_ms_at_scale) > 0.0
+        else float("nan")
+    )
+
+    n_scale_timing = int(len(scale_timing_samples))
+    correctness_ok = str(metadata.get("integrator_correctness_verdict") or "") == "PASS_CORRECTNESS_AT_SCALE"
+    cost_opt_verdict = "INCONCLUSIVE"
+    if correctness_ok and n_scale_timing >= int(cfg.min_scale_samples) and math.isfinite(float(integration_logic_speedup_at_scale)):
+        cost_opt_verdict = "PASS" if float(integration_logic_speedup_at_scale) >= 1.0 else "FAIL"
+
+    metadata["cost_median_integration_logic_ms_at_scale_before"] = float(integration_logic_before_ms_at_scale)
+    metadata["cost_median_integration_logic_ms_at_scale_after"] = float(integration_logic_after_ms_at_scale)
+    metadata["cost_integration_logic_speedup_at_scale"] = float(integration_logic_speedup_at_scale)
+    metadata["cost_integration_logic_opt_verdict_at_scale"] = str(cost_opt_verdict)
+
     summary_metadata_json.write_text(json.dumps(metadata, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
 
     # Metrics: keep the minimal "counts" gate compatible with existing publish workflows.

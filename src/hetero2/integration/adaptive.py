@@ -36,46 +36,53 @@ class AdaptiveCurveResult:
 class _EvalCache:
     def __init__(self, f: Callable[[np.ndarray], np.ndarray]) -> None:
         self._f = f
-        self._cache: dict[str, float] = {}
+        self._cache: dict[int, float] = {}
         self.evals_total = 0
         self.requests_total = 0
         self.hits_total = 0
         self.eval_walltime_ms_total = 0.0
-
-    @staticmethod
-    def _key(e: float) -> str:
-        v = float(e)
-        if not math.isfinite(v):
-            return "nan"
-        # Stable token for deterministic caching.
-        return f"{v:.12g}"
 
     def eval(self, energies: np.ndarray) -> np.ndarray:
         e = np.asarray(energies, dtype=float)
         if e.size == 0:
             return np.array([], dtype=float)
 
-        keys = [self._key(float(x)) for x in e.tolist()]
-        self.requests_total += int(len(keys))
-        for k in keys:
-            if k in self._cache:
+        e_flat = np.asarray(e.reshape(-1), dtype=np.float64)
+        out_flat = np.empty_like(e_flat, dtype=float)
+        keys = e_flat.view(np.int64)
+        keys_list: list[int] = keys.tolist()
+        self.requests_total += int(len(keys_list))
+
+        cache = self._cache
+        missing_idx_by_key: dict[int, list[int]] = {}
+        missing_energy_by_key: dict[int, float] = {}
+        for idx, key in enumerate(keys_list):
+            cached = cache.get(key)
+            if cached is not None:
                 self.hits_total += 1
+                out_flat[idx] = float(cached)
+                continue
+            missing_idx_by_key.setdefault(key, []).append(int(idx))
+            missing_energy_by_key.setdefault(key, float(e_flat[idx]))
 
-        missing: dict[str, float] = {k: float(v) for k, v in zip(keys, e.tolist(), strict=False) if k not in self._cache}
-        if missing:
-            # Deterministic ordering for evaluation and cache fill.
-            ordered = sorted(missing.items(), key=lambda kv: kv[0])
-            vals = np.array([v for _, v in ordered], dtype=float)
+        if missing_idx_by_key:
+            ordered_keys = sorted(missing_idx_by_key.keys())
+            vals = np.array([float(missing_energy_by_key[k]) for k in ordered_keys], dtype=float)
             t0 = time.perf_counter()
-            out = np.asarray(self._f(vals), dtype=float)
+            y_new = np.asarray(self._f(vals), dtype=float)
             self.eval_walltime_ms_total += float((time.perf_counter() - t0) * 1000.0)
-            if out.size != vals.size:
+            if y_new.size != vals.size:
                 raise ValueError("adaptive integrator: evaluator returned wrong shape")
-            for (k, _), y in zip(ordered, out.tolist(), strict=True):
-                self._cache[k] = float(y)
-            self.evals_total += int(vals.size)
+            for k, y in zip(ordered_keys, y_new.tolist(), strict=True):
+                cache[int(k)] = float(y)
+            self.evals_total += int(len(ordered_keys))
 
-        return np.array([float(self._cache[k]) for k in keys], dtype=float)
+            for k in ordered_keys:
+                y = float(cache[int(k)])
+                for idx in missing_idx_by_key.get(k, []):
+                    out_flat[int(idx)] = float(y)
+
+        return np.asarray(out_flat.reshape(e.shape), dtype=float)
 
     @property
     def hit_rate(self) -> float:
@@ -106,6 +113,7 @@ def _map_energy_to_x(e: np.ndarray, *, e_left: float, e_right: float) -> np.ndar
     return (2.0 * np.asarray(e, dtype=float) - (right + left)) / denom
 
 
+@functools.lru_cache(maxsize=256)
 def _chebyshev_nodes(n: int) -> np.ndarray:
     n = int(n)
     if n <= 1:
@@ -114,6 +122,25 @@ def _chebyshev_nodes(n: int) -> np.ndarray:
     # Chebyshev–Lobatto nodes on [-1, 1]. These are nested for n -> (2n-1),
     # enabling deterministic p-refinement with cache reuse.
     return np.cos(math.pi * k / float(n - 1))
+
+
+@functools.lru_cache(maxsize=256)
+def _chebyshev_vander_inv(n: int) -> np.ndarray:
+    n = int(n)
+    if n <= 0:
+        raise ValueError("adaptive integrator: invalid chebyshev size")
+    x = _chebyshev_nodes(int(n))
+    deg = int(n - 1)
+    vander = np.asarray(chebyshev.chebvander(x, deg), dtype=float)
+    return np.asarray(np.linalg.inv(vander), dtype=float)
+
+
+def _chebyshev_interpolate_coeffs(y: np.ndarray) -> np.ndarray:
+    y = np.asarray(y, dtype=float).reshape(-1)
+    n = int(y.size)
+    if n == 0:
+        return np.array([], dtype=float)
+    return np.asarray(_chebyshev_vander_inv(n) @ y, dtype=float)
 
 
 def adaptive_approximate_on_grid(
@@ -213,7 +240,7 @@ def adaptive_approximate_on_grid(
         y_probe = np.asarray(cache.eval(e_probe), dtype=float)
 
         poly_degree = int(max(1, n_probe - 1))
-        coeffs = chebyshev.chebfit(x_probe, y_probe, deg=int(poly_degree))
+        coeffs = _chebyshev_interpolate_coeffs(y_probe)
 
         if baseline_arr is not None:
             mask = (grid >= float(left)) & (grid <= float(right))
