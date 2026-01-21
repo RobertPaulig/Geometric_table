@@ -409,6 +409,33 @@ DoD:
 Hard rule:
 - No other integration optimizations/claims until P5.3 is merged and truth-chain is closed.
 
+### PHYSICS-P5.4-PERF-HARDNESS-TOPOLOGY-1: ring-suite topology hardness in P5-scale (anti-illusion)
+Status: [ ] planned  [x] in-progress  [ ] done
+
+Goal:
+- Add ring-suite to P5-scale and publish speedup profiles per `topology_family` to prevent chain-only (tridiagonal) proof illusions.
+
+Entry criteria:
+- PHYSICS-P5.1 is DONE on main (truth-chain closed; evidence pack + registry + lineage).
+- P5 large-scale pack builder / publish workflow exists (speedup vs N_atoms).
+
+DoD (law is DONE only when the truth-chain is closed):
+- Evidence pack contains both fixture suites:
+  - `fixtures_polymer_scale.csv`
+  - `fixtures_ring_scale.csv`
+- Evidence pack contains per-family speed profile:
+  - `speedup_vs_n_by_family.csv` with `family, n_atoms, n_samples, median_speedup, median_eval_ratio, correctness_pass_rate`.
+- `summary_metadata.json` includes P5.4 fields and verdict logic:
+  - `topology_families = ["polymer","ring"]`
+  - `speedup_median_at_scale_polymer`, `speedup_median_at_scale_ring`
+  - `speedup_verdict_at_scale_polymer`, `speedup_verdict_at_scale_ring`
+  - `topology_hardness_verdict`, `topology_hardness_reason`
+- Contract-tests / publish gates validate ring-suite artifacts + P5.4 metadata/verdict (anti-drift).
+- Live proof chain-of-truth closed: publish-run -> release(zip+.sha256) -> registry PR -> lineage PR (append-only) -> main 3/3.
+
+Hard rule:
+- No scalability conclusions (or single combined speedup claims) without ring-suite and per-family speed profiles.
+
 # ROADMAP — HETERO-2 как SaaS (Pfizer-ready evidence pipeline)
 
 Назначение: зафиксировать целевую картину SaaS и вести разработку через обязательные вехи (milestones).

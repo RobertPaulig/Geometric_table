@@ -195,7 +195,7 @@ jobs:
       - name: Validate zip (no unpack)
         run: |
           python -m zipfile -t out_physics_large_scale/physics_large_scale_evidence_pack.zip
-          python -m zipfile -l out_physics_large_scale/physics_large_scale_evidence_pack.zip | grep -E "manifest.json|checksums.sha256|metrics.json|index.md|summary.csv|summary_metadata.json|fixtures_polymer_scale.csv|speedup_vs_n.csv|speedup_vs_n.md|timing_breakdown.csv|integration_compare.csv|integration_speed_profile.csv|adaptive_integration_trace.csv|adaptive_integration_summary.json"
+          python -m zipfile -l out_physics_large_scale/physics_large_scale_evidence_pack.zip | grep -E "manifest.json|checksums.sha256|metrics.json|index.md|summary.csv|summary_metadata.json|fixtures_polymer_scale.csv|fixtures_ring_scale.csv|speedup_vs_n.csv|speedup_vs_n_by_family.csv|speedup_vs_n.md|timing_breakdown.csv|integration_compare.csv|integration_speed_profile.csv|adaptive_integration_trace.csv|adaptive_integration_summary.json"
 
       - name: "Gate: P5.1 contract metadata/verdict"
         run: |
@@ -241,10 +241,11 @@ jobs:
           speedup_gate = float(md.get("scale_speedup_gate_break_even", 1.0) or 1.0)
 
           n_scale = 0
-          with open("out_physics_large_scale/fixtures_polymer_scale.csv", "r", encoding="utf-8", newline="") as f:
-            for row in csv.DictReader(f):
-              if int(row.get("n_atoms", 0) or 0) >= gate_n_min:
-                n_scale += 1
+          for fname in ["fixtures_polymer_scale.csv", "fixtures_ring_scale.csv"]:
+            with open(f"out_physics_large_scale/{fname}", "r", encoding="utf-8", newline="") as f:
+              for row in csv.DictReader(f):
+                if int(row.get("n_atoms", 0) or 0) >= gate_n_min:
+                  n_scale += 1
 
           corr_v = str(md.get("integrator_correctness_verdict") or "")
           sp_v = str(md.get("integrator_speedup_verdict") or "")
@@ -321,6 +322,54 @@ jobs:
             assert abs(speed - expected) <= 1e-9 * max(1.0, abs(expected)), f"P5.3 speedup mismatch: got={speed} expected={expected}"
           PY
 
+      - name: "Gate: P5.4 ring-suite topology hardness"
+        run: |
+          python - << 'PY'
+          import csv
+          import json
+
+          md = json.load(open("out_physics_large_scale/summary_metadata.json", "r", encoding="utf-8"))
+          required = [
+            "topology_families",
+            "topology_gate_n_min",
+            "speedup_median_at_scale_polymer",
+            "speedup_median_at_scale_ring",
+            "speedup_verdict_at_scale_polymer",
+            "speedup_verdict_at_scale_ring",
+            "topology_hardness_verdict",
+            "topology_hardness_reason",
+          ]
+          missing = [k for k in required if k not in md]
+          assert not missing, f"Missing required P5.4 metadata keys: {missing}"
+
+          assert md.get("topology_families") == ["polymer", "ring"]
+          assert int(md.get("topology_gate_n_min", 0) or 0) == int(md.get("gate_n_min", 0) or 0)
+
+          corr_v = str(md.get("integrator_correctness_verdict") or "")
+          poly_v = str(md.get("speedup_verdict_at_scale_polymer") or "")
+          ring_v = str(md.get("speedup_verdict_at_scale_ring") or "")
+          hard_v = str(md.get("topology_hardness_verdict") or "")
+
+          poly_ok = poly_v == "PASS_SPEEDUP_AT_SCALE"
+          ring_ok = ring_v == "PASS_SPEEDUP_AT_SCALE"
+
+          if corr_v != "PASS_CORRECTNESS_AT_SCALE":
+            assert hard_v == "NOT_VALID_DUE_TO_CORRECTNESS"
+          else:
+            expected = "NO_SPEEDUP_YET"
+            if poly_ok and ring_ok:
+              expected = "SUCCESS_TOPOLOGY_ROBUST"
+            elif poly_ok and not ring_ok:
+              expected = "ILLUSION_CONFIRMED_TOPOLOGY_DEPENDENT"
+            assert hard_v == expected, f"hardness_verdict mismatch: got={hard_v} expected={expected} polymer={poly_v} ring={ring_v}"
+
+          families = set()
+          with open("out_physics_large_scale/speedup_vs_n_by_family.csv", "r", encoding="utf-8", newline="") as f:
+            for row in csv.DictReader(f):
+              families.add(str(row.get("family") or ""))
+          assert "polymer" in families and "ring" in families
+          PY
+
       - name: Extract facts (from summary_metadata.json)
         id: facts
         run: |
@@ -354,6 +403,16 @@ jobs:
           lines.append(f"    - cost_median_integration_logic_ms_at_scale_after: {md.get('cost_median_integration_logic_ms_at_scale_after')}")
           lines.append(f"    - cost_integration_logic_speedup_at_scale: {md.get('cost_integration_logic_speedup_at_scale')}")
           lines.append(f"    - cost_integration_logic_opt_verdict_at_scale: {md.get('cost_integration_logic_opt_verdict_at_scale')}")
+
+          lines.append("  - topology (P5.4):")
+          lines.append(f"    - topology_families: {md.get('topology_families')}")
+          lines.append(f"    - topology_gate_n_min: {md.get('topology_gate_n_min')}")
+          lines.append(f"    - speedup_median_at_scale_polymer: {md.get('speedup_median_at_scale_polymer')}")
+          lines.append(f"    - speedup_verdict_at_scale_polymer: {md.get('speedup_verdict_at_scale_polymer')}")
+          lines.append(f"    - speedup_median_at_scale_ring: {md.get('speedup_median_at_scale_ring')}")
+          lines.append(f"    - speedup_verdict_at_scale_ring: {md.get('speedup_verdict_at_scale_ring')}")
+          lines.append(f"    - topology_hardness_verdict: {md.get('topology_hardness_verdict')}")
+          lines.append(f"    - topology_hardness_reason: {md.get('topology_hardness_reason')}")
           lines.append("  - scale (P5):")
           lines.append(f"    - scale_n_atoms_min: {md.get('scale_n_atoms_min')}")
           lines.append(f"    - scale_n_atoms_max: {md.get('scale_n_atoms_max')}")
@@ -410,7 +469,7 @@ jobs:
             - quad_order_max: ${{ inputs.integrator_quad_order_max }}
             - eval_budget_max: ${{ inputs.integrator_eval_budget_max }}
             - split_criterion: ${{ inputs.integrator_split_criterion }}
-          - Pack: fixtures_polymer_scale.csv, speedup_vs_n.csv, speedup_vs_n.md, timing_breakdown.csv, integration_compare.csv, integration_speed_profile.csv, adaptive_integration_trace.csv, adaptive_integration_summary.json, summary.csv, summary_metadata.json, metrics.json, manifest.json, checksums.sha256, physics_large_scale_evidence_pack.zip
+          - Pack: fixtures_polymer_scale.csv, fixtures_ring_scale.csv, speedup_vs_n.csv, speedup_vs_n_by_family.csv, speedup_vs_n.md, timing_breakdown.csv, integration_compare.csv, integration_speed_profile.csv, adaptive_integration_trace.csv, adaptive_integration_summary.json, summary.csv, summary_metadata.json, metrics.json, manifest.json, checksums.sha256, physics_large_scale_evidence_pack.zip
           - SHA256(physics_large_scale_evidence_pack.zip): ${{ steps.hash.outputs.sha256 }}
           - Outcome (facts from summary_metadata.json):
           ${{ steps.facts.outputs.facts_md }}

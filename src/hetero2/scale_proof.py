@@ -12,10 +12,10 @@ import zipfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import Iterable, Mapping, Sequence
 
 import numpy as np
-from scipy.linalg import eigh_tridiagonal
+from scipy.linalg import eigvals_banded, eigh_tridiagonal
 
 import hetero1a
 from hetero2.integration.adaptive import adaptive_approximate_on_grid
@@ -236,6 +236,71 @@ def generate_polymer_scale_fixtures(
     return fixtures
 
 
+def generate_ring_scale_fixtures(
+    *,
+    n_atoms_bins: Sequence[int],
+    samples_per_bin: int,
+    seed: int,
+) -> list[PolymerScaleFixture]:
+    bins = [int(x) for x in n_atoms_bins]
+    if not bins or any(n < 3 for n in bins):
+        raise ValueError("n_atoms_bins must contain ints >= 3 for ring-suite")
+    per_bin = int(samples_per_bin)
+    if per_bin < 1:
+        raise ValueError("samples_per_bin must be >= 1")
+
+    motifs: list[tuple[str, tuple[int, ...]]] = [
+        ("COCN", (6, 8, 6, 7)),
+        ("CNOC", (6, 7, 8, 6)),
+        ("CCON", (6, 6, 8, 7)),
+        ("NCCO", (7, 6, 6, 8)),
+    ]
+    fixtures: list[PolymerScaleFixture] = []
+    for n_atoms in bins:
+        for idx in range(per_bin):
+            sample_seed = int(seed) ^ (n_atoms * 1009) ^ (idx * 104729) ^ 0xC0FFEE
+            rng = random.Random(sample_seed)
+            motif_name, motif = motifs[idx % len(motifs)]
+            offset = int(rng.randrange(len(motif)))
+            types = [int(motif[(i + offset) % len(motif)]) for i in range(int(n_atoms))]
+
+            # Break symmetry deterministically (avoid rotationally symmetric patterns).
+            types[0] = 6
+            types[-1] = 6
+            if len(types) >= 6:
+                pos_a = 1 + (idx * 7) % (len(types) - 2)
+                pos_b = 1 + (idx * 13) % (len(types) - 2)
+                if pos_b == pos_a:
+                    pos_b = 1 + ((pos_b + 3) % (len(types) - 2))
+                types[pos_a] = 8 if types[pos_a] != 8 else 7
+                types[pos_b] = 7 if types[pos_b] != 7 else 8
+
+            if not any(int(z) == 7 for z in types):
+                types[len(types) // 3] = 7
+            if not any(int(z) == 8 for z in types):
+                types[(2 * len(types)) // 3] = 8
+
+            n_hetero = int(sum(1 for z in types if int(z) != 6))
+            parts = [_Z_TO_SYMBOL.get(int(types[0]), "C") + "1"]
+            if len(types) > 2:
+                parts.extend(_Z_TO_SYMBOL.get(int(z), "C") for z in types[1:-1])
+            parts.append(_Z_TO_SYMBOL.get(int(types[-1]), "C") + "1")
+            smiles = "".join(parts)
+            fixture_id = f"ring_n{int(n_atoms)}_s{idx:02d}"
+            fixtures.append(
+                PolymerScaleFixture(
+                    fixture_id=str(fixture_id),
+                    smiles=str(smiles),
+                    types_z=tuple(int(z) for z in types),
+                    n_atoms=int(n_atoms),
+                    n_hetero=int(n_hetero),
+                    motif=str(motif_name),
+                    seed=int(sample_seed),
+                )
+            )
+    return fixtures
+
+
 def _chain_edge_weights(
     *,
     types_z: Sequence[int],
@@ -260,6 +325,95 @@ def _chain_edge_weights(
         chi_j = float(chi_by_z[int(types_z[i + 1])])
         w[i] = 1.0 + float(alpha) * abs(float(chi_i) - float(chi_j))
     return w
+
+
+def _ring_edge_weights(
+    *,
+    types_z: Sequence[int],
+    edge_weight_mode: str,
+    alpha: float = 0.5,
+) -> np.ndarray:
+    n = int(len(types_z))
+    if n < 3:
+        raise ValueError("ring topology requires n_atoms >= 3")
+    mode = str(edge_weight_mode)
+    if mode not in {"unweighted", "bond_order", "bond_order_delta_chi"}:
+        raise ValueError("edge_weight_mode must be one of: unweighted, bond_order, bond_order_delta_chi")
+
+    if mode in {"unweighted", "bond_order"}:
+        return np.ones((n,), dtype=float)
+
+    atoms_db = load_atoms_db_v1()
+    chi_by_z = {int(k): float(v) for k, v in atoms_db.chi_by_atomic_num.items()}
+    w = np.ones((n,), dtype=float)
+    for i in range(n):
+        j = (i + 1) % n
+        chi_i = float(chi_by_z[int(types_z[i])])
+        chi_j = float(chi_by_z[int(types_z[j])])
+        w[i] = 1.0 + float(alpha) * abs(float(chi_i) - float(chi_j))
+    return w
+
+
+def _ring_banded_permutation(n: int) -> list[int]:
+    n = int(n)
+    if n < 0:
+        raise ValueError("n must be >= 0")
+    if n <= 2:
+        return list(range(n))
+    perm: list[int] = [0, 1]
+    lo = 2
+    hi = n - 1
+    take_hi = True
+    while len(perm) < n:
+        if take_hi:
+            perm.append(int(hi))
+            hi -= 1
+        else:
+            perm.append(int(lo))
+            lo += 1
+        take_hi = not take_hi
+    return perm
+
+
+def build_h_banded_ring(
+    *,
+    types_z: Sequence[int],
+    edge_weight_mode: str,
+    potential_scale_gamma: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    atoms_db = load_atoms_db_v1()
+    eps_by_z = {int(k): float(v) for k, v in atoms_db.potential_by_atomic_num.items()}
+    for z in types_z:
+        if int(z) not in eps_by_z:
+            raise ValueError(f"Missing epsilon for Z={int(z)} in atoms_db_v1.json")
+
+    n = int(len(types_z))
+    w = _ring_edge_weights(types_z=types_z, edge_weight_mode=str(edge_weight_mode))
+    deg = np.zeros((n,), dtype=float)
+    for i in range(n):
+        deg[i] = float(w[(i - 1) % n] + w[i])
+
+    v0 = np.array([float(eps_by_z[int(z)]) for z in types_z], dtype=float)
+    diag = deg + float(potential_scale_gamma) * v0
+
+    perm = _ring_banded_permutation(n)
+    pos = {int(old): int(new) for new, old in enumerate(perm)}
+    ab = np.zeros((3, n), dtype=float)  # lower banded (diag + 2 subdiagonals), scipy.linalg.eigvals_banded format
+    ab[0, :] = np.asarray(diag, dtype=float)[perm]
+
+    for i in range(n):
+        j = (i + 1) % n
+        a = int(pos[int(i)])
+        b = int(pos[int(j)])
+        row = a if a >= b else b
+        col = b if a >= b else a
+        offset = int(row - col)
+        if offset > 2:
+            raise ValueError("ring band permutation failed (bandwidth > 2)")
+        # lower banded storage: ab[offset, col] = A[row, col] for row >= col
+        ab[offset, col] = -float(w[i])
+
+    return np.asarray(ab, dtype=float), np.asarray(v0, dtype=float)
 
 
 def build_h_tridiagonal_chain(
@@ -291,7 +445,7 @@ def build_h_tridiagonal_chain(
 
 def compute_p5_speedup_rows(
     *,
-    fixtures: Sequence[PolymerScaleFixture],
+    fixtures_by_family: Mapping[str, Sequence[PolymerScaleFixture]],
     cfg: P5Config,
 ) -> tuple[
     list[dict[str, object]],
@@ -314,152 +468,187 @@ def compute_p5_speedup_rows(
     adaptive_summary_rows: list[dict[str, object]] = []
     sample_rows: list[dict[str, object]] = []
     timing_sample_rows: list[dict[str, object]] = []
-    for fx in fixtures:
-        t_build0 = time.perf_counter()
-        diag, off, v0 = build_h_tridiagonal_chain(
-            types_z=fx.types_z,
-            edge_weight_mode=str(cfg.edge_weight_mode),
-            potential_scale_gamma=float(cfg.potential_scale_gamma),
-        )
-        eigvals = eigh_tridiagonal(diag, off, eigvals_only=True, check_finite=False)
-        grid = _auto_energy_grid(eigenvalues=eigvals, energy_points=int(cfg.energy_points), eta=float(cfg.dos_eta))
-        if grid.size == 0:
-            raise ValueError("Energy grid is empty (invalid eigenvalues range)")
-        e_min = float(np.min(grid)) if grid.size else float("nan")
-        e_max = float(np.max(grid)) if grid.size else float("nan")
-        build_operator_ms = float((time.perf_counter() - t_build0) * 1000.0)
+    preferred = ["polymer", "ring"]
+    ordered_families = [f for f in preferred if f in fixtures_by_family]
+    ordered_families.extend(sorted(str(k) for k in fixtures_by_family.keys() if str(k) not in set(ordered_families)))
 
-        def _f(x: np.ndarray) -> np.ndarray:
-            return compute_dos_curve(eigenvalues=eigvals, energy_grid=np.asarray(x, dtype=float), eta=float(cfg.dos_eta))
+    for family in ordered_families:
+        topo = str(family)
+        for fx in fixtures_by_family.get(topo, []):
+            t_build0 = time.perf_counter()
+            if topo == "polymer":
+                diag, off, v0 = build_h_tridiagonal_chain(
+                    types_z=fx.types_z,
+                    edge_weight_mode=str(cfg.edge_weight_mode),
+                    potential_scale_gamma=float(cfg.potential_scale_gamma),
+                )
+                eigvals = eigh_tridiagonal(diag, off, eigvals_only=True, check_finite=False)
+            elif topo == "ring":
+                ab, v0 = build_h_banded_ring(
+                    types_z=fx.types_z,
+                    edge_weight_mode=str(cfg.edge_weight_mode),
+                    potential_scale_gamma=float(cfg.potential_scale_gamma),
+                )
+                eigvals = eigvals_banded(ab, lower=True, check_finite=False)
+            else:
+                raise ValueError(f"Unknown topology family: {topo}")
 
-        t0 = time.perf_counter()
-        baseline_values = _f(grid)
-        baseline_ms = float((time.perf_counter() - t0) * 1000.0)
+            grid = _auto_energy_grid(eigenvalues=eigvals, energy_points=int(cfg.energy_points), eta=float(cfg.dos_eta))
+            if grid.size == 0:
+                raise ValueError("Energy grid is empty (invalid eigenvalues range)")
+            e_min = float(np.min(grid)) if grid.size else float("nan")
+            e_max = float(np.max(grid)) if grid.size else float("nan")
+            build_operator_ms = float((time.perf_counter() - t_build0) * 1000.0)
 
-        tol_scale = float(np.max(np.abs(np.asarray(baseline_values, dtype=float)))) if baseline_values.size else 0.0
-        res = adaptive_approximate_on_grid(
-            f=_f,
-            energy_grid=grid,
-            cfg=adaptive_cfg,
-            tol_scale=tol_scale,
-            baseline_values=np.asarray(baseline_values, dtype=float),
-        )
-        adaptive_ms = float(res.summary.get("walltime_ms_total", float("nan")))
-        adaptive_eval_ms = float(res.summary.get("eval_walltime_ms_total", float("nan")))
-        adaptive_overhead_ms = float(res.summary.get("overhead_walltime_ms_total", float("nan")))
-        adaptive_evals_total = int(res.summary.get("evals_total", 0) or 0)
-        segments_used = int(res.summary.get("segments_used", 0) or 0)
-        cache_hit_rate = float(res.summary.get("cache_hit_rate", float("nan")))
-        adaptive_verdict_row = str(res.summary.get("verdict", ""))
+            def _f(x: np.ndarray) -> np.ndarray:
+                return compute_dos_curve(eigenvalues=eigvals, energy_grid=np.asarray(x, dtype=float), eta=float(cfg.dos_eta))
 
-        base_arr = np.asarray(baseline_values, dtype=float)
-        adapt_arr = np.asarray(res.values, dtype=float)
-        base_value = float(np.max(np.abs(base_arr))) if base_arr.size else float("nan")
-        adapt_value = float(np.max(np.abs(adapt_arr))) if adapt_arr.size else float("nan")
-        abs_err = float(np.max(np.abs(adapt_arr - base_arr))) if base_arr.size and adapt_arr.size else float("nan")
-        denom = abs(float(base_value)) + 1e-12
-        rel_err = float(abs_err / denom) if math.isfinite(float(abs_err)) else float("nan")
-        tol = float(cfg.integrator_eps_abs) + float(cfg.integrator_eps_rel) * abs(float(base_value)) if math.isfinite(float(base_value)) else float("nan")
-        correctness_pass = bool(math.isfinite(float(abs_err)) and math.isfinite(float(tol)) and float(abs_err) <= float(tol))
+            t0 = time.perf_counter()
+            baseline_values = _f(grid)
+            baseline_ms = float((time.perf_counter() - t0) * 1000.0)
 
-        baseline_points = int(grid.size)
-        eval_ratio = float(baseline_points) / float(adaptive_evals_total) if baseline_points > 0 and adaptive_evals_total > 0 else float("nan")
-        speedup = float(baseline_ms / adaptive_ms) if adaptive_ms and adaptive_ms > 0.0 and math.isfinite(adaptive_ms) else float("nan")
+            tol_scale = float(np.max(np.abs(np.asarray(baseline_values, dtype=float)))) if baseline_values.size else 0.0
+            res = adaptive_approximate_on_grid(
+                f=_f,
+                energy_grid=grid,
+                cfg=adaptive_cfg,
+                tol_scale=tol_scale,
+                baseline_values=np.asarray(baseline_values, dtype=float),
+            )
+            adaptive_ms = float(res.summary.get("walltime_ms_total", float("nan")))
+            adaptive_eval_ms = float(res.summary.get("eval_walltime_ms_total", float("nan")))
+            adaptive_overhead_ms = float(res.summary.get("overhead_walltime_ms_total", float("nan")))
+            adaptive_evals_total = int(res.summary.get("evals_total", 0) or 0)
+            segments_used = int(res.summary.get("segments_used", 0) or 0)
+            cache_hit_rate = float(res.summary.get("cache_hit_rate", float("nan")))
+            adaptive_verdict_row = str(res.summary.get("verdict", ""))
 
-        for tr in res.trace:
-            adaptive_trace_rows.append(
+            base_arr = np.asarray(baseline_values, dtype=float)
+            adapt_arr = np.asarray(res.values, dtype=float)
+            base_value = float(np.max(np.abs(base_arr))) if base_arr.size else float("nan")
+            adapt_value = float(np.max(np.abs(adapt_arr))) if adapt_arr.size else float("nan")
+            abs_err = float(np.max(np.abs(adapt_arr - base_arr))) if base_arr.size and adapt_arr.size else float("nan")
+            denom = abs(float(base_value)) + 1e-12
+            rel_err = float(abs_err / denom) if math.isfinite(float(abs_err)) else float("nan")
+            tol = (
+                float(cfg.integrator_eps_abs) + float(cfg.integrator_eps_rel) * abs(float(base_value))
+                if math.isfinite(float(base_value))
+                else float("nan")
+            )
+            correctness_pass = bool(math.isfinite(float(abs_err)) and math.isfinite(float(tol)) and float(abs_err) <= float(tol))
+
+            baseline_points = int(grid.size)
+            eval_ratio = (
+                float(baseline_points) / float(adaptive_evals_total)
+                if baseline_points > 0 and adaptive_evals_total > 0
+                else float("nan")
+            )
+            speedup = float(baseline_ms / adaptive_ms) if adaptive_ms and adaptive_ms > 0.0 and math.isfinite(adaptive_ms) else float("nan")
+
+            for tr in res.trace:
+                adaptive_trace_rows.append(
+                    {
+                        "family": str(topo),
+                        "fixture_id": str(fx.fixture_id),
+                        "curve_id": str(cfg.curve_id),
+                        "n_atoms": int(fx.n_atoms),
+                        "segment_id": int(tr.segment_id),
+                        "E_left": float(tr.e_left),
+                        "E_right": float(tr.e_right),
+                        "n_probe_points": int(tr.n_probe_points),
+                        "poly_degree": int(tr.poly_degree),
+                        "quad_order": int(tr.quad_order),
+                        "n_function_evals": int(tr.n_function_evals),
+                        "error_est": float(tr.error_est),
+                        "walltime_ms_segment": float(tr.walltime_ms_segment),
+                        "split_reason": str(tr.split_reason),
+                    }
+                )
+
+            adaptive_summary_rows.append(
                 {
+                    "family": str(topo),
                     "fixture_id": str(fx.fixture_id),
                     "curve_id": str(cfg.curve_id),
                     "n_atoms": int(fx.n_atoms),
-                    "segment_id": int(tr.segment_id),
-                    "E_left": float(tr.e_left),
-                    "E_right": float(tr.e_right),
-                    "n_probe_points": int(tr.n_probe_points),
-                    "poly_degree": int(tr.poly_degree),
-                    "quad_order": int(tr.quad_order),
-                    "n_function_evals": int(tr.n_function_evals),
-                    "error_est": float(tr.error_est),
-                    "walltime_ms_segment": float(tr.walltime_ms_segment),
-                    "split_reason": str(tr.split_reason),
+                    "baseline_points": int(baseline_points),
+                    "adaptive_evals_total": int(adaptive_evals_total),
+                    "eval_ratio": float(eval_ratio),
+                    "segments_used": int(segments_used),
+                    "cache_hit_rate": float(cache_hit_rate),
+                    "adaptive_verdict_row": str(adaptive_verdict_row),
+                    "energy_min": float(e_min),
+                    "energy_max": float(e_max),
                 }
             )
 
-        adaptive_summary_rows.append(
-            {
-                "fixture_id": str(fx.fixture_id),
-                "curve_id": str(cfg.curve_id),
-                "n_atoms": int(fx.n_atoms),
-                "baseline_points": int(baseline_points),
-                "adaptive_evals_total": int(adaptive_evals_total),
-                "eval_ratio": float(eval_ratio),
-                "segments_used": int(segments_used),
-                "cache_hit_rate": float(cache_hit_rate),
-                "adaptive_verdict_row": str(adaptive_verdict_row),
-                "energy_min": float(e_min),
-                "energy_max": float(e_max),
-            }
-        )
+            sample_rows.append(
+                {
+                    "family": str(topo),
+                    "row_kind": "sample",
+                    "id": str(fx.fixture_id),
+                    "smiles": str(fx.smiles),
+                    "n_atoms": int(fx.n_atoms),
+                    "n_hetero": int(fx.n_hetero),
+                    "motif": str(fx.motif),
+                    "seed": int(fx.seed),
+                    "curve_id": str(cfg.curve_id),
+                    "edge_weight_mode": str(cfg.edge_weight_mode),
+                    "potential_scale_gamma": float(cfg.potential_scale_gamma),
+                    "dos_eta": float(cfg.dos_eta),
+                    "energy_points": int(baseline_points),
+                    "energy_min": float(e_min),
+                    "energy_max": float(e_max),
+                    "baseline_walltime_ms": float(baseline_ms),
+                    "adaptive_walltime_ms": float(adaptive_ms),
+                    "speedup": float(speedup),
+                    "baseline_points": int(baseline_points),
+                    "adaptive_evals_total": int(adaptive_evals_total),
+                    "eval_ratio": float(eval_ratio),
+                    "segments_used": int(segments_used),
+                    "cache_hit_rate": float(cache_hit_rate),
+                    "adaptive_verdict_row": str(adaptive_verdict_row),
+                    "baseline_value": float(base_value),
+                    "adaptive_value": float(adapt_value),
+                    "abs_err": float(abs_err),
+                    "rel_err": float(rel_err),
+                    "tol": float(tol),
+                    "correctness_pass": bool(correctness_pass),
+                    "eigs_checksum": str(
+                        curve_checksum_sha256(energy_grid=list(range(int(eigvals.size))), values=[float(x) for x in eigvals.tolist()])
+                    ),
+                    "v0_checksum": str(curve_checksum_sha256(energy_grid=list(range(int(v0.size))), values=[float(x) for x in v0.tolist()])),
+                }
+            )
 
-        sample_rows.append(
-            {
-                "row_kind": "sample",
-                "id": str(fx.fixture_id),
-                "smiles": str(fx.smiles),
-                "n_atoms": int(fx.n_atoms),
-                "n_hetero": int(fx.n_hetero),
-                "motif": str(fx.motif),
-                "seed": int(fx.seed),
-                "curve_id": str(cfg.curve_id),
-                "edge_weight_mode": str(cfg.edge_weight_mode),
-                "potential_scale_gamma": float(cfg.potential_scale_gamma),
-                "dos_eta": float(cfg.dos_eta),
-                "energy_points": int(baseline_points),
-                "energy_min": float(e_min),
-                "energy_max": float(e_max),
-                "baseline_walltime_ms": float(baseline_ms),
-                "adaptive_walltime_ms": float(adaptive_ms),
-                "speedup": float(speedup),
-                "baseline_points": int(baseline_points),
-                "adaptive_evals_total": int(adaptive_evals_total),
-                "eval_ratio": float(eval_ratio),
-                "segments_used": int(segments_used),
-                "cache_hit_rate": float(cache_hit_rate),
-                "adaptive_verdict_row": str(adaptive_verdict_row),
-                "baseline_value": float(base_value),
-                "adaptive_value": float(adapt_value),
-                "abs_err": float(abs_err),
-                "rel_err": float(rel_err),
-                "tol": float(tol),
-                "correctness_pass": bool(correctness_pass),
-                "eigs_checksum": str(curve_checksum_sha256(energy_grid=list(range(int(eigvals.size))), values=[float(x) for x in eigvals.tolist()])),
-                "v0_checksum": str(curve_checksum_sha256(energy_grid=list(range(int(v0.size))), values=[float(x) for x in v0.tolist()])),
-            }
-        )
-
-        dos_ldos_eval_ms = float(baseline_ms + adaptive_eval_ms) if math.isfinite(adaptive_eval_ms) else float("nan")
-        integration_logic_ms = float(adaptive_overhead_ms) if math.isfinite(adaptive_overhead_ms) else float("nan")
-        total_ms_no_io = float(build_operator_ms + dos_ldos_eval_ms + integration_logic_ms) if math.isfinite(dos_ldos_eval_ms) and math.isfinite(integration_logic_ms) else float("nan")
-        timing_sample_rows.append(
-            {
-                "row_kind": "sample",
-                "fixture_id": str(fx.fixture_id),
-                "n_atoms": int(fx.n_atoms),
-                "build_operator_ms": float(build_operator_ms),
-                "dos_ldos_eval_ms": float(dos_ldos_eval_ms),
-                "integration_logic_ms": float(integration_logic_ms),
-                "io_ms": 0.0,
-                "total_ms": float(total_ms_no_io),
-                "baseline_walltime_ms": float(baseline_ms),
-                "adaptive_walltime_ms": float(adaptive_ms),
-                "adaptive_eval_walltime_ms": float(adaptive_eval_ms),
-                "adaptive_overhead_walltime_ms": float(adaptive_overhead_ms),
-                "baseline_points": int(baseline_points),
-                "adaptive_evals_total": int(adaptive_evals_total),
-                "speedup": float(speedup),
-                "eval_ratio": float(eval_ratio),
-            }
-        )
+            dos_ldos_eval_ms = float(baseline_ms + adaptive_eval_ms) if math.isfinite(adaptive_eval_ms) else float("nan")
+            integration_logic_ms = float(adaptive_overhead_ms) if math.isfinite(adaptive_overhead_ms) else float("nan")
+            total_ms_no_io = (
+                float(build_operator_ms + dos_ldos_eval_ms + integration_logic_ms)
+                if math.isfinite(dos_ldos_eval_ms) and math.isfinite(integration_logic_ms)
+                else float("nan")
+            )
+            timing_sample_rows.append(
+                {
+                    "family": str(topo),
+                    "row_kind": "sample",
+                    "fixture_id": str(fx.fixture_id),
+                    "n_atoms": int(fx.n_atoms),
+                    "build_operator_ms": float(build_operator_ms),
+                    "dos_ldos_eval_ms": float(dos_ldos_eval_ms),
+                    "integration_logic_ms": float(integration_logic_ms),
+                    "io_ms": 0.0,
+                    "total_ms": float(total_ms_no_io),
+                    "baseline_walltime_ms": float(baseline_ms),
+                    "adaptive_walltime_ms": float(adaptive_ms),
+                    "adaptive_eval_walltime_ms": float(adaptive_eval_ms),
+                    "adaptive_overhead_walltime_ms": float(adaptive_overhead_ms),
+                    "baseline_points": int(baseline_points),
+                    "adaptive_evals_total": int(adaptive_evals_total),
+                    "speedup": float(speedup),
+                    "eval_ratio": float(eval_ratio),
+                }
+            )
 
     # Aggregates per N.
     by_n: dict[int, list[dict[str, object]]] = {}
@@ -565,6 +754,61 @@ def compute_p5_speedup_rows(
         )
     integrator_valid_row_fraction = float(sum(1 for x in valid_flags if x) / len(valid_flags)) if valid_flags else float("nan")
 
+    topology_families = [f for f in ["polymer", "ring"] if f in fixtures_by_family]
+    topology_gate_n_min = int(cfg.gate_n_min)
+
+    def _family_scale_stats(fam: str) -> tuple[float, float, int]:
+        fam_scale = [
+            r
+            for r in sample_rows
+            if str(r.get("family") or "") == str(fam) and int(r.get("n_atoms", 0) or 0) >= int(topology_gate_n_min)
+        ]
+        n_fam = int(len(fam_scale))
+        pass_rate_fam = float(sum(1 for r in fam_scale if bool(r.get("correctness_pass", False))) / n_fam) if n_fam > 0 else float("nan")
+        med_speed = float(_median([float(r.get("speedup", float("nan"))) for r in fam_scale]))
+        return float(med_speed), float(pass_rate_fam), int(n_fam)
+
+    poly_speed_med, poly_pass_rate, poly_n_scale = _family_scale_stats("polymer")
+    ring_speed_med, ring_pass_rate, ring_n_scale = _family_scale_stats("ring")
+
+    poly_speed_verdict = "NOT_VALID_DUE_TO_CORRECTNESS"
+    ring_speed_verdict = "NOT_VALID_DUE_TO_CORRECTNESS"
+    if str(integrator_correctness_verdict) == "PASS_CORRECTNESS_AT_SCALE":
+        if math.isfinite(poly_pass_rate) and poly_pass_rate < correctness_gate_rate:
+            poly_speed_verdict = "FAIL_CORRECTNESS_AT_SCALE"
+        elif poly_n_scale < int(cfg.min_scale_samples):
+            poly_speed_verdict = "INCONCLUSIVE_NOT_ENOUGH_SCALE_SAMPLES"
+        elif math.isfinite(poly_speed_med) and poly_speed_med >= float(cfg.speedup_gate_break_even):
+            poly_speed_verdict = "PASS_SPEEDUP_AT_SCALE"
+        else:
+            poly_speed_verdict = "FAIL_SPEEDUP_AT_SCALE"
+
+        if math.isfinite(ring_pass_rate) and ring_pass_rate < correctness_gate_rate:
+            ring_speed_verdict = "FAIL_CORRECTNESS_AT_SCALE"
+        elif ring_n_scale < int(cfg.min_scale_samples):
+            ring_speed_verdict = "INCONCLUSIVE_NOT_ENOUGH_SCALE_SAMPLES"
+        elif math.isfinite(ring_speed_med) and ring_speed_med >= float(cfg.speedup_gate_break_even):
+            ring_speed_verdict = "PASS_SPEEDUP_AT_SCALE"
+        else:
+            ring_speed_verdict = "FAIL_SPEEDUP_AT_SCALE"
+
+    topology_hardness_verdict = "NOT_VALID_DUE_TO_CORRECTNESS"
+    topology_hardness_reason = f"NOT_VALID: integrator_correctness_verdict={integrator_correctness_verdict}"
+    if str(integrator_correctness_verdict) == "PASS_CORRECTNESS_AT_SCALE":
+        poly_ok = str(poly_speed_verdict) == "PASS_SPEEDUP_AT_SCALE"
+        ring_ok = str(ring_speed_verdict) == "PASS_SPEEDUP_AT_SCALE"
+        if poly_ok and ring_ok:
+            topology_hardness_verdict = "SUCCESS_TOPOLOGY_ROBUST"
+        elif poly_ok and not ring_ok:
+            topology_hardness_verdict = "ILLUSION_CONFIRMED_TOPOLOGY_DEPENDENT"
+        else:
+            topology_hardness_verdict = "NO_SPEEDUP_YET"
+        topology_hardness_reason = (
+            f"polymer(verdict={poly_speed_verdict}, median={poly_speed_med}) "
+            f"ring(verdict={ring_speed_verdict}, median={ring_speed_med}) "
+            f"gate_n_min={topology_gate_n_min}"
+        )
+
     metadata: dict[str, object] = {
         "schema_version": "hetero2_scale_speedup_metadata.v1",
         "law_ref": {
@@ -608,6 +852,14 @@ def compute_p5_speedup_rows(
         "scale_speedup_median_at_maxN": float(max_bin_speed),
         "scale_speedup_verdict": str(scale_speedup_verdict),
         "scale_bins": bin_rows,
+        "topology_families": list(topology_families),
+        "topology_gate_n_min": int(topology_gate_n_min),
+        "speedup_median_at_scale_polymer": float(poly_speed_med),
+        "speedup_median_at_scale_ring": float(ring_speed_med),
+        "speedup_verdict_at_scale_polymer": str(poly_speed_verdict),
+        "speedup_verdict_at_scale_ring": str(ring_speed_verdict),
+        "topology_hardness_verdict": str(topology_hardness_verdict),
+        "topology_hardness_reason": str(topology_hardness_reason),
     }
 
     return sample_rows + bin_rows, metadata, adaptive_trace_rows, adaptive_summary_rows, timing_sample_rows
@@ -620,14 +872,32 @@ def write_p5_evidence_pack(
 ) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    fixtures = generate_polymer_scale_fixtures(n_atoms_bins=cfg.n_atoms_bins, samples_per_bin=cfg.samples_per_bin, seed=cfg.seed)
+    polymer_fixtures = generate_polymer_scale_fixtures(n_atoms_bins=cfg.n_atoms_bins, samples_per_bin=cfg.samples_per_bin, seed=cfg.seed)
+    ring_fixtures = generate_ring_scale_fixtures(n_atoms_bins=cfg.n_atoms_bins, samples_per_bin=cfg.samples_per_bin, seed=cfg.seed)
 
-    fixtures_csv = out_dir / "fixtures_polymer_scale.csv"
-    fixtures_csv.write_text("", encoding="utf-8")
-    with fixtures_csv.open("w", encoding="utf-8", newline="") as f:
+    polymer_csv = out_dir / "fixtures_polymer_scale.csv"
+    polymer_csv.write_text("", encoding="utf-8")
+    with polymer_csv.open("w", encoding="utf-8", newline="") as f:
         w = csv.DictWriter(f, fieldnames=["id", "smiles", "n_atoms", "n_hetero", "motif", "seed"])
         w.writeheader()
-        for fx in fixtures:
+        for fx in polymer_fixtures:
+            w.writerow(
+                {
+                    "id": fx.fixture_id,
+                    "smiles": fx.smiles,
+                    "n_atoms": int(fx.n_atoms),
+                    "n_hetero": int(fx.n_hetero),
+                    "motif": fx.motif,
+                    "seed": int(fx.seed),
+                }
+            )
+
+    ring_csv = out_dir / "fixtures_ring_scale.csv"
+    ring_csv.write_text("", encoding="utf-8")
+    with ring_csv.open("w", encoding="utf-8", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=["id", "smiles", "n_atoms", "n_hetero", "motif", "seed"])
+        w.writeheader()
+        for fx in ring_fixtures:
             w.writerow(
                 {
                     "id": fx.fixture_id,
@@ -640,10 +910,14 @@ def write_p5_evidence_pack(
             )
 
     t0 = time.perf_counter()
-    rows, metadata, adaptive_trace_rows, adaptive_summary_rows, timing_sample_rows = compute_p5_speedup_rows(fixtures=fixtures, cfg=cfg)
+    rows, metadata, adaptive_trace_rows, adaptive_summary_rows, timing_sample_rows = compute_p5_speedup_rows(
+        fixtures_by_family={"polymer": polymer_fixtures, "ring": ring_fixtures},
+        cfg=cfg,
+    )
     runtime_s = float(time.perf_counter() - t0)
 
     speedup_vs_n_csv = out_dir / "speedup_vs_n.csv"
+    speedup_vs_n_by_family_csv = out_dir / "speedup_vs_n_by_family.csv"
     speedup_vs_n_md = out_dir / "speedup_vs_n.md"
     compare_csv = out_dir / "integration_compare.csv"
     speed_profile_csv = out_dir / "integration_speed_profile.csv"
@@ -663,6 +937,54 @@ def write_p5_evidence_pack(
         w = csv.DictWriter(f, fieldnames=fieldnames)
         w.writeheader()
         for row in rows:
+            w.writerow(row)
+
+    by_family_n: dict[tuple[str, int], list[dict[str, object]]] = {}
+    for row in rows:
+        if row.get("row_kind") != "sample":
+            continue
+        fam = str(row.get("family") or "")
+        if not fam:
+            continue
+        n = int(row.get("n_atoms", 0) or 0)
+        by_family_n.setdefault((fam, n), []).append(row)
+
+    family_bin_rows: list[dict[str, object]] = []
+    for fam in ["polymer", "ring"]:
+        ns = sorted({n for (f, n) in by_family_n.keys() if f == fam})
+        for n in ns:
+            rows_n = by_family_n.get((fam, int(n)), [])
+            n_samples = int(len(rows_n))
+            speeds = [float(r.get("speedup", float("nan"))) for r in rows_n]
+            eval_ratios = [float(r.get("eval_ratio", float("nan"))) for r in rows_n]
+            pass_flags = [bool(r.get("correctness_pass", False)) for r in rows_n]
+            pass_rate = float(sum(1 for x in pass_flags if x) / n_samples) if n_samples > 0 else float("nan")
+            family_bin_rows.append(
+                {
+                    "family": str(fam),
+                    "n_atoms": int(n),
+                    "n_samples": int(n_samples),
+                    "median_speedup": float(_median(speeds)),
+                    "median_eval_ratio": float(_median(eval_ratios)),
+                    "correctness_pass_rate": float(pass_rate),
+                }
+            )
+
+    speedup_vs_n_by_family_csv.write_text("", encoding="utf-8")
+    with speedup_vs_n_by_family_csv.open("w", encoding="utf-8", newline="") as f:
+        w = csv.DictWriter(
+            f,
+            fieldnames=[
+                "family",
+                "n_atoms",
+                "n_samples",
+                "median_speedup",
+                "median_eval_ratio",
+                "correctness_pass_rate",
+            ],
+        )
+        w.writeheader()
+        for row in family_bin_rows:
             w.writerow(row)
 
     speedup_vs_n_md.write_text(
@@ -691,7 +1013,9 @@ def write_p5_evidence_pack(
                 "",
                 "Outputs:",
                 "- fixtures_polymer_scale.csv (input fixtures)",
+                "- fixtures_ring_scale.csv (input fixtures; ring-suite)",
                 "- speedup_vs_n.csv (samples + bin aggregates)",
+                "- speedup_vs_n_by_family.csv (bin aggregates per topology family)",
                 "- timing_breakdown.csv (cost decomposition; samples + bin aggregates)",
                 "- integration_compare.csv (baseline vs adaptive correctness + timing)",
                 "- integration_speed_profile.csv (eval ratio + speedup per sample)",
@@ -993,7 +1317,9 @@ def write_p5_evidence_pack(
                 "## P5 Large-Scale Proof",
                 "",
                 "- fixtures: ./fixtures_polymer_scale.csv",
+                "- fixtures (ring-suite): ./fixtures_ring_scale.csv",
                 "- speedup vs N: ./speedup_vs_n.csv",
+                "- speedup vs N (by family): ./speedup_vs_n_by_family.csv",
                 "- report: ./speedup_vs_n.md",
                 "- timing breakdown: ./timing_breakdown.csv",
                 "- integration compare: ./integration_compare.csv",
