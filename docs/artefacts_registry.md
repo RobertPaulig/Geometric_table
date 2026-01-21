@@ -1155,6 +1155,8 @@ separation facts (computed on status==OK rows only):
   - topology (P5.4):
     - topology_families: ['polymer', 'ring']
     - topology_gate_n_min: 200
+    - pack contains fixtures_ring_scale.csv
+    - pack contains speedup_vs_n_by_family.csv
     - speedup_median_at_scale_polymer: 0.0879949862363698
     - speedup_verdict_at_scale_polymer: FAIL_SPEEDUP_AT_SCALE
     - speedup_median_at_scale_ring: 0.07868455761041604
