@@ -1486,3 +1486,66 @@ separation facts (computed on status==OK rows only):
     - rewire_fallback_aromatic_as_single_v1: 100 (50.0%)
     - rewire_strict_v1: 60 (30.0%)
     - rewire_relax_a_v1: 40 (20.0%)
+
+## value-known-bad-good-2026-01-21
+
+- Source commit: cd8113bbe269caa3d171df19d5fe417b125ba92a
+
+- Variant: BAD-constant
+  - Release asset: https://github.com/RobertPaulig/Geometric_table/releases/download/value-known-bad-good-2026-01-21/value_known_bad_good_BAD-constant_evidence_pack.zip
+  - SHA256(value_known_bad_good_BAD-constant_evidence_pack.zip): 6D4C12D4523AADC35CB65EAB5A0FB8E8E2EE01626769E74AD0E62B4D7BF182BF
+  - Command:
+    python scripts/pilot_generate_input.py --out_dir out_value_m2/suite --rows 200 --k_decoys 20 --seed 0 --full_cover_count 3
+    (scores variant) BAD-constant: all scores equal
+    hetero2-batch --input out_value_m2/suite/input.csv --out_dir out_value_m2/BAD-constant --artifacts light --score_mode external_scores --scores_input out_value_m2/score_variants/scores_BAD-constant.json --k_decoys 20 --workers 2 --timeout_s 60 --maxtasksperchild 100 --seed_strategy per_row --seed 0 --zip_pack
+  - Outcome (facts from summary.csv):
+  - rows_total: 200
+  - rows_ok: 200
+  - status_counts: OK=200, SKIP=0, ERROR=0
+  - top_skip_reasons: (none)
+  - share_rows_with_n_decoys_gt_0: 1.000 (100.0%)
+  - median_slack: -0.500000
+  - pass_rate: 0.000000
+
+- Variant: BAD-random
+  - Release asset: https://github.com/RobertPaulig/Geometric_table/releases/download/value-known-bad-good-2026-01-21/value_known_bad_good_BAD-random_evidence_pack.zip
+  - SHA256(value_known_bad_good_BAD-random_evidence_pack.zip): DC723348B495F0E6AC29ABF749D8858F023762FA947DBF75066BCB05D62B3046
+  - Command:
+    python scripts/pilot_generate_input.py --out_dir out_value_m2/suite --rows 200 --k_decoys 20 --seed 0 --full_cover_count 3
+    (scores variant) BAD-random: random scores (seed=0)
+    hetero2-batch --input out_value_m2/suite/input.csv --out_dir out_value_m2/BAD-random --artifacts light --score_mode external_scores --scores_input out_value_m2/score_variants/scores_BAD-random.json --k_decoys 20 --workers 2 --timeout_s 60 --maxtasksperchild 100 --seed_strategy per_row --seed 0 --zip_pack
+  - Outcome (facts from summary.csv):
+  - rows_total: 200
+  - rows_ok: 200
+  - status_counts: OK=200, SKIP=0, ERROR=0
+  - top_skip_reasons: (none)
+  - share_rows_with_n_decoys_gt_0: 1.000 (100.0%)
+  - median_slack: 0.000000
+  - pass_rate: 0.600000
+
+- Variant: GOOD-synthetic
+  - Release asset: https://github.com/RobertPaulig/Geometric_table/releases/download/value-known-bad-good-2026-01-21/value_known_bad_good_GOOD-synthetic_evidence_pack.zip
+  - SHA256(value_known_bad_good_GOOD-synthetic_evidence_pack.zip): 4FC460FEE5712FC3349CD44B8EF3D6ACF43BD4D98EDBDBD7DD7F01DC5C74AB25
+  - Command:
+    python scripts/pilot_generate_input.py --out_dir out_value_m2/suite --rows 200 --k_decoys 20 --seed 0 --full_cover_count 3
+    (scores variant) GOOD-synthetic: original=1.0, decoys=0.0
+    hetero2-batch --input out_value_m2/suite/input.csv --out_dir out_value_m2/GOOD-synthetic --artifacts light --score_mode external_scores --scores_input out_value_m2/score_variants/scores_GOOD-synthetic.json --k_decoys 20 --workers 2 --timeout_s 60 --maxtasksperchild 100 --seed_strategy per_row --seed 0 --zip_pack
+  - Outcome (facts from summary.csv):
+  - rows_total: 200
+  - rows_ok: 200
+  - status_counts: OK=200, SKIP=0, ERROR=0
+  - top_skip_reasons: (none)
+  - share_rows_with_n_decoys_gt_0: 1.000 (100.0%)
+  - median_slack: 0.000000
+  - pass_rate: 1.000000
+
+- Separation facts (OK-only; no auto-threshold gating):
+separation facts (computed on status==OK rows only):
+- BAD-constant: rows_ok=200/200, median_slack=-0.500000, pass_rate=0.000000
+- BAD-random: rows_ok=200/200, median_slack=0.000000, pass_rate=0.600000
+- GOOD-synthetic: rows_ok=200/200, median_slack=0.000000, pass_rate=1.000000
+
+- Δ_median_slack(GOOD - BAD-constant): 0.500000
+- Δ_PASS_rate(GOOD - BAD-constant): 1.000000
+- Δ_median_slack(GOOD - BAD-random): 0.000000
+- Δ_PASS_rate(GOOD - BAD-random): 0.400000
