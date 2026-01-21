@@ -895,3 +895,17 @@
 - CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21193563936
 - Registry addendum PR (P5.3 thresholds): https://github.com/RobertPaulig/Geometric_table/pull/172 (merge: 993f6f303462f33b106206cd6fb15dbcde89b28b)
 - CI run (3/3 ci/* on addendum merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21193677005
+
+### 2026-01-21 - PHYSICS-P5.4-PERF-HARDNESS-TOPOLOGY-1: ring-suite topology hardness in P5-scale (anti-illusion)
+- Code PR (ring-suite + topology hardness gates): https://github.com/RobertPaulig/Geometric_table/pull/170 (merge: 300c8657ef2c808462662cbc05f1c4245f8fe71b)
+- CI run (3/3 ci/* on code merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21204483269
+- Live proof r5 (large-scale; integrator_mode=both; dos_eta=0.2):
+  - Law ref (from summary_metadata.json): docs/contracts/INTEGRATION_SCALE_CONTRACT.md @ 300c8657ef2c808462662cbc05f1c4245f8fe71b (p5.1.v1)
+  - Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/physics-operator-large-scale-2026-01-20-r5
+  - Publish run: https://github.com/RobertPaulig/Geometric_table/actions/runs/21204574412
+  - Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/physics-operator-large-scale-2026-01-20-r5/physics_large_scale_evidence_pack.zip
+  - SHA256(physics_large_scale_evidence_pack.zip): 2414FBBFEC48A920E061FA3037BA0626FBFDD28F905C3DE874BBF1CCCFE8AF48 (verified by download)
+  - Evidence pack artifacts: fixtures_polymer_scale.csv, fixtures_ring_scale.csv, speedup_vs_n.csv, speedup_vs_n_by_family.csv, speedup_vs_n.md, timing_breakdown.csv, integration_compare.csv, integration_speed_profile.csv, adaptive_integration_trace.csv, adaptive_integration_summary.json, summary_metadata.json
+  - Facts (summary_metadata.json): topology_families=['polymer', 'ring']; topology_gate_n_min=200; speedup_median_at_scale_polymer=0.0879949862363698; speedup_verdict_at_scale_polymer=FAIL_SPEEDUP_AT_SCALE; speedup_median_at_scale_ring=0.07868455761041604; speedup_verdict_at_scale_ring=FAIL_SPEEDUP_AT_SCALE; topology_hardness_verdict=NO_SPEEDUP_YET; topology_hardness_reason=polymer(verdict=FAIL_SPEEDUP_AT_SCALE, median=0.0879949862363698) ring(verdict=FAIL_SPEEDUP_AT_SCALE, median=0.07868455761041604) gate_n_min=200; integrator_correctness_verdict=PASS_CORRECTNESS_AT_SCALE
+- Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/174 (merge: 4e65ee4c30db55fcff450523a847690c1430c954)
+- CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21204853592
