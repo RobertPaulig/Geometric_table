@@ -991,3 +991,17 @@
 - Decoy strategy distribution (summary.csv; status=OK): rewire_strict_v1=60; rewire_relax_a_v1=40; rewire_fallback_aromatic_as_single_v1=100
 - Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/194 (merge: c997129056254f2f7e85c9d87fba20bce7970d9d)
 - CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21225233053
+
+### 2026-01-21 - VALUE-M2 known bad/good evidence packs (release assets + SHA256 + registry)
+- Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/value-known-bad-good-2026-01-21
+- Source commit: cd8113bbe269caa3d171df19d5fe417b125ba92a
+- Assets:
+  - BAD-constant: https://github.com/RobertPaulig/Geometric_table/releases/download/value-known-bad-good-2026-01-21/value_known_bad_good_BAD-constant_evidence_pack.zip
+    - SHA256: 6D4C12D4523AADC35CB65EAB5A0FB8E8E2EE01626769E74AD0E62B4D7BF182BF
+  - BAD-random: https://github.com/RobertPaulig/Geometric_table/releases/download/value-known-bad-good-2026-01-21/value_known_bad_good_BAD-random_evidence_pack.zip
+    - SHA256: DC723348B495F0E6AC29ABF749D8858F023762FA947DBF75066BCB05D62B3046
+  - GOOD-synthetic: https://github.com/RobertPaulig/Geometric_table/releases/download/value-known-bad-good-2026-01-21/value_known_bad_good_GOOD-synthetic_evidence_pack.zip
+    - SHA256: 4FC460FEE5712FC3349CD44B8EF3D6ACF43BD4D98EDBDBD7DD7F01DC5C74AB25
+- Run: https://github.com/RobertPaulig/Geometric_table/actions/runs/21228738744
+- Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/196 (merge: a3e8ad4071640a42caf503a12d16d8f38d952032)
+- Separation facts (computed on status==OK rows only; no auto-threshold gating): Delta_median_slack(GOOD - BAD-constant)=0.500000; Delta_PASS_rate(GOOD - BAD-constant)=1.000000; Delta_median_slack(GOOD - BAD-random)=0.000000; Delta_PASS_rate(GOOD - BAD-random)=0.400000
