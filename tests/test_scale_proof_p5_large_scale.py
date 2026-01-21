@@ -74,6 +74,7 @@ def test_p5_evidence_pack_contains_required_files_and_metadata(tmp_path: Path) -
             "speedup_vs_n_by_family.csv",
             "speedup_vs_n.md",
             "timing_breakdown.csv",
+            "timing_breakdown_by_family.csv",
             "summary.csv",
             "summary_metadata.json",
             "metrics.json",
@@ -131,6 +132,34 @@ def test_p5_evidence_pack_contains_required_files_and_metadata(tmp_path: Path) -
             "SUCCESS_TOPOLOGY_ROBUST",
             "NO_SPEEDUP_YET",
         }
+        assert meta["topology_ring_cost_gap_verdict_at_scale"] in {
+            "INCONCLUSIVE_NOT_ENOUGH_SCALE_SAMPLES",
+            "RING_NOT_SLOWER_THAN_POLYMER",
+            "RING_SLOWER_DUE_TO_BUILD_OPERATOR",
+            "RING_SLOWER_DUE_TO_DOS_LDOS_EVAL",
+            "RING_SLOWER_DUE_TO_INTEGRATION_LOGIC",
+            "RING_SLOWER_DUE_TO_IO",
+            "RING_SLOWER_MIXED",
+        }
+        assert str(meta.get("topology_ring_cost_gap_reason_at_scale") or "")
+        for k in [
+            "cost_median_build_operator_ms_at_scale_polymer",
+            "cost_median_dos_ldos_eval_ms_at_scale_polymer",
+            "cost_median_integration_logic_ms_at_scale_polymer",
+            "cost_median_total_ms_at_scale_polymer_estimate",
+            "cost_median_build_operator_ms_at_scale_ring",
+            "cost_median_dos_ldos_eval_ms_at_scale_ring",
+            "cost_median_integration_logic_ms_at_scale_ring",
+            "cost_median_total_ms_at_scale_ring_estimate",
+        ]:
+            assert k in meta
+        for k in [
+            "cost_ratio_ring_vs_polymer_build_operator_ms_at_scale",
+            "cost_ratio_ring_vs_polymer_dos_ldos_eval_ms_at_scale",
+            "cost_ratio_ring_vs_polymer_integration_logic_ms_at_scale",
+            "cost_ratio_ring_vs_polymer_total_ms_at_scale_estimate",
+        ]:
+            assert k in meta
 
         by_family_text = zf.read("speedup_vs_n_by_family.csv").decode("utf-8")
         r_family = csv.DictReader(io.StringIO(by_family_text))
@@ -148,6 +177,25 @@ def test_p5_evidence_pack_contains_required_files_and_metadata(tmp_path: Path) -
         rows = list(r)
         assert any(row.get("row_kind") == "sample" for row in rows)
         assert any(row.get("row_kind") == "bin" for row in rows)
+
+        timing_by_family_text = zf.read("timing_breakdown_by_family.csv").decode("utf-8")
+        r_timing_family = csv.DictReader(io.StringIO(timing_by_family_text))
+        assert r_timing_family.fieldnames is not None
+        for col in [
+            "family",
+            "n_atoms",
+            "n_samples",
+            "median_build_operator_ms",
+            "median_dos_ldos_eval_ms",
+            "median_integration_logic_ms",
+            "median_io_ms",
+            "median_total_ms",
+        ]:
+            assert col in r_timing_family.fieldnames
+        timing_rows_family = list(r_timing_family)
+        timing_families = {str(row.get("family") or "") for row in timing_rows_family}
+        assert "polymer" in timing_families
+        assert "ring" in timing_families
 
 
 def test_p5_correctness_passes_at_scale_for_eta_0_2(tmp_path: Path) -> None:
