@@ -924,6 +924,7 @@ def write_p5_evidence_pack(
     adaptive_trace_csv = out_dir / "adaptive_integration_trace.csv"
     adaptive_summary_json = out_dir / "adaptive_integration_summary.json"
     timing_breakdown_csv = out_dir / "timing_breakdown.csv"
+    timing_breakdown_by_family_csv = out_dir / "timing_breakdown_by_family.csv"
     summary_csv = out_dir / "summary.csv"
     summary_metadata_json = out_dir / "summary_metadata.json"
     metrics_json = out_dir / "metrics.json"
@@ -1017,6 +1018,7 @@ def write_p5_evidence_pack(
                 "- speedup_vs_n.csv (samples + bin aggregates)",
                 "- speedup_vs_n_by_family.csv (bin aggregates per topology family)",
                 "- timing_breakdown.csv (cost decomposition; samples + bin aggregates)",
+                "- timing_breakdown_by_family.csv (cost decomposition; bin aggregates per topology family)",
                 "- integration_compare.csv (baseline vs adaptive correctness + timing)",
                 "- integration_speed_profile.csv (eval ratio + speedup per sample)",
                 "- adaptive_integration_trace.csv (segment trace; audit)",
@@ -1221,12 +1223,142 @@ def write_p5_evidence_pack(
         for r in timing_rows:
             w.writerow(r)
 
+    # P5.5: per-family timing aggregates (bin-level) to compare polymer vs ring cost profiles.
+    timing_by_family_n: dict[tuple[str, int], list[dict[str, object]]] = {}
+    for r in timing_sample_rows:
+        if r.get("row_kind") != "sample":
+            continue
+        fam = str(r.get("family") or "")
+        if not fam:
+            continue
+        n = int(r.get("n_atoms", 0) or 0)
+        timing_by_family_n.setdefault((fam, n), []).append(r)
+
+    timing_family_bin_rows: list[dict[str, object]] = []
+    for fam in ["polymer", "ring"]:
+        ns = sorted({n for (f, n) in timing_by_family_n.keys() if f == fam})
+        for n in ns:
+            rows_n = timing_by_family_n.get((fam, int(n)), [])
+            timing_family_bin_rows.append(
+                {
+                    "family": str(fam),
+                    "n_atoms": int(n),
+                    "n_samples": int(len(rows_n)),
+                    "median_build_operator_ms": float(_median([float(x.get("build_operator_ms", float("nan"))) for x in rows_n])),
+                    "median_dos_ldos_eval_ms": float(_median([float(x.get("dos_ldos_eval_ms", float("nan"))) for x in rows_n])),
+                    "median_integration_logic_ms": float(_median([float(x.get("integration_logic_ms", float("nan"))) for x in rows_n])),
+                    "median_io_ms": float(_median([float(x.get("io_ms", float("nan"))) for x in rows_n])),
+                    "median_total_ms": float(_median([float(x.get("total_ms", float("nan"))) for x in rows_n])),
+                }
+            )
+
+    timing_breakdown_by_family_csv.write_text("", encoding="utf-8")
+    with timing_breakdown_by_family_csv.open("w", encoding="utf-8", newline="") as f:
+        w = csv.DictWriter(
+            f,
+            fieldnames=[
+                "family",
+                "n_atoms",
+                "n_samples",
+                "median_build_operator_ms",
+                "median_dos_ldos_eval_ms",
+                "median_integration_logic_ms",
+                "median_io_ms",
+                "median_total_ms",
+            ],
+        )
+        w.writeheader()
+        for row in timing_family_bin_rows:
+            w.writerow(row)
+
     scale_timing_samples = [r for r in timing_sample_rows if int(r.get("n_atoms", 0) or 0) >= int(cfg.gate_n_min)]
     build_med = float(_median([float(r.get("build_operator_ms", float("nan"))) for r in scale_timing_samples]))
     dos_med = float(_median([float(r.get("dos_ldos_eval_ms", float("nan"))) for r in scale_timing_samples]))
     integ_med = float(_median([float(r.get("integration_logic_ms", float("nan"))) for r in scale_timing_samples]))
     io_med = float(_median([float(r.get("io_ms", float("nan"))) for r in scale_timing_samples]))
     total_med = float(_median([float(r.get("total_ms", float("nan"))) for r in scale_timing_samples]))
+
+    # P5.5: per-family scale medians and a simple "ring cost gap" verdict to localize where ring loses.
+    scale_by_family: dict[str, list[dict[str, object]]] = {}
+    for fam in ["polymer", "ring"]:
+        scale_by_family[fam] = [
+            r
+            for r in timing_sample_rows
+            if r.get("row_kind") == "sample"
+            and str(r.get("family") or "") == fam
+            and int(r.get("n_atoms", 0) or 0) >= int(cfg.gate_n_min)
+        ]
+
+    def _median_key(rows: list[dict[str, object]], key: str) -> float:
+        return float(_median([float(r.get(key, float("nan"))) for r in rows]))
+
+    poly_rows = scale_by_family.get("polymer", [])
+    ring_rows = scale_by_family.get("ring", [])
+    poly_n = int(len(poly_rows))
+    ring_n = int(len(ring_rows))
+
+    poly_build = _median_key(poly_rows, "build_operator_ms")
+    poly_dos = _median_key(poly_rows, "dos_ldos_eval_ms")
+    poly_integ = _median_key(poly_rows, "integration_logic_ms")
+    poly_io = _median_key(poly_rows, "io_ms")
+    poly_total = _median_key(poly_rows, "total_ms")
+
+    ring_build = _median_key(ring_rows, "build_operator_ms")
+    ring_dos = _median_key(ring_rows, "dos_ldos_eval_ms")
+    ring_integ = _median_key(ring_rows, "integration_logic_ms")
+    ring_io = _median_key(ring_rows, "io_ms")
+    ring_total = _median_key(ring_rows, "total_ms")
+
+    def _ratio(num: float, den: float) -> float:
+        return float(num / den) if math.isfinite(num) and math.isfinite(den) and den > 0.0 else float("nan")
+
+    ratio_build = _ratio(ring_build, poly_build)
+    ratio_dos = _ratio(ring_dos, poly_dos)
+    ratio_integ = _ratio(ring_integ, poly_integ)
+    ratio_io = _ratio(ring_io, poly_io)
+    ratio_total = _ratio(ring_total, poly_total)
+
+    gap_verdict = "INCONCLUSIVE_NOT_ENOUGH_SCALE_SAMPLES"
+    if poly_n >= int(cfg.min_scale_samples) and ring_n >= int(cfg.min_scale_samples) and math.isfinite(ratio_total):
+        if ratio_total <= 1.0:
+            gap_verdict = "RING_NOT_SLOWER_THAN_POLYMER"
+        else:
+            top = max(
+                (ratio_build, "RING_SLOWER_DUE_TO_BUILD_OPERATOR"),
+                (ratio_dos, "RING_SLOWER_DUE_TO_DOS_LDOS_EVAL"),
+                (ratio_integ, "RING_SLOWER_DUE_TO_INTEGRATION_LOGIC"),
+                (ratio_io, "RING_SLOWER_DUE_TO_IO"),
+                key=lambda x: float(x[0]) if math.isfinite(float(x[0])) else float("-inf"),
+            )
+            gap_verdict = str(top[1]) if math.isfinite(float(top[0])) else "RING_SLOWER_MIXED"
+
+    gap_reason = (
+        f"scale_n_min={int(cfg.gate_n_min)} polymer_n={poly_n} ring_n={ring_n} "
+        f"ratio_total={ratio_total} ratio_build={ratio_build} ratio_dos={ratio_dos} ratio_integration_logic={ratio_integ} ratio_io={ratio_io}"
+    )
+
+    metadata["cost_median_build_operator_ms_at_scale_polymer"] = float(poly_build)
+    metadata["cost_median_dos_ldos_eval_ms_at_scale_polymer"] = float(poly_dos)
+    metadata["cost_median_integration_logic_ms_at_scale_polymer"] = float(poly_integ)
+    metadata["cost_median_io_ms_at_scale_polymer_estimate"] = float(poly_io)
+    metadata["cost_median_total_ms_at_scale_polymer_estimate"] = float(poly_total)
+    metadata["cost_scale_samples_polymer"] = int(poly_n)
+
+    metadata["cost_median_build_operator_ms_at_scale_ring"] = float(ring_build)
+    metadata["cost_median_dos_ldos_eval_ms_at_scale_ring"] = float(ring_dos)
+    metadata["cost_median_integration_logic_ms_at_scale_ring"] = float(ring_integ)
+    metadata["cost_median_io_ms_at_scale_ring_estimate"] = float(ring_io)
+    metadata["cost_median_total_ms_at_scale_ring_estimate"] = float(ring_total)
+    metadata["cost_scale_samples_ring"] = int(ring_n)
+
+    metadata["cost_ratio_ring_vs_polymer_build_operator_ms_at_scale"] = float(ratio_build)
+    metadata["cost_ratio_ring_vs_polymer_dos_ldos_eval_ms_at_scale"] = float(ratio_dos)
+    metadata["cost_ratio_ring_vs_polymer_integration_logic_ms_at_scale"] = float(ratio_integ)
+    metadata["cost_ratio_ring_vs_polymer_io_ms_at_scale"] = float(ratio_io)
+    metadata["cost_ratio_ring_vs_polymer_total_ms_at_scale_estimate"] = float(ratio_total)
+
+    metadata["topology_ring_cost_gap_verdict_at_scale"] = str(gap_verdict)
+    metadata["topology_ring_cost_gap_reason_at_scale"] = str(gap_reason)
 
     denom_kpi = float(dos_med + integ_med + io_med) if all(math.isfinite(x) for x in [dos_med, integ_med, io_med]) else float("nan")
     share_dos = float(dos_med / denom_kpi) if math.isfinite(denom_kpi) and denom_kpi > 0.0 else float("nan")
@@ -1322,6 +1454,7 @@ def write_p5_evidence_pack(
                 "- speedup vs N (by family): ./speedup_vs_n_by_family.csv",
                 "- report: ./speedup_vs_n.md",
                 "- timing breakdown: ./timing_breakdown.csv",
+                "- timing breakdown (by family): ./timing_breakdown_by_family.csv",
                 "- integration compare: ./integration_compare.csv",
                 "- integration speed profile: ./integration_speed_profile.csv",
                 "- adaptive trace: ./adaptive_integration_trace.csv",

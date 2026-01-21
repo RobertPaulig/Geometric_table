@@ -195,7 +195,7 @@ jobs:
       - name: Validate zip (no unpack)
         run: |
           python -m zipfile -t out_physics_large_scale/physics_large_scale_evidence_pack.zip
-          python -m zipfile -l out_physics_large_scale/physics_large_scale_evidence_pack.zip | grep -E "manifest.json|checksums.sha256|metrics.json|index.md|summary.csv|summary_metadata.json|fixtures_polymer_scale.csv|fixtures_ring_scale.csv|speedup_vs_n.csv|speedup_vs_n_by_family.csv|speedup_vs_n.md|timing_breakdown.csv|integration_compare.csv|integration_speed_profile.csv|adaptive_integration_trace.csv|adaptive_integration_summary.json"
+          python -m zipfile -l out_physics_large_scale/physics_large_scale_evidence_pack.zip | grep -E "manifest.json|checksums.sha256|metrics.json|index.md|summary.csv|summary_metadata.json|fixtures_polymer_scale.csv|fixtures_ring_scale.csv|speedup_vs_n.csv|speedup_vs_n_by_family.csv|speedup_vs_n.md|timing_breakdown.csv|timing_breakdown_by_family.csv|integration_compare.csv|integration_speed_profile.csv|adaptive_integration_trace.csv|adaptive_integration_summary.json"
 
       - name: "Gate: P5.1 contract metadata/verdict"
         run: |
@@ -370,6 +370,56 @@ jobs:
           assert "polymer" in families and "ring" in families
           PY
 
+      - name: "Gate: P5.5 per-family timing breakdown"
+        run: |
+          python - << 'PY'
+          import csv
+          import json
+ 
+          md = json.load(open("out_physics_large_scale/summary_metadata.json", "r", encoding="utf-8"))
+          required_keys = [
+            "topology_ring_cost_gap_verdict_at_scale",
+            "topology_ring_cost_gap_reason_at_scale",
+            "cost_median_total_ms_at_scale_polymer_estimate",
+            "cost_median_total_ms_at_scale_ring_estimate",
+            "cost_ratio_ring_vs_polymer_total_ms_at_scale_estimate",
+          ]
+          missing = [k for k in required_keys if k not in md]
+          assert not missing, f"Missing required P5.5 metadata keys: {missing}"
+ 
+          verdict = str(md.get("topology_ring_cost_gap_verdict_at_scale") or "")
+          assert verdict in {
+            "INCONCLUSIVE_NOT_ENOUGH_SCALE_SAMPLES",
+            "RING_NOT_SLOWER_THAN_POLYMER",
+            "RING_SLOWER_DUE_TO_BUILD_OPERATOR",
+            "RING_SLOWER_DUE_TO_DOS_LDOS_EVAL",
+            "RING_SLOWER_DUE_TO_INTEGRATION_LOGIC",
+            "RING_SLOWER_DUE_TO_IO",
+            "RING_SLOWER_MIXED",
+          }
+          assert str(md.get("topology_ring_cost_gap_reason_at_scale") or "").strip()
+ 
+          required_cols = {
+            "family",
+            "n_atoms",
+            "n_samples",
+            "median_build_operator_ms",
+            "median_dos_ldos_eval_ms",
+            "median_integration_logic_ms",
+            "median_io_ms",
+            "median_total_ms",
+          }
+          families = set()
+          with open("out_physics_large_scale/timing_breakdown_by_family.csv", "r", encoding="utf-8", newline="") as f:
+            r = csv.DictReader(f)
+            assert r.fieldnames is not None, "timing_breakdown_by_family.csv must have a header"
+            missing = sorted(required_cols.difference(set(r.fieldnames)))
+            assert not missing, f"Missing required columns in timing_breakdown_by_family.csv: {missing}"
+            for row in r:
+              families.add(str(row.get("family") or ""))
+          assert "polymer" in families and "ring" in families
+          PY
+
       - name: Extract facts (from summary_metadata.json)
         id: facts
         run: |
@@ -413,6 +463,13 @@ jobs:
           lines.append(f"    - speedup_verdict_at_scale_ring: {md.get('speedup_verdict_at_scale_ring')}")
           lines.append(f"    - topology_hardness_verdict: {md.get('topology_hardness_verdict')}")
           lines.append(f"    - topology_hardness_reason: {md.get('topology_hardness_reason')}")
+          lines.append("  - topology cost (P5.5):")
+          lines.append("    - pack contains timing_breakdown_by_family.csv")
+          lines.append(f"    - cost_median_total_ms_at_scale_polymer_estimate: {md.get('cost_median_total_ms_at_scale_polymer_estimate')}")
+          lines.append(f"    - cost_median_total_ms_at_scale_ring_estimate: {md.get('cost_median_total_ms_at_scale_ring_estimate')}")
+          lines.append(f"    - cost_ratio_ring_vs_polymer_total_ms_at_scale_estimate: {md.get('cost_ratio_ring_vs_polymer_total_ms_at_scale_estimate')}")
+          lines.append(f"    - topology_ring_cost_gap_verdict_at_scale: {md.get('topology_ring_cost_gap_verdict_at_scale')}")
+          lines.append(f"    - topology_ring_cost_gap_reason_at_scale: {md.get('topology_ring_cost_gap_reason_at_scale')}")
           lines.append("  - scale (P5):")
           lines.append(f"    - scale_n_atoms_min: {md.get('scale_n_atoms_min')}")
           lines.append(f"    - scale_n_atoms_max: {md.get('scale_n_atoms_max')}")
@@ -469,7 +526,7 @@ jobs:
             - quad_order_max: ${{ inputs.integrator_quad_order_max }}
             - eval_budget_max: ${{ inputs.integrator_eval_budget_max }}
             - split_criterion: ${{ inputs.integrator_split_criterion }}
-          - Pack: fixtures_polymer_scale.csv, fixtures_ring_scale.csv, speedup_vs_n.csv, speedup_vs_n_by_family.csv, speedup_vs_n.md, timing_breakdown.csv, integration_compare.csv, integration_speed_profile.csv, adaptive_integration_trace.csv, adaptive_integration_summary.json, summary.csv, summary_metadata.json, metrics.json, manifest.json, checksums.sha256, physics_large_scale_evidence_pack.zip
+          - Pack: fixtures_polymer_scale.csv, fixtures_ring_scale.csv, speedup_vs_n.csv, speedup_vs_n_by_family.csv, speedup_vs_n.md, timing_breakdown.csv, timing_breakdown_by_family.csv, integration_compare.csv, integration_speed_profile.csv, adaptive_integration_trace.csv, adaptive_integration_summary.json, summary.csv, summary_metadata.json, metrics.json, manifest.json, checksums.sha256, physics_large_scale_evidence_pack.zip
           - SHA256(physics_large_scale_evidence_pack.zip): ${{ steps.hash.outputs.sha256 }}
           - Outcome (facts from summary_metadata.json):
           ${{ steps.facts.outputs.facts_md }}

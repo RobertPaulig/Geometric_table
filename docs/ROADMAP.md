@@ -389,7 +389,15 @@ Hard rule:
 - No new integration optimizations/claims until P5.2 is merged; next actions must be justified by the bottleneck verdict.
 
 ### PHYSICS-P5.3-INTEGRATION-LOGIC-OPT-1: integration logic optimization (reduce integration_logic_ms; KPI + gates)
-Status: [ ] planned  [x] in-progress  [ ] done
+Status: [ ] planned  [ ] in-progress  [x] done
+
+Closed:
+- PR #169 (code): https://github.com/RobertPaulig/Geometric_table/pull/169
+- Publish run r4 (large-scale proof): https://github.com/RobertPaulig/Geometric_table/actions/runs/21193382219
+- Release r4 (zip+.sha256): https://github.com/RobertPaulig/Geometric_table/releases/tag/physics-operator-large-scale-2026-01-20-r4
+- PR #171 (registry): https://github.com/RobertPaulig/Geometric_table/pull/171
+- PR #172 (registry addendum: P5.3 thresholds rails): https://github.com/RobertPaulig/Geometric_table/pull/172
+- PR #173 (lineage): https://github.com/RobertPaulig/Geometric_table/pull/173
 
 Goal:
 - Optimize only integration_logic (adaptive integrator overhead), because P5.2 bottleneck verdict at scale is `BOTTLENECK_IS_INTEGRATOR`.
@@ -410,7 +418,14 @@ Hard rule:
 - No other integration optimizations/claims until P5.3 is merged and truth-chain is closed.
 
 ### PHYSICS-P5.4-PERF-HARDNESS-TOPOLOGY-1: ring-suite topology hardness in P5-scale (anti-illusion)
-Status: [ ] planned  [x] in-progress  [ ] done
+Status: [ ] planned  [ ] in-progress  [x] done
+
+Closed:
+- PR #170 (code): https://github.com/RobertPaulig/Geometric_table/pull/170
+- Publish run r5 (large-scale proof): https://github.com/RobertPaulig/Geometric_table/actions/runs/21204574412
+- Release r5 (zip+.sha256): https://github.com/RobertPaulig/Geometric_table/releases/tag/physics-operator-large-scale-2026-01-20-r5
+- PR #174 (registry): https://github.com/RobertPaulig/Geometric_table/pull/174
+- PR #175 (lineage): https://github.com/RobertPaulig/Geometric_table/pull/175
 
 Goal:
 - Add ring-suite to P5-scale and publish speedup profiles per `topology_family` to prevent chain-only (tridiagonal) proof illusions.
@@ -435,6 +450,30 @@ DoD (law is DONE only when the truth-chain is closed):
 
 Hard rule:
 - No scalability conclusions (or single combined speedup claims) without ring-suite and per-family speed profiles.
+
+### PHYSICS-P5.5-RING-PERF-FOLLOW-UP-1: ring performance follow-up (per-family cost profile + verdict rails)
+Status: [ ] planned  [x] in-progress  [ ] done
+
+Goal:
+- Produce per-family cost decomposition (polymer vs ring) at scale and a factual verdict for where ring is slower.
+
+Entry criteria:
+- PHYSICS-P5.4 truth-chain is DONE (ring-suite + per-family speed profile on main).
+- P5 large-scale pack builder / publish workflow exists (evidence pack + gates).
+
+DoD (law is DONE only when the truth-chain is closed):
+- Evidence pack contains `timing_breakdown_by_family.csv` (bin-level per-family aggregates).
+- `timing_breakdown_by_family.csv` schema includes:
+  - `family, n_atoms, n_samples, median_build_operator_ms, median_dos_ldos_eval_ms, median_integration_logic_ms, median_io_ms, median_total_ms`.
+- `summary_metadata.json` includes required P5.5 fields:
+  - `cost_median_total_ms_at_scale_polymer_estimate`, `cost_median_total_ms_at_scale_ring_estimate`
+  - `cost_ratio_ring_vs_polymer_total_ms_at_scale_estimate`
+  - `topology_ring_cost_gap_verdict_at_scale`, `topology_ring_cost_gap_reason_at_scale`
+- Contract-tests / publish gates validate presence + schema of per-family timing breakdown and P5.5 metadata/verdict (anti-drift).
+- Live proof chain-of-truth closed: publish-run -> release(zip+.sha256) -> registry PR -> lineage PR (append-only) -> main 3/3.
+
+Hard rule:
+- No ring performance optimizations/claims without per-family cost profile (P5.5).
 
 # ROADMAP — HETERO-2 как SaaS (Pfizer-ready evidence pipeline)
 
