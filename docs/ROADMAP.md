@@ -514,7 +514,14 @@ Hard rule:
 - No chemistry-wide scalability claims without P5.6 ring-law fields in a registry-grade evidence pack.
 
 ### PHYSICS-P5.7-BUILD_OPERATOR-OPT-RING-1: build_operator optimization (ring) (narrow; reason-driven)
-Status: [ ] planned  [x] in-progress  [ ] done
+Status: [ ] planned  [ ] in-progress  [x] done
+
+Closed:
+- PR #184 (code): https://github.com/RobertPaulig/Geometric_table/pull/184
+- Publish run r8 (large-scale proof): https://github.com/RobertPaulig/Geometric_table/actions/runs/21215792704
+- Release r8 (zip+.sha256): https://github.com/RobertPaulig/Geometric_table/releases/tag/physics-operator-large-scale-2026-01-20-r8
+- PR #185 (registry): https://github.com/RobertPaulig/Geometric_table/pull/185
+- PR #186 (lineage): https://github.com/RobertPaulig/Geometric_table/pull/186
 
 Goal:
 - Reduce ring build_operator cost at scale without changing laws/fixtures/baseline parameters.
@@ -530,6 +537,24 @@ DoD (optimization is DONE only when the truth-chain is closed):
 
 Hard rule:
 - No P5.6 contract/threshold/fixtures/baseline parameter changes in P5.7 PR (only build_operator optimization).
+
+### PHYSICS-P5.8-INTEGRATION_LOGIC-OPT-RING-1: integration_logic optimization (ring) (narrow; reason-driven)
+Status: [ ] planned  [x] in-progress  [ ] done
+
+Goal:
+- Reduce ring integration_logic overhead at scale without changing laws/fixtures/baseline parameters.
+
+Entry criteria:
+- PHYSICS-P5.7 truth-chain is DONE (build_operator optimization accepted).
+- Latest registry-grade evidence indicates: `topology_ring_cost_gap_verdict_at_scale = RING_SLOWER_DUE_TO_INTEGRATION_LOGIC`.
+
+DoD (optimization is DONE only when the truth-chain is closed):
+- Code PR merged (main CI 3/3).
+- P5 large-scale proof publish-run on main succeeds and produces a new evidence pack + `.sha256`.
+- Registry + lineage entries record updated ring-vs-polymer integration_logic cost facts (numbers + verdict reasons), with stable law refs.
+
+Hard rule:
+- No P5.6 contract/threshold/fixtures/baseline parameter changes in P5.8 PR (only integration_logic optimization).
 
 # ROADMAP — HETERO-2 как SaaS (Pfizer-ready evidence pipeline)
 

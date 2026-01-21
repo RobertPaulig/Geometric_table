@@ -1490,6 +1490,34 @@ def write_p5_evidence_pack(
     metadata["cost_integration_logic_speedup_at_scale"] = float(integration_logic_speedup_at_scale)
     metadata["cost_integration_logic_opt_verdict_at_scale"] = str(cost_opt_verdict)
 
+    # P5.8 KPI: compare ring integration_logic_ms at scale against a pinned baseline ("before") and
+    # record a simple verdict for the optimization step.
+    ring_integration_logic_before_ms_at_scale = 2.6423465000817714  # P5.7 truth r8 baseline (registry-grade)
+    before_override = str(os.environ.get("P5_COST_INTEGRATION_LOGIC_RING_MS_AT_SCALE_BEFORE") or "").strip()
+    if before_override:
+        try:
+            ring_integration_logic_before_ms_at_scale = float(before_override)
+        except ValueError:
+            pass
+
+    ring_integration_logic_after_ms_at_scale = float(ring_integ)
+    ring_integration_logic_speedup_at_scale = (
+        float(ring_integration_logic_before_ms_at_scale) / float(ring_integration_logic_after_ms_at_scale)
+        if math.isfinite(float(ring_integration_logic_before_ms_at_scale))
+        and math.isfinite(float(ring_integration_logic_after_ms_at_scale))
+        and float(ring_integration_logic_after_ms_at_scale) > 0.0
+        else float("nan")
+    )
+
+    ring_opt_verdict = "INCONCLUSIVE"
+    if correctness_ok and poly_n >= int(cfg.min_scale_samples) and ring_n >= int(cfg.min_scale_samples) and math.isfinite(float(ring_integration_logic_speedup_at_scale)):
+        ring_opt_verdict = "PASS" if float(ring_integration_logic_speedup_at_scale) >= 1.0 else "FAIL"
+
+    metadata["cost_median_integration_logic_ms_at_scale_ring_before"] = float(ring_integration_logic_before_ms_at_scale)
+    metadata["cost_median_integration_logic_ms_at_scale_ring_after"] = float(ring_integration_logic_after_ms_at_scale)
+    metadata["cost_integration_logic_speedup_at_scale_ring"] = float(ring_integration_logic_speedup_at_scale)
+    metadata["cost_integration_logic_opt_verdict_at_scale_ring"] = str(ring_opt_verdict)
+
     summary_metadata_json.write_text(json.dumps(metadata, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
 
     # Metrics: keep the minimal "counts" gate compatible with existing publish workflows.
