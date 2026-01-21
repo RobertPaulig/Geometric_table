@@ -477,9 +477,9 @@ jobs:
             expected = "NO_SPEEDUP_YET"
 
           assert verdict == expected, (
-            f\"ring_speedup_verdict mismatch: got={verdict} expected={expected} ring_n={ring_n} \"
-            f\"ring_pass_rate={ring_pass_rate} ring_speed_med={ring_speed_med} poly_speed_med={poly_speed_med} \"
-            f\"gate_speedup={gate_speedup} correctness_gate_rate={correctness_gate_rate} min_scale_samples={min_scale_samples}\"
+            f"ring_speedup_verdict mismatch: got={verdict} expected={expected} ring_n={ring_n} "
+            f"ring_pass_rate={ring_pass_rate} ring_speed_med={ring_speed_med} poly_speed_med={poly_speed_med} "
+            f"gate_speedup={gate_speedup} correctness_gate_rate={correctness_gate_rate} min_scale_samples={min_scale_samples}"
           )
           PY
 
