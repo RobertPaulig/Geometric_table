@@ -483,7 +483,15 @@ Hard rule:
 - No ring performance optimizations/claims without per-family cost profile (P5.5).
 
 ### PHYSICS-P5.6-RING-SPEEDUP-LAW-1: ring speedup law (contract + gates; no polymer-only claims)
-Status: [ ] planned  [x] in-progress  [ ] done
+Status: [ ] planned  [ ] in-progress  [x] done
+
+Closed:
+- PR #179 (code): https://github.com/RobertPaulig/Geometric_table/pull/179
+- Publish run r7 (large-scale proof): https://github.com/RobertPaulig/Geometric_table/actions/runs/21211317639
+- Release r7 (zip+.sha256): https://github.com/RobertPaulig/Geometric_table/releases/tag/physics-operator-large-scale-2026-01-20-r7
+- PR #181 (registry): https://github.com/RobertPaulig/Geometric_table/pull/181
+- PR #182 (lineage): https://github.com/RobertPaulig/Geometric_table/pull/182
+- PR #183 (lineage incident note): https://github.com/RobertPaulig/Geometric_table/pull/183
 
 Goal:
 - Freeze "what counts as ring speedup at scale" as a contract (no interpretation drift).
@@ -504,6 +512,24 @@ DoD (law is DONE only when the truth-chain is closed):
 
 Hard rule:
 - No chemistry-wide scalability claims without P5.6 ring-law fields in a registry-grade evidence pack.
+
+### PHYSICS-P5.7-BUILD_OPERATOR-OPT-RING-1: build_operator optimization (ring) (narrow; reason-driven)
+Status: [ ] planned  [x] in-progress  [ ] done
+
+Goal:
+- Reduce ring build_operator cost at scale without changing laws/fixtures/baseline parameters.
+
+Entry criteria:
+- PHYSICS-P5.6 truth-chain is DONE (ring speedup law accepted).
+- Latest registry-grade evidence indicates: `topology_ring_cost_gap_verdict_at_scale = RING_SLOWER_DUE_TO_BUILD_OPERATOR`.
+
+DoD (optimization is DONE only when the truth-chain is closed):
+- Code PR merged (main CI 3/3).
+- P5 large-scale proof publish-run on main succeeds and produces a new evidence pack + `.sha256`.
+- Registry + lineage entries record updated build_operator ring-vs-polymer cost facts (numbers + verdict reasons), with stable law refs.
+
+Hard rule:
+- No P5.6 contract/threshold/fixtures/baseline parameter changes in P5.7 PR (only build_operator optimization).
 
 # ROADMAP — HETERO-2 как SaaS (Pfizer-ready evidence pipeline)
 

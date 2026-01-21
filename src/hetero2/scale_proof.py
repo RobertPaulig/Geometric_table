@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import functools
 import json
 import math
 import os
@@ -343,15 +344,27 @@ def _ring_edge_weights(
     if mode in {"unweighted", "bond_order"}:
         return np.ones((n,), dtype=float)
 
+    chi_by_z = _chi_by_z_cached()
+    try:
+        chi = np.fromiter((float(chi_by_z[int(z)]) for z in types_z), dtype=float, count=n)
+    except KeyError as e:
+        missing_z = int(e.args[0]) if e.args else -1
+        raise ValueError(f"Missing chi for Z={missing_z} in atoms_db_v1.json") from e
+
+    diff = np.abs(chi - np.roll(chi, -1))
+    return np.asarray(1.0 + float(alpha) * diff, dtype=float)
+
+
+@functools.lru_cache(maxsize=1)
+def _eps_by_z_cached() -> dict[int, float]:
     atoms_db = load_atoms_db_v1()
-    chi_by_z = {int(k): float(v) for k, v in atoms_db.chi_by_atomic_num.items()}
-    w = np.ones((n,), dtype=float)
-    for i in range(n):
-        j = (i + 1) % n
-        chi_i = float(chi_by_z[int(types_z[i])])
-        chi_j = float(chi_by_z[int(types_z[j])])
-        w[i] = 1.0 + float(alpha) * abs(float(chi_i) - float(chi_j))
-    return w
+    return {int(k): float(v) for k, v in atoms_db.potential_by_atomic_num.items()}
+
+
+@functools.lru_cache(maxsize=1)
+def _chi_by_z_cached() -> dict[int, float]:
+    atoms_db = load_atoms_db_v1()
+    return {int(k): float(v) for k, v in atoms_db.chi_by_atomic_num.items()}
 
 
 def _ring_banded_permutation(n: int) -> list[int]:
@@ -381,39 +394,44 @@ def build_h_banded_ring(
     edge_weight_mode: str,
     potential_scale_gamma: float,
 ) -> tuple[np.ndarray, np.ndarray]:
-    atoms_db = load_atoms_db_v1()
-    eps_by_z = {int(k): float(v) for k, v in atoms_db.potential_by_atomic_num.items()}
-    for z in types_z:
-        if int(z) not in eps_by_z:
-            raise ValueError(f"Missing epsilon for Z={int(z)} in atoms_db_v1.json")
-
     n = int(len(types_z))
-    w = _ring_edge_weights(types_z=types_z, edge_weight_mode=str(edge_weight_mode))
-    deg = np.zeros((n,), dtype=float)
-    for i in range(n):
-        deg[i] = float(w[(i - 1) % n] + w[i])
+    eps_by_z = _eps_by_z_cached()
+    try:
+        v0 = np.fromiter((float(eps_by_z[int(z)]) for z in types_z), dtype=float, count=n)
+    except KeyError as e:
+        missing_z = int(e.args[0]) if e.args else -1
+        raise ValueError(f"Missing epsilon for Z={missing_z} in atoms_db_v1.json") from e
 
-    v0 = np.array([float(eps_by_z[int(z)]) for z in types_z], dtype=float)
+    w = _ring_edge_weights(types_z=types_z, edge_weight_mode=str(edge_weight_mode))
+    deg = np.asarray(w + np.roll(w, 1), dtype=float)
     diag = deg + float(potential_scale_gamma) * v0
 
-    perm = _ring_banded_permutation(n)
-    pos = {int(old): int(new) for new, old in enumerate(perm)}
+    perm, inv_perm = _ring_banded_perm_and_inv(n)
     ab = np.zeros((3, n), dtype=float)  # lower banded (diag + 2 subdiagonals), scipy.linalg.eigvals_banded format
     ab[0, :] = np.asarray(diag, dtype=float)[perm]
 
-    for i in range(n):
-        j = (i + 1) % n
-        a = int(pos[int(i)])
-        b = int(pos[int(j)])
-        row = a if a >= b else b
-        col = b if a >= b else a
-        offset = int(row - col)
-        if offset > 2:
-            raise ValueError("ring band permutation failed (bandwidth > 2)")
-        # lower banded storage: ab[offset, col] = A[row, col] for row >= col
-        ab[offset, col] = -float(w[i])
+    i = np.arange(n, dtype=int)
+    a = inv_perm[i]
+    b = inv_perm[(i + 1) % n]
+    row = np.maximum(a, b)
+    col = np.minimum(a, b)
+    offset = row - col
+    if bool(np.any(offset > 2)):
+        raise ValueError("ring band permutation failed (bandwidth > 2)")
+
+    # lower banded storage: ab[offset, col] = A[row, col] for row >= col
+    ab[offset, col] = -np.asarray(w, dtype=float)
 
     return np.asarray(ab, dtype=float), np.asarray(v0, dtype=float)
+
+
+@functools.lru_cache(maxsize=None)
+def _ring_banded_perm_and_inv(n: int) -> tuple[np.ndarray, np.ndarray]:
+    n = int(n)
+    perm = np.asarray(_ring_banded_permutation(n), dtype=int)
+    inv = np.empty((n,), dtype=int)
+    inv[perm] = np.arange(n, dtype=int)
+    return perm, inv
 
 
 def build_h_tridiagonal_chain(
