@@ -976,3 +976,18 @@
 - Decoy strategy distribution (summary.csv): rewire_strict_v1=60; rewire_relax_a_v1=40; rewire_fallback_aromatic_as_single_v1=100
 - Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/190 (merge: d5bd4a15d7b51167556f03d143078d71f8d92f31)
 - CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21222210835
+
+### 2026-01-21 - VALUE-M1.1-DECOYS-COVERAGE: ring-suite decoys coverage gate (coverage>=0.95; no_decoys_generated<=10)
+- Code PR (M1.1 gates + anti-regression test): https://github.com/RobertPaulig/Geometric_table/pull/192 (merge: 4aa99224109d1f4a9418c775e1e0a3acd9d9694c)
+- CI run (3/3 ci/* on code merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21224871070
+- Code PR (allow tag suffix -m1_1(-rN)?): https://github.com/RobertPaulig/Geometric_table/pull/193 (merge: 3ee006204c4fb5635c779c54254384c4132d98ed)
+- CI run (3/3 ci/* on code merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21225130000
+- Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/value-ring-suite-2026-01-21-m1_1
+- Source commit: 3ee006204c4fb5635c779c54254384c4132d98ed
+- Publish run: https://github.com/RobertPaulig/Geometric_table/actions/runs/21225180059
+- Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/value-ring-suite-2026-01-21-m1_1/value_ring_suite_evidence_pack.zip
+- SHA256(value_ring_suite_evidence_pack.zip): A250164C1D47EDF650846C0D8E1F9B043D3530C6E962C7309255F0B50F629E96 (verified by download)
+- Facts (summary.csv): rows_total=200; status_counts OK=200, SKIP=0, ERROR=0; top_skip_reasons=(none); no_decoys_generated=0; share_rows_with_n_decoys_gt_0=1.000 (100%)
+- Decoy strategy distribution (summary.csv; status=OK): rewire_strict_v1=60; rewire_relax_a_v1=40; rewire_fallback_aromatic_as_single_v1=100
+- Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/194 (merge: c997129056254f2f7e85c9d87fba20bce7970d9d)
+- CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21225233053
