@@ -43,45 +43,50 @@ class _EvalCache:
         self.eval_walltime_ms_total = 0.0
 
     def eval(self, energies: np.ndarray) -> np.ndarray:
-        e = np.asarray(energies, dtype=float)
+        e = np.asarray(energies, dtype=np.float64)
         if e.size == 0:
             return np.array([], dtype=float)
 
-        e_flat = np.asarray(e.reshape(-1), dtype=np.float64)
-        out_flat = np.empty_like(e_flat, dtype=float)
+        e_flat = e.reshape(-1)
         keys = e_flat.view(np.int64)
-        keys_list: list[int] = keys.tolist()
-        self.requests_total += int(len(keys_list))
+        keys_unique, first_idx, inv = np.unique(keys, return_index=True, return_inverse=True)
+        counts = np.bincount(inv, minlength=int(keys_unique.size))
+        self.requests_total += int(e_flat.size)
 
         cache = self._cache
-        missing_idx_by_key: dict[int, list[int]] = {}
-        missing_energy_by_key: dict[int, float] = {}
-        for idx, key in enumerate(keys_list):
-            cached = cache.get(key)
-            if cached is not None:
-                self.hits_total += 1
-                out_flat[idx] = float(cached)
-                continue
-            missing_idx_by_key.setdefault(key, []).append(int(idx))
-            missing_energy_by_key.setdefault(key, float(e_flat[idx]))
+        out_unique = np.empty((int(keys_unique.size),), dtype=float)
 
-        if missing_idx_by_key:
-            ordered_keys = sorted(missing_idx_by_key.keys())
-            vals = np.array([float(missing_energy_by_key[k]) for k in ordered_keys], dtype=float)
+        missing_pos: list[int] = []
+        missing_keys: list[int] = []
+        missing_energies: list[float] = []
+
+        keys_unique_list = keys_unique.tolist()
+        first_idx_list = first_idx.tolist()
+        for i, key in enumerate(keys_unique_list):
+            cached = cache.get(int(key))
+            if cached is not None:
+                self.hits_total += int(counts[int(i)])
+                out_unique[int(i)] = float(cached)
+                continue
+            missing_pos.append(int(i))
+            missing_keys.append(int(key))
+            missing_energies.append(float(e_flat[int(first_idx_list[int(i)])]))
+
+        if missing_keys:
+            vals = np.asarray(missing_energies, dtype=float)
             t0 = time.perf_counter()
             y_new = np.asarray(self._f(vals), dtype=float)
             self.eval_walltime_ms_total += float((time.perf_counter() - t0) * 1000.0)
             if y_new.size != vals.size:
                 raise ValueError("adaptive integrator: evaluator returned wrong shape")
-            for k, y in zip(ordered_keys, y_new.tolist(), strict=True):
+            y_list = y_new.tolist()
+            for k, y in zip(missing_keys, y_list, strict=True):
                 cache[int(k)] = float(y)
-            self.evals_total += int(len(ordered_keys))
+            self.evals_total += int(len(missing_keys))
+            for pos, y in zip(missing_pos, y_list, strict=True):
+                out_unique[int(pos)] = float(y)
 
-            for k in ordered_keys:
-                y = float(cache[int(k)])
-                for idx in missing_idx_by_key.get(k, []):
-                    out_flat[int(idx)] = float(y)
-
+        out_flat = out_unique[inv]
         return np.asarray(out_flat.reshape(e.shape), dtype=float)
 
     @property
@@ -223,6 +228,10 @@ def adaptive_approximate_on_grid(
     verdict = "SUCCESS"
     t_total = time.perf_counter()
 
+    grid_sorted = True
+    if int(grid.size) >= 2:
+        grid_sorted = bool(np.all(np.diff(grid) >= 0.0))
+
     subdomains_max = int(cfg.subdomains_max)
     eval_budget_max = int(cfg.eval_budget_max)
     quad_order = max(2, min(int(cfg.quad_order_max), 128))
@@ -243,13 +252,23 @@ def adaptive_approximate_on_grid(
         coeffs = _chebyshev_interpolate_coeffs(y_probe)
 
         if baseline_arr is not None:
-            mask = (grid >= float(left)) & (grid <= float(right))
-            if np.any(mask):
-                x_grid = _map_energy_to_x(grid[mask], e_left=float(left), e_right=float(right))
-                y_hat = chebyshev.chebval(x_grid, coeffs)
-                error_est = float(np.max(np.abs(np.asarray(y_hat, dtype=float) - np.asarray(baseline_arr[mask], dtype=float))))
+            if grid_sorted:
+                lo = int(np.searchsorted(grid, float(left), side="left"))
+                hi = int(np.searchsorted(grid, float(right), side="right"))
+                if hi > lo:
+                    x_grid = _map_energy_to_x(grid[lo:hi], e_left=float(left), e_right=float(right))
+                    y_hat = np.asarray(chebyshev.chebval(x_grid, coeffs), dtype=float)
+                    error_est = float(np.max(np.abs(y_hat - np.asarray(baseline_arr[lo:hi], dtype=float))))
+                else:
+                    error_est = 0.0
             else:
-                error_est = 0.0
+                mask = (grid >= float(left)) & (grid <= float(right))
+                if np.any(mask):
+                    x_grid = _map_energy_to_x(grid[mask], e_left=float(left), e_right=float(right))
+                    y_hat = chebyshev.chebval(x_grid, coeffs)
+                    error_est = float(np.max(np.abs(np.asarray(y_hat, dtype=float) - np.asarray(baseline_arr[mask], dtype=float))))
+                else:
+                    error_est = 0.0
         else:
             # Fallback: Gauss-point error estimate (adaptive-only mode / unit tests).
             x_quad, _ = _leggauss_cached(int(quad_order))
@@ -317,14 +336,23 @@ def adaptive_approximate_on_grid(
     accepted_sorted = sorted(accepted, key=lambda s: (float(s[0]), float(s[1])))
     values_out = np.zeros_like(grid)
     for idx, (left, right, coeffs) in enumerate(accepted_sorted):
-        if idx == len(accepted_sorted) - 1:
-            mask = (grid >= float(left)) & (grid <= float(right))
+        if grid_sorted:
+            lo = int(np.searchsorted(grid, float(left), side="left"))
+            side = "right" if idx == len(accepted_sorted) - 1 else "left"
+            hi = int(np.searchsorted(grid, float(right), side=side))
+            if hi <= lo:
+                continue
+            x = _map_energy_to_x(grid[lo:hi], e_left=float(left), e_right=float(right))
+            values_out[lo:hi] = chebyshev.chebval(x, coeffs)
         else:
-            mask = (grid >= float(left)) & (grid < float(right))
-        if not np.any(mask):
-            continue
-        x = _map_energy_to_x(grid[mask], e_left=float(left), e_right=float(right))
-        values_out[mask] = chebyshev.chebval(x, coeffs)
+            if idx == len(accepted_sorted) - 1:
+                mask = (grid >= float(left)) & (grid <= float(right))
+            else:
+                mask = (grid >= float(left)) & (grid < float(right))
+            if not np.any(mask):
+                continue
+            x = _map_energy_to_x(grid[mask], e_left=float(left), e_right=float(right))
+            values_out[mask] = chebyshev.chebval(x, coeffs)
 
     error_est_total = float(
         max(

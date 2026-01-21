@@ -483,6 +483,65 @@ jobs:
           )
           PY
 
+      - name: "Gate: P5.8 ring integration_logic KPI fields"
+        run: |
+          python - << 'PY'
+          import json
+          import math
+  
+          md = json.load(open("out_physics_large_scale/summary_metadata.json", "r", encoding="utf-8"))
+  
+          required_keys = [
+            "integrator_correctness_verdict",
+            "min_scale_samples",
+            "cost_scale_samples_polymer",
+            "cost_scale_samples_ring",
+            "cost_median_integration_logic_ms_at_scale_polymer",
+            "cost_median_integration_logic_ms_at_scale_ring",
+            "cost_ratio_ring_vs_polymer_integration_logic_ms_at_scale",
+            "cost_median_integration_logic_ms_at_scale_ring_before",
+            "cost_median_integration_logic_ms_at_scale_ring_after",
+            "cost_integration_logic_speedup_at_scale_ring",
+            "cost_integration_logic_opt_verdict_at_scale_ring",
+          ]
+          missing = [k for k in required_keys if k not in md]
+          assert not missing, f"Missing required P5.8 metadata keys: {missing}"
+  
+          verdict = str(md.get("cost_integration_logic_opt_verdict_at_scale_ring") or "")
+          assert verdict in {"PASS", "FAIL", "INCONCLUSIVE"}
+  
+          poly_n = int(md.get("cost_scale_samples_polymer", 0) or 0)
+          ring_n = int(md.get("cost_scale_samples_ring", 0) or 0)
+          min_scale_samples = int(md.get("min_scale_samples", 0) or 0)
+          correctness_ok = str(md.get("integrator_correctness_verdict") or "") == "PASS_CORRECTNESS_AT_SCALE"
+  
+          poly_med = float(md.get("cost_median_integration_logic_ms_at_scale_polymer", float("nan")))
+          ring_med = float(md.get("cost_median_integration_logic_ms_at_scale_ring", float("nan")))
+          ratio = float(md.get("cost_ratio_ring_vs_polymer_integration_logic_ms_at_scale", float("nan")))
+  
+          if math.isfinite(poly_med) and math.isfinite(ring_med) and poly_med > 0.0:
+            expected = ring_med / poly_med
+            assert math.isfinite(ratio), "P5.8 ratio must be finite when ring/poly medians are finite"
+            assert abs(ratio - expected) <= 1e-9 * max(1.0, abs(expected)), f"P5.8 ratio mismatch: got={ratio} expected={expected}"
+  
+          before = float(md.get("cost_median_integration_logic_ms_at_scale_ring_before", float("nan")))
+          after = float(md.get("cost_median_integration_logic_ms_at_scale_ring_after", float("nan")))
+          speed = float(md.get("cost_integration_logic_speedup_at_scale_ring", float("nan")))
+  
+          if math.isfinite(before) and math.isfinite(after) and after > 0.0:
+            expected = before / after
+            assert math.isfinite(speed), "P5.8 speedup must be finite when before/after are finite"
+            assert abs(speed - expected) <= 1e-9 * max(1.0, abs(expected)), f"P5.8 speedup mismatch: got={speed} expected={expected}"
+  
+          if math.isfinite(after) and math.isfinite(ring_med):
+            assert abs(after - ring_med) <= 1e-9 * max(1.0, abs(ring_med)), f"P5.8 ring_after must match ring median: after={after} ring_med={ring_med}"
+  
+          expected_verdict = "INCONCLUSIVE"
+          if correctness_ok and poly_n >= min_scale_samples and ring_n >= min_scale_samples and math.isfinite(speed):
+            expected_verdict = "PASS" if speed >= 1.0 else "FAIL"
+          assert verdict == expected_verdict, f"P5.8 verdict mismatch: got={verdict} expected={expected_verdict}"
+          PY
+
       - name: Extract facts (from summary_metadata.json)
         id: facts
         run: |
@@ -533,6 +592,13 @@ jobs:
           lines.append(f"    - cost_ratio_ring_vs_polymer_total_ms_at_scale_estimate: {md.get('cost_ratio_ring_vs_polymer_total_ms_at_scale_estimate')}")
           lines.append(f"    - topology_ring_cost_gap_verdict_at_scale: {md.get('topology_ring_cost_gap_verdict_at_scale')}")
           lines.append(f"    - topology_ring_cost_gap_reason_at_scale: {md.get('topology_ring_cost_gap_reason_at_scale')}")
+          lines.append("  - integration_logic (ring) KPI (P5.8):")
+          lines.append(f"    - cost_ratio_ring_vs_polymer_integration_logic_ms_at_scale: {md.get('cost_ratio_ring_vs_polymer_integration_logic_ms_at_scale')}")
+          lines.append(f"    - cost_median_integration_logic_ms_at_scale_ring_before: {md.get('cost_median_integration_logic_ms_at_scale_ring_before')}")
+          lines.append(f"    - cost_median_integration_logic_ms_at_scale_ring_after: {md.get('cost_median_integration_logic_ms_at_scale_ring_after')}")
+          lines.append(f"    - cost_integration_logic_speedup_at_scale_ring: {md.get('cost_integration_logic_speedup_at_scale_ring')}")
+          lines.append(f"    - cost_integration_logic_opt_verdict_at_scale_ring: {md.get('cost_integration_logic_opt_verdict_at_scale_ring')}")
+          lines.append(f"    - topology_ring_cost_gap_verdict_at_scale: {md.get('topology_ring_cost_gap_verdict_at_scale')}")
           lines.append("  - ring speedup law (P5.6):")
           lines.append(f"    - ring_speedup_median_at_scale: {md.get('ring_speedup_median_at_scale')}")
           lines.append(f"    - ring_eval_ratio_median_at_scale: {md.get('ring_eval_ratio_median_at_scale')}")

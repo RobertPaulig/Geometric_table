@@ -109,6 +109,13 @@ def test_p5_evidence_pack_contains_required_files_and_metadata(tmp_path: Path) -
             "cost_integration_logic_speedup_at_scale",
         ]:
             assert k in meta
+        assert meta["cost_integration_logic_opt_verdict_at_scale_ring"] in {"PASS", "FAIL", "INCONCLUSIVE"}
+        for k in [
+            "cost_median_integration_logic_ms_at_scale_ring_before",
+            "cost_median_integration_logic_ms_at_scale_ring_after",
+            "cost_integration_logic_speedup_at_scale_ring",
+        ]:
+            assert k in meta
 
         assert meta["topology_families"] == ["polymer", "ring"]
         assert meta["topology_gate_n_min"] == 200
