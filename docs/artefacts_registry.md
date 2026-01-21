@@ -1454,3 +1454,17 @@ separation facts (computed on status==OK rows only):
       - n_atoms=200 n_samples=20 median_speedup=0.05476953125070314 median_eval_ratio=0.9143323638961172 pass_rate=1.0
       - n_atoms=400 n_samples=20 median_speedup=0.10289085018839059 median_eval_ratio=1.148005148005148 pass_rate=1.0
       - n_atoms=800 n_samples=20 median_speedup=0.2855233217418385 median_eval_ratio=1.1378002528445006 pass_rate=1.0
+
+## value-ring-suite-2026-01-21
+
+- Source commit: 632d5f1b231288ae1308a338cf52f9299eec70db
+- Release asset: https://github.com/RobertPaulig/Geometric_table/releases/download/value-ring-suite-2026-01-21/value_ring_suite_evidence_pack.zip
+- SHA256(value_ring_suite_evidence_pack.zip): 97A3181F897A89A0559E0099A40AF7537D8A7E08A5B3D7D6377514E042E27509
+- Command:
+  python scripts/pilot_generate_input.py --out_dir out_ring_suite --rows 200 --k_decoys 20 --seed 0 --full_cover_count 3
+  hetero2-batch --input out_ring_suite/input.csv --out_dir out_ring_suite --artifacts light --score_mode external_scores --scores_input out_ring_suite/scores.json --k_decoys 20 --workers 2 --timeout_s 60 --maxtasksperchild 100 --seed_strategy per_row --seed 0 --zip_pack
+- Outcome (facts from summary.csv):
+  - rows_total: 200
+  - status_counts: OK=200, SKIP=0, ERROR=0
+  - top_skip_reasons: (none)
+  - share_rows_with_n_decoys_gt_0: 1.000 (100.0%)
