@@ -1360,6 +1360,56 @@ def write_p5_evidence_pack(
     metadata["topology_ring_cost_gap_verdict_at_scale"] = str(gap_verdict)
     metadata["topology_ring_cost_gap_reason_at_scale"] = str(gap_reason)
 
+    # P5.6: ring speedup law (ring-suite KPI at scale; correctness gates speed).
+    ring_scale_speed_rows = [
+        r
+        for r in rows
+        if r.get("row_kind") == "sample"
+        and str(r.get("family") or "") == "ring"
+        and int(r.get("n_atoms", 0) or 0) >= int(cfg.gate_n_min)
+    ]
+    ring_n_speed = int(len(ring_scale_speed_rows))
+    ring_pass_rate_speed = (
+        float(sum(1 for r in ring_scale_speed_rows if bool(r.get("correctness_pass", False))) / ring_n_speed)
+        if ring_n_speed > 0
+        else float("nan")
+    )
+    ring_speed_med_speed = float(_median([float(r.get("speedup", float("nan"))) for r in ring_scale_speed_rows]))
+    ring_eval_ratio_med_speed = float(_median([float(r.get("eval_ratio", float("nan"))) for r in ring_scale_speed_rows]))
+
+    gate_speedup = float(cfg.speedup_gate_break_even)
+    poly_speed_med = float(metadata.get("speedup_median_at_scale_polymer", float("nan")))
+
+    ring_speedup_verdict = "NO_SPEEDUP_YET"
+    if ring_n_speed > 0 and math.isfinite(ring_pass_rate_speed) and ring_pass_rate_speed < float(cfg.correctness_gate_rate):
+        ring_speedup_verdict = "NOT_VALID_DUE_TO_CORRECTNESS"
+    elif ring_n_speed < int(cfg.min_scale_samples):
+        ring_speedup_verdict = "NO_SPEEDUP_YET"
+    elif math.isfinite(ring_speed_med_speed) and ring_speed_med_speed >= gate_speedup:
+        ring_speedup_verdict = "PASS_RING_SPEEDUP_AT_SCALE"
+    elif (
+        math.isfinite(ring_speed_med_speed)
+        and ring_speed_med_speed < gate_speedup
+        and math.isfinite(poly_speed_med)
+        and poly_speed_med >= gate_speedup
+    ):
+        ring_speedup_verdict = "FAIL_RING_SPEEDUP_AT_SCALE"
+    else:
+        ring_speedup_verdict = "NO_SPEEDUP_YET"
+
+    ring_speedup_reason = (
+        f"gate_n_min={int(cfg.gate_n_min)} min_scale_samples={int(cfg.min_scale_samples)} ring_n={ring_n_speed} "
+        f"correctness_gate_rate={float(cfg.correctness_gate_rate)} ring_pass_rate={ring_pass_rate_speed} "
+        f"ring_median_speedup={ring_speed_med_speed} polymer_median_speedup={poly_speed_med} gate_speedup={gate_speedup} "
+        f"ring_cost_gap_verdict={metadata.get('topology_ring_cost_gap_verdict_at_scale')}"
+    )
+
+    metadata["ring_speedup_median_at_scale"] = float(ring_speed_med_speed)
+    metadata["ring_eval_ratio_median_at_scale"] = float(ring_eval_ratio_med_speed)
+    metadata["ring_correctness_pass_rate_at_scale"] = float(ring_pass_rate_speed)
+    metadata["ring_speedup_verdict_at_scale"] = str(ring_speedup_verdict)
+    metadata["ring_speedup_verdict_reason_at_scale"] = str(ring_speedup_reason)
+
     denom_kpi = float(dos_med + integ_med + io_med) if all(math.isfinite(x) for x in [dos_med, integ_med, io_med]) else float("nan")
     share_dos = float(dos_med / denom_kpi) if math.isfinite(denom_kpi) and denom_kpi > 0.0 else float("nan")
     share_integ = float(integ_med / denom_kpi) if math.isfinite(denom_kpi) and denom_kpi > 0.0 else float("nan")

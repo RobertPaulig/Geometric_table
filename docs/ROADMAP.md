@@ -452,7 +452,14 @@ Hard rule:
 - No scalability conclusions (or single combined speedup claims) without ring-suite and per-family speed profiles.
 
 ### PHYSICS-P5.5-RING-PERF-FOLLOW-UP-1: ring performance follow-up (per-family cost profile + verdict rails)
-Status: [ ] planned  [x] in-progress  [ ] done
+Status: [ ] planned  [ ] in-progress  [x] done
+
+Closed:
+- PR #176 (code): https://github.com/RobertPaulig/Geometric_table/pull/176
+- Publish run r6 (large-scale proof): https://github.com/RobertPaulig/Geometric_table/actions/runs/21208683069
+- Release r6 (zip+.sha256): https://github.com/RobertPaulig/Geometric_table/releases/tag/physics-operator-large-scale-2026-01-20-r6
+- PR #177 (registry): https://github.com/RobertPaulig/Geometric_table/pull/177
+- PR #178 (lineage): https://github.com/RobertPaulig/Geometric_table/pull/178
 
 Goal:
 - Produce per-family cost decomposition (polymer vs ring) at scale and a factual verdict for where ring is slower.
@@ -474,6 +481,29 @@ DoD (law is DONE only when the truth-chain is closed):
 
 Hard rule:
 - No ring performance optimizations/claims without per-family cost profile (P5.5).
+
+### PHYSICS-P5.6-RING-SPEEDUP-LAW-1: ring speedup law (contract + gates; no polymer-only claims)
+Status: [ ] planned  [x] in-progress  [ ] done
+
+Goal:
+- Freeze "what counts as ring speedup at scale" as a contract (no interpretation drift).
+
+Entry criteria:
+- PHYSICS-P5.4 truth-chain is DONE (ring-suite + per-family speed profile on main).
+- PHYSICS-P5.5 truth-chain is DONE (per-family timing + ring cost gap verdict on main).
+
+DoD (law is DONE only when the truth-chain is closed):
+- Contract doc merged to main: `docs/contracts/RING_SPEEDUP_CONTRACT.md` (p5.6.v1).
+- Evidence pack contains: `speedup_vs_n_by_family.csv`, `timing_breakdown_by_family.csv`, `summary_metadata.json`.
+- `summary_metadata.json` includes P5.6 fields + verdict rails:
+  - `ring_speedup_median_at_scale`, `ring_eval_ratio_median_at_scale`, `ring_correctness_pass_rate_at_scale`
+  - `ring_speedup_verdict_at_scale`, `ring_speedup_verdict_reason_at_scale`
+  - linkage rail: `topology_ring_cost_gap_verdict_at_scale` (P5.5)
+- Contract-tests / publish gates validate presence + verdict logic (anti-drift).
+- Live proof chain-of-truth closed: publish-run -> release(zip+.sha256) -> registry PR -> lineage PR (append-only) -> main 3/3.
+
+Hard rule:
+- No chemistry-wide scalability claims without P5.6 ring-law fields in a registry-grade evidence pack.
 
 # ROADMAP — HETERO-2 как SaaS (Pfizer-ready evidence pipeline)
 

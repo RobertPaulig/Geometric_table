@@ -420,6 +420,69 @@ jobs:
           assert "polymer" in families and "ring" in families
           PY
 
+      - name: "Gate: P5.6 ring speedup law"
+        run: |
+          python - << 'PY'
+          import json
+          import math
+
+          md = json.load(open("out_physics_large_scale/summary_metadata.json", "r", encoding="utf-8"))
+
+          required_keys = [
+            "ring_speedup_median_at_scale",
+            "ring_eval_ratio_median_at_scale",
+            "ring_correctness_pass_rate_at_scale",
+            "ring_speedup_verdict_at_scale",
+            "ring_speedup_verdict_reason_at_scale",
+            "topology_ring_cost_gap_verdict_at_scale",
+            "speedup_median_at_scale_polymer",
+            "cost_scale_samples_ring",
+          ]
+          missing = [k for k in required_keys if k not in md]
+          assert not missing, f"Missing required P5.6 metadata keys: {missing}"
+
+          verdict = str(md.get("ring_speedup_verdict_at_scale") or "")
+          assert verdict in {
+            "PASS_RING_SPEEDUP_AT_SCALE",
+            "FAIL_RING_SPEEDUP_AT_SCALE",
+            "NO_SPEEDUP_YET",
+            "NOT_VALID_DUE_TO_CORRECTNESS",
+          }
+          assert str(md.get("ring_speedup_verdict_reason_at_scale") or "").strip()
+
+          gate_speedup = float(md.get("scale_speedup_gate_break_even", 1.0))
+          correctness_gate_rate = float(md.get("correctness_gate_rate", 1.0))
+          min_scale_samples = int(md.get("min_scale_samples", 0) or 0)
+
+          ring_n = int(md.get("cost_scale_samples_ring", 0) or 0)
+          ring_pass_rate = float(md.get("ring_correctness_pass_rate_at_scale", float("nan")))
+          ring_speed_med = float(md.get("ring_speedup_median_at_scale", float("nan")))
+          poly_speed_med = float(md.get("speedup_median_at_scale_polymer", float("nan")))
+
+          expected = "NO_SPEEDUP_YET"
+          if ring_n > 0 and math.isfinite(ring_pass_rate) and ring_pass_rate < correctness_gate_rate:
+            expected = "NOT_VALID_DUE_TO_CORRECTNESS"
+          elif ring_n < min_scale_samples:
+            expected = "NO_SPEEDUP_YET"
+          elif math.isfinite(ring_speed_med) and ring_speed_med >= gate_speedup:
+            expected = "PASS_RING_SPEEDUP_AT_SCALE"
+          elif (
+            math.isfinite(ring_speed_med)
+            and ring_speed_med < gate_speedup
+            and math.isfinite(poly_speed_med)
+            and poly_speed_med >= gate_speedup
+          ):
+            expected = "FAIL_RING_SPEEDUP_AT_SCALE"
+          else:
+            expected = "NO_SPEEDUP_YET"
+
+          assert verdict == expected, (
+            f\"ring_speedup_verdict mismatch: got={verdict} expected={expected} ring_n={ring_n} \"
+            f\"ring_pass_rate={ring_pass_rate} ring_speed_med={ring_speed_med} poly_speed_med={poly_speed_med} \"
+            f\"gate_speedup={gate_speedup} correctness_gate_rate={correctness_gate_rate} min_scale_samples={min_scale_samples}\"
+          )
+          PY
+
       - name: Extract facts (from summary_metadata.json)
         id: facts
         run: |
@@ -470,6 +533,13 @@ jobs:
           lines.append(f"    - cost_ratio_ring_vs_polymer_total_ms_at_scale_estimate: {md.get('cost_ratio_ring_vs_polymer_total_ms_at_scale_estimate')}")
           lines.append(f"    - topology_ring_cost_gap_verdict_at_scale: {md.get('topology_ring_cost_gap_verdict_at_scale')}")
           lines.append(f"    - topology_ring_cost_gap_reason_at_scale: {md.get('topology_ring_cost_gap_reason_at_scale')}")
+          lines.append("  - ring speedup law (P5.6):")
+          lines.append(f"    - ring_speedup_median_at_scale: {md.get('ring_speedup_median_at_scale')}")
+          lines.append(f"    - ring_eval_ratio_median_at_scale: {md.get('ring_eval_ratio_median_at_scale')}")
+          lines.append(f"    - ring_correctness_pass_rate_at_scale: {md.get('ring_correctness_pass_rate_at_scale')}")
+          lines.append(f"    - ring_speedup_verdict_at_scale: {md.get('ring_speedup_verdict_at_scale')}")
+          lines.append(f"    - ring_speedup_verdict_reason_at_scale: {md.get('ring_speedup_verdict_reason_at_scale')}")
+          lines.append(f"    - topology_ring_cost_gap_verdict_at_scale: {md.get('topology_ring_cost_gap_verdict_at_scale')}")
           lines.append("  - scale (P5):")
           lines.append(f"    - scale_n_atoms_min: {md.get('scale_n_atoms_min')}")
           lines.append(f"    - scale_n_atoms_max: {md.get('scale_n_atoms_max')}")
