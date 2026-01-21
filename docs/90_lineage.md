@@ -909,3 +909,17 @@
   - Facts (summary_metadata.json): topology_families=['polymer', 'ring']; topology_gate_n_min=200; speedup_median_at_scale_polymer=0.0879949862363698; speedup_verdict_at_scale_polymer=FAIL_SPEEDUP_AT_SCALE; speedup_median_at_scale_ring=0.07868455761041604; speedup_verdict_at_scale_ring=FAIL_SPEEDUP_AT_SCALE; topology_hardness_verdict=NO_SPEEDUP_YET; topology_hardness_reason=polymer(verdict=FAIL_SPEEDUP_AT_SCALE, median=0.0879949862363698) ring(verdict=FAIL_SPEEDUP_AT_SCALE, median=0.07868455761041604) gate_n_min=200; integrator_correctness_verdict=PASS_CORRECTNESS_AT_SCALE
 - Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/174 (merge: 4e65ee4c30db55fcff450523a847690c1430c954)
 - CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21204853592
+
+### 2026-01-21 - PHYSICS-P5.5-RING-PERF-FOLLOW-UP-1: ring per-family cost profile (polymer vs ring) + verdict rails
+- Code PR (per-family timing breakdown + gates): https://github.com/RobertPaulig/Geometric_table/pull/176 (merge: 93145ec561ce6565b149c4e1b5536f7e778731db)
+- CI run (3/3 ci/* on code merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21208619062
+- Live proof r6 (large-scale; integrator_mode=both; dos_eta=0.2):
+  - Law ref (from summary_metadata.json): docs/contracts/INTEGRATION_SCALE_CONTRACT.md @ 93145ec561ce6565b149c4e1b5536f7e778731db (p5.1.v1)
+  - Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/physics-operator-large-scale-2026-01-20-r6
+  - Publish run: https://github.com/RobertPaulig/Geometric_table/actions/runs/21208683069
+  - Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/physics-operator-large-scale-2026-01-20-r6/physics_large_scale_evidence_pack.zip
+  - SHA256(physics_large_scale_evidence_pack.zip): 7A933610708BEEF60FC69DD37BC6A200679E9BD3E92BBBF4CA981C4C7CBED530 (verified by download)
+  - Evidence pack artifacts: fixtures_polymer_scale.csv, fixtures_ring_scale.csv, speedup_vs_n.csv, speedup_vs_n_by_family.csv, speedup_vs_n.md, timing_breakdown.csv, timing_breakdown_by_family.csv, integration_compare.csv, integration_speed_profile.csv, adaptive_integration_trace.csv, adaptive_integration_summary.json, summary_metadata.json
+  - Facts (summary_metadata.json): gate_n_min=200; integrator_correctness_verdict=PASS_CORRECTNESS_AT_SCALE; integrator_speedup_median_at_scale=0.12003553852247553; topology_hardness_verdict=NO_SPEEDUP_YET; topology_ring_cost_gap_verdict_at_scale=RING_SLOWER_DUE_TO_BUILD_OPERATOR; cost_median_total_ms_at_scale_polymer_estimate=7.468396366668155; cost_median_total_ms_at_scale_ring_estimate=8.9061203666598; cost_ratio_ring_vs_polymer_total_ms_at_scale_estimate=1.192507725809557
+- Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/177 (merge: f534b1fab00dfdb64e982d7ef1e963e2dee37cf1)
+- CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21208898844
