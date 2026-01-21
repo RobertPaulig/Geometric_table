@@ -1121,3 +1121,58 @@ separation facts (computed on status==OK rows only):
       - n_atoms=200 n_samples=10 median_speedup=0.07580819744790274 median_eval_ratio=1.148005148005148 pass_rate=1.0
       - n_atoms=400 n_samples=10 median_speedup=0.21174035241485198 median_eval_ratio=1.1583947583947585 pass_rate=1.0
       - n_atoms=800 n_samples=10 median_speedup=0.3310290128123675 median_eval_ratio=1.148005148005148 pass_rate=1.0
+
+## physics-operator-large-scale-2026-01-20-r5
+
+- Source commit: 300c8657ef2c808462662cbc05f1c4245f8fe71b
+- Release asset: https://github.com/RobertPaulig/Geometric_table/releases/download/physics-operator-large-scale-2026-01-20-r5/physics_large_scale_evidence_pack.zip
+- SHA256(physics_large_scale_evidence_pack.zip): 2414FBBFEC48A920E061FA3037BA0626FBFDD28F905C3DE874BBF1CCCFE8AF48
+- Command:
+  python scripts/build_p5_large_scale_pack.py --out_dir out_physics_large_scale --n_atoms_bins "20,50,100,200,400,800" --samples_per_bin 10 --seed 0 --curve_id "dos_H" --energy_points 128 --dos_eta 0.2 --potential_scale_gamma 1.0 --edge_weight_mode bond_order_delta_chi --integrator_eps_abs 1e-6 --integrator_eps_rel 1e-4 --integrator_subdomains_max 32 --integrator_poly_degree_max 16 --integrator_quad_order_max 32 --integrator_eval_budget_max 256 --integrator_split_criterion "curvature" --overhead_region_n_max 100 --gate_n_min 200 --speedup_gate_break_even 1.0 --speedup_gate_strong 2.0
+- Outcome (facts from summary_metadata.json):
+  - law_ref:
+    - contract_path: docs/contracts/INTEGRATION_SCALE_CONTRACT.md
+    - contract_commit: 300c8657ef2c808462662cbc05f1c4245f8fe71b
+    - contract_version: p5.1.v1
+  - integrator (P5.1):
+    - gate_n_min: 200
+    - correctness_gate_rate: 1.0
+    - min_scale_samples: 5
+    - integrator_correctness_pass_rate_at_scale: 1.0
+    - integrator_speedup_median_at_scale: 0.0851339642569639
+    - integrator_eval_ratio_median_at_scale: 1.1327433628318584
+    - integrator_correctness_verdict: PASS_CORRECTNESS_AT_SCALE
+    - integrator_speedup_verdict: FAIL_SPEEDUP_AT_SCALE
+    - integrator_verdict_reason: FAIL: correctness ok at scale; speedup_median_at_scale=0.0851339642569639 < 1.0
+  - cost (P5.2/P5.3):
+    - cost_bottleneck_verdict_at_scale: MIXED
+    - cost_median_dos_ldos_eval_ms_at_scale: 1.866809499944111
+    - cost_median_integration_logic_ms_at_scale: 2.0868710000740975
+    - cost_median_integration_logic_ms_at_scale_before: 4.544935500007341
+    - cost_median_integration_logic_ms_at_scale_after: 2.0868710000740975
+    - cost_integration_logic_speedup_at_scale: 2.1778708410083643
+    - cost_integration_logic_opt_verdict_at_scale: PASS
+  - topology (P5.4):
+    - topology_families: ['polymer', 'ring']
+    - topology_gate_n_min: 200
+    - speedup_median_at_scale_polymer: 0.0879949862363698
+    - speedup_verdict_at_scale_polymer: FAIL_SPEEDUP_AT_SCALE
+    - speedup_median_at_scale_ring: 0.07868455761041604
+    - speedup_verdict_at_scale_ring: FAIL_SPEEDUP_AT_SCALE
+    - topology_hardness_verdict: NO_SPEEDUP_YET
+    - topology_hardness_reason: polymer(verdict=FAIL_SPEEDUP_AT_SCALE, median=0.0879949862363698) ring(verdict=FAIL_SPEEDUP_AT_SCALE, median=0.07868455761041604) gate_n_min=200
+  - scale (P5):
+    - scale_n_atoms_min: 20
+    - scale_n_atoms_max: 800
+    - scale_overhead_region_n_max: 100
+    - scale_gate_n_min: 200
+    - scale_break_even_n_estimate: None
+    - scale_speedup_median_at_maxN: 0.2545261166843933
+    - scale_speedup_verdict: FAIL_SPEEDUP_AT_SCALE
+    - bins:
+      - n_atoms=20 n_samples=20 median_speedup=0.012754543778999802 median_eval_ratio=0.8889317578972751 pass_rate=1.0
+      - n_atoms=50 n_samples=20 median_speedup=0.021665670378961815 median_eval_ratio=1.1428571428571428 pass_rate=1.0
+      - n_atoms=100 n_samples=20 median_speedup=0.036416296425919446 median_eval_ratio=1.1428571428571428 pass_rate=1.0
+      - n_atoms=200 n_samples=20 median_speedup=0.059633706605321975 median_eval_ratio=0.9143323638961172 pass_rate=1.0
+      - n_atoms=400 n_samples=20 median_speedup=0.0851339642569639 median_eval_ratio=1.148005148005148 pass_rate=1.0
+      - n_atoms=800 n_samples=20 median_speedup=0.2545261166843933 median_eval_ratio=1.1378002528445006 pass_rate=1.0
