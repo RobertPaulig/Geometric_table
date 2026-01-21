@@ -1104,6 +1104,8 @@ separation facts (computed on status==OK rows only):
     - cost_median_integration_logic_ms_at_scale_after: 2.218445499991617
     - cost_integration_logic_speedup_at_scale: 2.048702796631477
     - cost_integration_logic_opt_verdict_at_scale: PASS
+    - cost_integration_logic_speedup_gate_break_even: 1.0
+    - cost_integration_logic_speedup_gate_strong: 2.0
   - scale (P5):
     - scale_n_atoms_min: 20
     - scale_n_atoms_max: 800
