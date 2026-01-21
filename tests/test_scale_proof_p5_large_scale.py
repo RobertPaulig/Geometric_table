@@ -4,7 +4,7 @@ import json
 import zipfile
 from pathlib import Path
 
-from hetero2.scale_proof import P5Config, generate_polymer_scale_fixtures, write_p5_evidence_pack
+from hetero2.scale_proof import P5Config, generate_polymer_scale_fixtures, generate_ring_scale_fixtures, write_p5_evidence_pack
 
 
 def test_p5_fixtures_deterministic_and_has_hetero_atoms() -> None:
@@ -19,6 +19,22 @@ def test_p5_fixtures_deterministic_and_has_hetero_atoms() -> None:
         assert fx.n_hetero > 0
         assert fx.types_z[0] == 6
         assert fx.types_z[-1] == 6
+
+
+def test_p5_ring_fixtures_deterministic_and_has_hetero_atoms() -> None:
+    fixtures1 = generate_ring_scale_fixtures(n_atoms_bins=[20, 50], samples_per_bin=3, seed=0)
+    fixtures2 = generate_ring_scale_fixtures(n_atoms_bins=[20, 50], samples_per_bin=3, seed=0)
+    assert fixtures1 == fixtures2
+
+    assert len(fixtures1) == 2 * 3
+    for fx in fixtures1:
+        assert fx.n_atoms == len(fx.types_z)
+        assert fx.n_atoms in {20, 50}
+        assert fx.n_hetero > 0
+        assert fx.types_z[0] == 6
+        assert fx.types_z[-1] == 6
+        assert any(z == 7 for z in fx.types_z)
+        assert any(z == 8 for z in fx.types_z)
 
 
 def test_p5_evidence_pack_contains_required_files_and_metadata(tmp_path: Path) -> None:
@@ -53,7 +69,9 @@ def test_p5_evidence_pack_contains_required_files_and_metadata(tmp_path: Path) -
         names = set(zf.namelist())
         for required in [
             "fixtures_polymer_scale.csv",
+            "fixtures_ring_scale.csv",
             "speedup_vs_n.csv",
+            "speedup_vs_n_by_family.csv",
             "speedup_vs_n.md",
             "timing_breakdown.csv",
             "summary.csv",
@@ -90,6 +108,36 @@ def test_p5_evidence_pack_contains_required_files_and_metadata(tmp_path: Path) -
             "cost_integration_logic_speedup_at_scale",
         ]:
             assert k in meta
+
+        assert meta["topology_families"] == ["polymer", "ring"]
+        assert meta["topology_gate_n_min"] == 200
+        assert meta["speedup_verdict_at_scale_polymer"] in {
+            "PASS_SPEEDUP_AT_SCALE",
+            "FAIL_SPEEDUP_AT_SCALE",
+            "INCONCLUSIVE_NOT_ENOUGH_SCALE_SAMPLES",
+            "FAIL_CORRECTNESS_AT_SCALE",
+            "NOT_VALID_DUE_TO_CORRECTNESS",
+        }
+        assert meta["speedup_verdict_at_scale_ring"] in {
+            "PASS_SPEEDUP_AT_SCALE",
+            "FAIL_SPEEDUP_AT_SCALE",
+            "INCONCLUSIVE_NOT_ENOUGH_SCALE_SAMPLES",
+            "FAIL_CORRECTNESS_AT_SCALE",
+            "NOT_VALID_DUE_TO_CORRECTNESS",
+        }
+        assert meta["topology_hardness_verdict"] in {
+            "NOT_VALID_DUE_TO_CORRECTNESS",
+            "ILLUSION_CONFIRMED_TOPOLOGY_DEPENDENT",
+            "SUCCESS_TOPOLOGY_ROBUST",
+            "NO_SPEEDUP_YET",
+        }
+
+        by_family_text = zf.read("speedup_vs_n_by_family.csv").decode("utf-8")
+        r_family = csv.DictReader(io.StringIO(by_family_text))
+        rows_family = list(r_family)
+        families = {str(row.get("family") or "") for row in rows_family}
+        assert "polymer" in families
+        assert "ring" in families
 
         timing_text = zf.read("timing_breakdown.csv").decode("utf-8")
         r = csv.DictReader(io.StringIO(timing_text))
@@ -133,4 +181,40 @@ def test_p5_correctness_passes_at_scale_for_eta_0_2(tmp_path: Path) -> None:
     with zipfile.ZipFile(zip_path, "r") as zf:
         meta = json.loads(zf.read("summary_metadata.json").decode("utf-8"))
         assert meta["integrator_correctness_verdict"] == "PASS_CORRECTNESS_AT_SCALE"
+
+        assert meta["integrator_correctness_verdict"] == "PASS_CORRECTNESS_AT_SCALE"
+
+
+def test_p5_4_topology_hardness_not_valid_if_correctness_fails(tmp_path: Path) -> None:
+    out_dir = tmp_path / "out"
+    cfg = P5Config(
+        n_atoms_bins=(20, 200),
+        samples_per_bin=1,
+        seed=0,
+        curve_id="dos_H",
+        energy_points=32,
+        dos_eta=0.05,
+        potential_scale_gamma=1.0,
+        edge_weight_mode="bond_order_delta_chi",
+        integrator_eps_abs=1e-6,
+        integrator_eps_rel=1e-4,
+        integrator_subdomains_max=16,
+        integrator_poly_degree_max=8,
+        integrator_quad_order_max=16,
+        integrator_eval_budget_max=256,
+        integrator_split_criterion="max_abs_error",
+        overhead_region_n_max=50,
+        gate_n_min=200,
+        correctness_gate_rate=1.1,  # >1.0 forces FAIL regardless of pass_rate
+        min_scale_samples=1,
+        speedup_gate_break_even=1.0,
+        speedup_gate_strong=2.0,
+    )
+    zip_path = write_p5_evidence_pack(out_dir=out_dir, cfg=cfg)
+    assert zip_path.exists()
+
+    with zipfile.ZipFile(zip_path, "r") as zf:
+        meta = json.loads(zf.read("summary_metadata.json").decode("utf-8"))
+        assert meta["integrator_correctness_verdict"] == "FAIL_CORRECTNESS_AT_SCALE"
+        assert meta["topology_hardness_verdict"] == "NOT_VALID_DUE_TO_CORRECTNESS"
 
