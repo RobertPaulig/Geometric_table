@@ -1670,3 +1670,36 @@ separation facts (computed on status==OK rows only):
     - potential_mode: static
     - potential_scale_gamma: 0.25
     - beta: None
+
+## accuracy-a1-isomers-2026-01-22-a1_3-r1
+
+- Source commit: 14970cf76d9f44d8f18e3a1df503e454353717e9
+- Release asset: https://github.com/RobertPaulig/Geometric_table/releases/download/accuracy-a1-isomers-2026-01-22-a1_3-r1/accuracy_a1_isomers_evidence_pack.zip
+- SHA256(accuracy_a1_isomers_evidence_pack.zip): D5DE1211A7C6ADF78419A6AA9ADCB8F530E5B6C68985363F70715CAE159361A5
+- Command:
+  python scripts/build_isomer_truth_v1.py
+  python scripts/accuracy_a1_isomers_sweep.py --experiment_id ACCURACY-A1.3 --input_csv data/accuracy/isomer_truth.v1.csv --out_dir out_accuracy_a1_isomers_a1_3 --edge_weight_modes unweighted --potential_modes static --gammas 0.15,0.18,0.20,0.22,0.24,0.25,0.26,0.28,0.30,0.32,0.35 --predictors logdet_shifted_eps --eps_values 1e-6,1e-5,1e-4,1e-3 --shift_values 0.0,1e-4,1e-3,1e-2 --baseline_gamma 1.0 --kpi_mean_spearman_by_group_min 0.55 --kpi_median_spearman_by_group_min 0.50
+- Outcome (facts from metrics.json):
+  - rows_total: 35
+  - groups_total: 10
+  - verdict: SIGNAL_OK (mean_spearman_pred_vs_truth >= 0.2)
+  - kpi_verdict: FAIL (mean=0.3899999999999999, median=0.5499999999999998)
+  - baseline (A1.1; H_trace):
+    - mean_spearman_pred_vs_truth: 0.0533647488893285
+    - median_spearman_by_group: 0.3054092553389459
+    - pairwise_order_accuracy_overall: 0.5
+    - pairwise_order_accuracy_by_group_mean: 0.42000000000000004
+    - top1_accuracy_mean: 0.2
+  - best (A1.3; narrow calibration):
+    - mean_spearman_pred_vs_truth: 0.3899999999999999
+    - median_spearman_by_group: 0.5499999999999998
+    - pairwise_order_accuracy_overall: 0.6739130434782609
+    - pairwise_order_accuracy_by_group_mean: 0.6633333333333333
+    - top1_accuracy_mean: 0.5
+  - best_config:
+    - predictor: logdet_shifted_eps
+    - edge_weight_mode: unweighted
+    - potential_mode: static
+    - potential_scale_gamma: 0.28
+    - eps: 1e-06
+    - shift: 0.0
