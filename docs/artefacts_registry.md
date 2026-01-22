@@ -1726,3 +1726,31 @@ separation facts (computed on status==OK rows only):
     - edge_weight_mode: bond_order
     - potential_variant: epsilon_z_plus_features
     - gamma: 0.28
+
+## accuracy-a1-isomers-2026-01-22-a1_5-r2
+
+- Source commit: 9f61b4e55dda142e6fed8668fe074532c4c53d10
+- Release asset: https://github.com/RobertPaulig/Geometric_table/releases/download/accuracy-a1-isomers-2026-01-22-a1_5-r2/accuracy_a1_isomers_evidence_pack.zip
+- SHA256(accuracy_a1_isomers_evidence_pack.zip): 101D6FED30C26B3A2B049203C270E51E118E9EB4164F39A579E3FEDF9FBFD7A1
+- Command:
+  python scripts/build_isomer_truth_v1.py
+  python scripts/accuracy_a1_isomers_pairwise_rank.py --experiment_id ACCURACY-A1.5 --input_csv data/accuracy/isomer_truth.v1.csv --out_dir out_accuracy_a1_isomers_a1_5 --seed 0 --gamma 0.28 --model_type pairwise_logistic_l2 --model_l2_lambda 1e-3 --model_lr 0.1 --model_max_iter 2000 --model_tol 1e-6 --kpi_mean_spearman_by_group_test_min 0.55 --kpi_median_spearman_by_group_test_min 0.55 --kpi_pairwise_order_accuracy_overall_test_min 0.70 --kpi_top1_accuracy_mean_test_min 0.40
+- Outcome (facts from metrics.json):
+  - rows_total: 35
+  - groups_total: 10
+  - cv_method: LOOCV_GROUP_ID
+  - model_type: pairwise_logistic_l2
+  - kpi_verdict: FAIL (mean_spearman_by_group_test=0.36999999999999994, median_spearman_by_group_test=0.5499999999999998, pairwise_order_accuracy_overall_test=0.6956521739130435, top1_accuracy_mean_test=0.5)
+  - test_metrics:
+    - mean_spearman_by_group: 0.36999999999999994
+    - median_spearman_by_group: 0.5499999999999998
+    - pairwise_order_accuracy_overall: 0.6956521739130435
+    - top1_accuracy_mean: 0.5
+  - operator:
+    - edge_weight_mode: bond_order
+    - potential_variant: epsilon_z_plus_features_v2
+    - gamma: 0.28
+  - worst_groups:
+    - C11H21B1N2O4: spearman=-0.4999999999999999, top1=0.0, pairwise_acc=0.3333333333333333
+    - C15H24O1: spearman=-0.4999999999999999, top1=0.0, pairwise_acc=0.3333333333333333
+    - C21H23N3O3: spearman=-0.4999999999999999, top1=0.0, pairwise_acc=0.3333333333333333
