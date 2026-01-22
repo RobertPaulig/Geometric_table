@@ -6,6 +6,7 @@ import json
 import math
 import os
 import platform
+import shutil
 import statistics
 import subprocess
 import sys
@@ -337,6 +338,36 @@ def run_accuracy_a1_isomers(
         "",
     ]
     (out_dir / "index.md").write_text("\n".join(report) + "\n", encoding="utf-8")
+
+    # Add provenance inputs to the evidence pack (append-only, audit-grade).
+    # (a) canonical truth used by the run
+    # (b) contract doc (schema + invariants)
+    # (c) raw truth CSV + sha256 file (provenance)
+    repo_root = Path(__file__).resolve().parents[1]
+    extra_files: list[tuple[Path, Path]] = [
+        (Path("data/accuracy/isomer_truth.v1.csv"), input_csv),
+        (
+            Path("docs/contracts/isomer_truth.v1.md"),
+            repo_root / "docs/contracts/isomer_truth.v1.md",
+        ),
+        (
+            Path("data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv"),
+            repo_root / "data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv",
+        ),
+        (
+            Path("data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv.sha256"),
+            repo_root / "data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv.sha256",
+        ),
+    ]
+    for rel_dst, src in extra_files:
+        try:
+            if not src.exists():
+                continue
+            dst = out_dir / rel_dst
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(src, dst)
+        except Exception as exc:
+            raise AccuracyA1Error(f"failed to copy provenance file {src} -> {rel_dst}") from exc
 
     # Pack (manifest + checksums + zip) per release checklist.
     config = dict(metrics["config"])

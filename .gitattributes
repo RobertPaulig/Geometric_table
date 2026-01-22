@@ -1,0 +1,2 @@
+# Keep ACCURACY truth artifacts byte-stable for SHA256 verification (no CRLF drift).
+data/accuracy/** text eol=lf

@@ -556,10 +556,41 @@ DoD (optimization is DONE only when the truth-chain is closed):
 Hard rule:
 - No P5.6 contract/threshold/fixtures/baseline parameter changes in P5.8 PR (only integration_logic optimization).
 
-# ROADMAP — HETERO-2 как SaaS (Pfizer-ready evidence pipeline)
+---
+
+## Accuracy Roadmap (expensive truth / calibration)
+
+Цель: зафиксировать "expensive truth" (DFT) и получить воспроизводимый baseline-контур, который можно калибровать без дрейфа протокола.
+
+### ACCURACY-A1 (Isomers) — DFT truth + baseline operator proxy
+
+#### ACCURACY-A1.0 — Truth & Contract
+Статус: [ ] planned  [ ] in-progress  [x] done
+
+Proof:
+- PR #201 (code): https://github.com/RobertPaulig/Geometric_table/pull/201
+- Merge commit: https://github.com/RobertPaulig/Geometric_table/commit/517a1f125afb43b54b6ee961ff48b55c29af5335
+- CI run (3/3 ci/* on merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21242006439
+
+DoD:
+- Raw truth CSV tracked at `data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv` with adjacent `.sha256`.
+- Canonical truth generated and tracked: `data/accuracy/isomer_truth.v1.csv`.
+- Contract doc merged: `docs/contracts/isomer_truth.v1.md`.
+- Runner produces `summary.csv/metrics.json/index.md/manifest.json/checksums.sha256/evidence_pack.zip`: `scripts/accuracy_a1_isomers_run.py`.
+
+#### ACCURACY-A1.1 — Evidence pack release (truth-chain closure)
+Статус: [ ] planned  [x] in-progress  [ ] done
+
+DoD (A1 is DONE only when the truth-chain is closed):
+- publish-run on main produces an evidence pack asset + `.sha256`.
+- release tag + asset URL + SHA256 recorded in `docs/artefacts_registry.md`.
+- lineage entry added to `docs/90_lineage.md` (append-only).
+- main CI 3/3 green on merge SHAs of registry + lineage PRs.
+
+# ROADMAP - HETERO-2 как SaaS (Pfizer-ready evidence pipeline)
 
 Назначение: зафиксировать целевую картину SaaS и вести разработку через обязательные вехи (milestones).
-Этот документ — “истина по развитию продукта” (в отличие от сырого склада идей в backlog).
+Этот документ - "истина по развитию продукта" (в отличие от сырого склада идей в backlog).
 
 ---
 
