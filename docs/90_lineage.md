@@ -1005,3 +1005,20 @@
 - Run: https://github.com/RobertPaulig/Geometric_table/actions/runs/21228738744
 - Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/196 (merge: a3e8ad4071640a42caf503a12d16d8f38d952032)
 - Separation facts (computed on status==OK rows only; no auto-threshold gating): Delta_median_slack(GOOD - BAD-constant)=0.500000; Delta_PASS_rate(GOOD - BAD-constant)=1.000000; Delta_median_slack(GOOD - BAD-random)=0.000000; Delta_PASS_rate(GOOD - BAD-random)=0.400000
+
+### 2026-01-22 - VALUE-M2.1-SLACK-SIGNAL-REPAIR-1: known bad/good evidence packs (r2; slack distribution stats)
+- Code PR (add slack distribution stats): https://github.com/RobertPaulig/Geometric_table/pull/198 (merge: 6cbcc31cbd20749cecc0f62d4b68986801c801e8)
+- CI run (3/3 ci/* on code merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21230339035
+- Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/value-known-bad-good-2026-01-21-r2
+- Source commit: 6cbcc31cbd20749cecc0f62d4b68986801c801e8
+- Run: https://github.com/RobertPaulig/Geometric_table/actions/runs/21230392968
+- Assets:
+  - BAD-constant: https://github.com/RobertPaulig/Geometric_table/releases/download/value-known-bad-good-2026-01-21-r2/value_known_bad_good_BAD-constant_evidence_pack.zip
+    - SHA256: AC12456914248E6D1D0A44AD1827E367532B2A9452B77CA22D26A8A77BB84EE8
+  - BAD-random: https://github.com/RobertPaulig/Geometric_table/releases/download/value-known-bad-good-2026-01-21-r2/value_known_bad_good_BAD-random_evidence_pack.zip
+    - SHA256: CE1DC0C1CD03DDA63F0078ECC5F4B71F3CE74B1BE4A9643790B3EE9A552676B5
+  - GOOD-synthetic: https://github.com/RobertPaulig/Geometric_table/releases/download/value-known-bad-good-2026-01-21-r2/value_known_bad_good_GOOD-synthetic_evidence_pack.zip
+    - SHA256: 84F5215A583D73481DB7612FA92D90BD54AB5BF2D310ECE54BE6667E5FFECEE9
+- Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/199 (merge: 527749a81c331521b20f602890da0aeaa5bc5c71)
+- CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21230473360
+- Separation facts (computed on status==OK rows only; OK=200): Δ_PASS_rate(GOOD - BAD-random)=0.400000; Δ_median_slack(GOOD - BAD-random)=0.000000; Δ_mean_slack(GOOD - BAD-random)=0.311111; Δ_p25_slack(GOOD - BAD-random)=1.000000; Δ_p75_slack(GOOD - BAD-random)=0.000000
