@@ -1053,3 +1053,18 @@
 - Facts (metrics.json): rows_total=35; groups_total=10; verdict=SIGNAL_OK (mean_spearman_pred_vs_truth>=0.2); baseline_mean_spearman=-0.022816061641181683; baseline_pairwise_order_accuracy_overall=0.5434782608695652; baseline_top1_accuracy_mean=0.3; best_mean_spearman=0.3799999999999999; best_pairwise_order_accuracy_overall=0.6956521739130435; best_top1_accuracy_mean=0.5; best_config(predictor=logdet_shifted_eps, edge_weight_mode=unweighted, potential_mode=static, gamma=0.25, beta=None)
 - Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/208 (merge: 47f723f7e1e84864e1fe585052a9e4e9aa491adc)
 - CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21246722991
+
+### 2026-01-22 - ACCURACY-A1.3 narrow calibration sweep (logdet_shifted_eps gamma/eps/shift grid)
+
+- Code PR (A1.3 sweep params + group-aware metrics + publish workflow): https://github.com/RobertPaulig/Geometric_table/pull/211 (merge: 14970cf76d9f44d8f18e3a1df503e454353717e9)
+- CI run (3/3 ci/* on code merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21250567759
+- Publish run (success): https://github.com/RobertPaulig/Geometric_table/actions/runs/21250626844
+- Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/accuracy-a1-isomers-2026-01-22-a1_3-r1
+- Source commit: 14970cf76d9f44d8f18e3a1df503e454353717e9
+- Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/accuracy-a1-isomers-2026-01-22-a1_3-r1/accuracy_a1_isomers_evidence_pack.zip
+- SHA256(accuracy_a1_isomers_evidence_pack.zip): D5DE1211A7C6ADF78419A6AA9ADCB8F530E5B6C68985363F70715CAE159361A5 (verified by download)
+- Pack contains (provenance): data/accuracy/isomer_truth.v1.csv; docs/contracts/isomer_truth.v1.md; data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv (+ .sha256); provenance.json
+- Facts (metrics.json): rows_total=35; groups_total=10; verdict=SIGNAL_OK (mean_spearman_pred_vs_truth>=0.2); baseline_mean_spearman=0.0533647488893285; baseline_median_spearman_by_group=0.3054092553389459; baseline_pairwise_overall=0.5; baseline_pairwise_by_group_mean=0.42000000000000004; baseline_top1=0.2; best_mean_spearman=0.3899999999999999; best_median_spearman_by_group=0.5499999999999998; best_pairwise_overall=0.6739130434782609; best_pairwise_by_group_mean=0.6633333333333333; best_top1=0.5; best_config(predictor=logdet_shifted_eps, edge_weight_mode=unweighted, potential_mode=static, gamma=0.28, eps=1e-6, shift=0.0)
+- KPI A1.3 gates (mean>=0.55 & median>=0.50): FAIL (mean=0.3899999999999999, median=0.5499999999999998)
+- Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/212 (merge: 9364fcc58fb79d93e4bfe16b288dd2a75b2e58b8)
+- CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21250755897
