@@ -1628,3 +1628,18 @@ separation facts (computed on status==OK rows only):
 - Δ_median_slack(GOOD - BAD-random): 0.000000
 - Δ_p75_slack(GOOD - BAD-random): 0.000000
 - Δ_PASS_rate(GOOD - BAD-random): 0.400000
+
+## accuracy-a1-isomers-2026-01-22-r1
+
+- Source commit: 0efe6602c636bc587745f6acfa95c6295dc12f0c
+- Release asset: https://github.com/RobertPaulig/Geometric_table/releases/download/accuracy-a1-isomers-2026-01-22-r1/accuracy_a1_isomers_evidence_pack.zip
+- SHA256(accuracy_a1_isomers_evidence_pack.zip): A44624D1B705CA000FEC2DB92EE871E29ACD052E51F30B1C06F7468CF8258A89
+- Command:
+  python scripts/build_isomer_truth_v1.py
+  python scripts/accuracy_a1_isomers_run.py --input_csv data/accuracy/isomer_truth.v1.csv --out_dir out_accuracy_a1_isomers --potential_scale_gamma 1.0
+- Outcome (facts from metrics.json):
+  - rows_total: 35
+  - groups_total: 10
+  - mean_spearman_pred_vs_truth: 0.0533647488893285
+  - pairwise_order_accuracy_overall: 0.5
+  - top1_accuracy_mean: 0.2
