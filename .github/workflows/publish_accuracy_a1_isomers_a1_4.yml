@@ -137,14 +137,14 @@ jobs:
               lines.append(f"    - potential_variant: {op.get('potential_variant')}")
               lines.append(f"    - gamma: {op.get('gamma')}")
 
-          facts_md = \"\\n\".join(lines) + \"\\n\"
-          Path(\"out_accuracy_a1_isomers_a1_4/accuracy_a1_isomers_facts.md\").write_text(facts_md, encoding=\"utf-8\")
-          gh_out = os.environ.get(\"GITHUB_OUTPUT\")
+          facts_md = "\\n".join(lines) + "\\n"
+          Path("out_accuracy_a1_isomers_a1_4/accuracy_a1_isomers_facts.md").write_text(facts_md, encoding="utf-8")
+          gh_out = os.environ.get("GITHUB_OUTPUT")
           if gh_out:
-              with open(gh_out, \"a\", encoding=\"utf-8\") as f:
-                  f.write(\"facts_md<<EOF\\n\")
+              with open(gh_out, "a", encoding="utf-8") as f:
+                  f.write("facts_md<<EOF\\n")
                   f.write(facts_md)
-                  f.write(\"EOF\\n\")
+                  f.write("EOF\\n")
           PY
 
       - name: Compute SHA256
