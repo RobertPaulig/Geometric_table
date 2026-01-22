@@ -1022,3 +1022,19 @@
 - Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/199 (merge: 527749a81c331521b20f602890da0aeaa5bc5c71)
 - CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21230473360
 - Separation facts (computed on status==OK rows only; OK=200): Δ_PASS_rate(GOOD - BAD-random)=0.400000; Δ_median_slack(GOOD - BAD-random)=0.000000; Δ_mean_slack(GOOD - BAD-random)=0.311111; Δ_p25_slack(GOOD - BAD-random)=1.000000; Δ_p75_slack(GOOD - BAD-random)=0.000000
+
+### 2026-01-22 - ACCURACY-A1 isomers baseline (DFT truth ordering vs H_trace proxy)
+
+- Code PR (truth contract + runner): https://github.com/RobertPaulig/Geometric_table/pull/201 (merge: 517a1f125afb43b54b6ee961ff48b55c29af5335)
+- Code PR (publish workflow + provenance in pack): https://github.com/RobertPaulig/Geometric_table/pull/202 (merge: 59a9461ec7ebfd2f13e97f321375d2b549baac49)
+- Code PR (publish workflow fix: facts step): https://github.com/RobertPaulig/Geometric_table/pull/203 (merge: 0efe6602c636bc587745f6acfa95c6295dc12f0c)
+- Publish run (failed; fixed in PR #203): https://github.com/RobertPaulig/Geometric_table/actions/runs/21242357438
+- Publish run (success): https://github.com/RobertPaulig/Geometric_table/actions/runs/21242635179
+- Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/accuracy-a1-isomers-2026-01-22-r1
+- Source commit: 0efe6602c636bc587745f6acfa95c6295dc12f0c
+- Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/accuracy-a1-isomers-2026-01-22-r1/accuracy_a1_isomers_evidence_pack.zip
+- SHA256(accuracy_a1_isomers_evidence_pack.zip): A44624D1B705CA000FEC2DB92EE871E29ACD052E51F30B1C06F7468CF8258A89 (verified by download)
+- Pack contains (provenance): data/accuracy/isomer_truth.v1.csv; docs/contracts/isomer_truth.v1.md; data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv (+ .sha256)
+- Facts (metrics.json): rows_total=35; groups_total=10; mean_spearman_pred_vs_truth=0.0533647488893285; pairwise_order_accuracy_overall=0.5; top1_accuracy_mean=0.2
+- Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/204 (merge: ee836c9b0dc432e8eaf6a4311853eb4a67338409)
+- CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21242765078
