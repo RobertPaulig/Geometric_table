@@ -1038,3 +1038,18 @@
 - Facts (metrics.json): rows_total=35; groups_total=10; mean_spearman_pred_vs_truth=0.0533647488893285; pairwise_order_accuracy_overall=0.5; top1_accuracy_mean=0.2
 - Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/204 (merge: ee836c9b0dc432e8eaf6a4311853eb4a67338409)
 - CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21242765078
+
+### 2026-01-22 - ACCURACY-A1.2 isomers signal repair sweep (operator-spectrum predictors)
+
+- Code PR (sweep runner + publish workflow): https://github.com/RobertPaulig/Geometric_table/pull/206 (merge: 89c8e9d87ead70063a2b2bdb532a3d37d245cbd1)
+- Code PR (publish workflow fix: facts step): https://github.com/RobertPaulig/Geometric_table/pull/207 (merge: 13c2ee2d66bad98a811962181b4198c5f271a9d8)
+- Publish run (failed; fixed in PR #207): https://github.com/RobertPaulig/Geometric_table/actions/runs/21246384599
+- Publish run (success): https://github.com/RobertPaulig/Geometric_table/actions/runs/21246627533
+- Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/accuracy-a1-isomers-2026-01-22-r2
+- Source commit: 13c2ee2d66bad98a811962181b4198c5f271a9d8
+- Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/accuracy-a1-isomers-2026-01-22-r2/accuracy_a1_isomers_evidence_pack.zip
+- SHA256(accuracy_a1_isomers_evidence_pack.zip): E04117E5AB26B7248507AEA21159F98512274B8051ADFFD30D0ADA98F2D4A0D4 (verified by download)
+- Pack contains (provenance): data/accuracy/isomer_truth.v1.csv; docs/contracts/isomer_truth.v1.md; data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv (+ .sha256)
+- Facts (metrics.json): rows_total=35; groups_total=10; verdict=SIGNAL_OK (mean_spearman_pred_vs_truth>=0.2); baseline_mean_spearman=-0.022816061641181683; baseline_pairwise_order_accuracy_overall=0.5434782608695652; baseline_top1_accuracy_mean=0.3; best_mean_spearman=0.3799999999999999; best_pairwise_order_accuracy_overall=0.6956521739130435; best_top1_accuracy_mean=0.5; best_config(predictor=logdet_shifted_eps, edge_weight_mode=unweighted, potential_mode=static, gamma=0.25, beta=None)
+- Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/208 (merge: 47f723f7e1e84864e1fe585052a9e4e9aa491adc)
+- CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21246722991
