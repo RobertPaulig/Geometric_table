@@ -1703,3 +1703,26 @@ separation facts (computed on status==OK rows only):
     - potential_scale_gamma: 0.28
     - eps: 1e-06
     - shift: 0.0
+
+## accuracy-a1-isomers-2026-01-22-a1_4-r1
+
+- Source commit: 04eefabd05c262646d29ce93830951514646ab52
+- Release asset: https://github.com/RobertPaulig/Geometric_table/releases/download/accuracy-a1-isomers-2026-01-22-a1_4-r1/accuracy_a1_isomers_evidence_pack.zip
+- SHA256(accuracy_a1_isomers_evidence_pack.zip): 785DD76FCD254EB46E447693BF10FC4C97BD33468BF3AE7FF850D6201DED864B
+- Command:
+  python scripts/build_isomer_truth_v1.py
+  python scripts/accuracy_a1_isomers_feature_upgrade.py --experiment_id ACCURACY-A1.4 --input_csv data/accuracy/isomer_truth.v1.csv --out_dir out_accuracy_a1_isomers_a1_4 --seed 0 --n_train_groups 7 --gamma 0.28 --potential_variant epsilon_z_plus_features --v_deg_coeff 0.10 --v_arom_coeff 0.20 --v_charge_coeff 0.50 --logdet_eps 1e-6 --logdet_shift 0.0 --heat_betas 0.5,1.0,2.0 --entropy_beta 1.0 --ridge_lambda 1e-3 --kpi_mean_spearman_by_group_test_min 0.55 --kpi_median_spearman_by_group_test_min 0.55 --kpi_pairwise_order_accuracy_overall_test_min 0.65 --kpi_top1_accuracy_mean_test_min 0.40
+- Outcome (facts from metrics.json):
+  - rows_total: 35
+  - groups_total: 10
+  - split: train_groups=7, test_groups=3
+  - kpi_verdict: FAIL (mean_spearman_by_group_test=0.5999999999999999, median_spearman_by_group_test=0.4999999999999999, pairwise_order_accuracy_overall_test=0.75, top1_accuracy_mean_test=0.3333333333333333)
+  - test_metrics:
+    - mean_spearman_by_group: 0.5999999999999999
+    - median_spearman_by_group: 0.4999999999999999
+    - pairwise_order_accuracy_overall: 0.75
+    - top1_accuracy_mean: 0.3333333333333333
+  - operator:
+    - edge_weight_mode: bond_order
+    - potential_variant: epsilon_z_plus_features
+    - gamma: 0.28
