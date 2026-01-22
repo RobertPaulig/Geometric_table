@@ -1068,3 +1068,24 @@
 - KPI A1.3 gates (mean>=0.55 & median>=0.50): FAIL (mean=0.3899999999999999, median=0.5499999999999998)
 - Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/212 (merge: 9364fcc58fb79d93e4bfe16b288dd2a75b2e58b8)
 - CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21250755897
+
+### 2026-01-22 - ACCURACY-A1.4 feature upgrade (chemistry-aware operator + multi-feature ridge; train/test split)
+
+- Parent release (A1.3): https://github.com/RobertPaulig/Geometric_table/releases/tag/accuracy-a1-isomers-2026-01-22-a1_3-r1
+- Code PR (A1.4 runner + tests + publish workflow + roadmap): https://github.com/RobertPaulig/Geometric_table/pull/214 (merge: dacfb1512c54b033da783a1149e59805e4ed0a64)
+- Code PR (publish workflow fix: facts step quoting): https://github.com/RobertPaulig/Geometric_table/pull/215 (merge: bdc279f492ccf4c76b469158867797879fa6af40)
+- Code PR (publish workflow fix: facts output newlines): https://github.com/RobertPaulig/Geometric_table/pull/216 (merge: b6498550160e7e4b3d998ffb0878f4d88027ada9)
+- Code PR (publish workflow fix: GITHUB_OUTPUT newlines): https://github.com/RobertPaulig/Geometric_table/pull/217 (merge: 04eefabd05c262646d29ce93830951514646ab52)
+- Publish run (failed): https://github.com/RobertPaulig/Geometric_table/actions/runs/21256741669
+- Publish run (failed): https://github.com/RobertPaulig/Geometric_table/actions/runs/21256956558
+- Publish run (failed): https://github.com/RobertPaulig/Geometric_table/actions/runs/21257134909
+- Publish run (failed; required contexts gate): https://github.com/RobertPaulig/Geometric_table/actions/runs/21257304691
+- Publish run (success): https://github.com/RobertPaulig/Geometric_table/actions/runs/21257398707
+- Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/accuracy-a1-isomers-2026-01-22-a1_4-r1
+- Source commit: 04eefabd05c262646d29ce93830951514646ab52
+- Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/accuracy-a1-isomers-2026-01-22-a1_4-r1/accuracy_a1_isomers_evidence_pack.zip
+- SHA256(accuracy_a1_isomers_evidence_pack.zip): 785DD76FCD254EB46E447693BF10FC4C97BD33468BF3AE7FF850D6201DED864B (verified by download)
+- Pack contains (provenance): data/accuracy/isomer_truth.v1.csv; docs/contracts/isomer_truth.v1.md; data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv (+ .sha256); data/atoms_db_v1.json; predictions.csv; group_metrics.csv; best_config.json
+- Facts (metrics.json): rows_total=35; groups_total=10; split(train_groups=7, test_groups=3); kpi_verdict=FAIL; test_mean_spearman_by_group=0.5999999999999999; test_median_spearman_by_group=0.4999999999999999; test_pairwise_order_accuracy_overall=0.75; test_top1_accuracy_mean=0.3333333333333333
+- Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/218 (merge: c8144c8d12781fa18fa8db140f4e0dc7dd42e291)
+- CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21257564605
