@@ -618,7 +618,19 @@ Hard rule:
 - No large dataset downloads (SPICE hdf5 etc). Only input is `data/accuracy/isomer_truth.v1.csv`.
 
 #### ACCURACY-A1.3 - Narrow calibration around A1.2 best-config (logdet_shifted_eps)
-Status: [ ] planned  [x] in-progress  [ ] done
+Status: [ ] planned  [ ] in-progress  [x] done
+
+Proof:
+- Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/accuracy-a1-isomers-2026-01-22-a1_3-r1
+- Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/212 (merge: 9364fcc58fb79d93e4bfe16b288dd2a75b2e58b8)
+- Lineage PR: https://github.com/RobertPaulig/Geometric_table/pull/213 (merge: 789deed5a4386b8c45db2379e6e2e0efdb2d38c1)
+- CI run (3/3 ci/* on lineage merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21251081388
+
+Outcome (facts):
+- Release tag: `accuracy-a1-isomers-2026-01-22-a1_3-r1`
+- SHA256(zip): `D5DE1211A7C6ADF78419A6AA9ADCB8F530E5B6C68985363F70715CAE159361A5`
+- KPI: `mean_spearman_by_group = 0.39` (<0.55; FAIL), `median_spearman_by_group = 0.55` (>=0.50; PASS)
+- Best config (fact): `gamma=0.28, eps=1e-6, shift=0.0`
 
 Goal:
 - Narrow sweep around A1.2 best predictor (`logdet_shifted_eps`, `gamma≈0.25`) using group-aware metrics (per `group_id`).
@@ -632,6 +644,22 @@ DoD (facts):
 
 Hard rule:
 - No large dataset downloads (SPICE hdf5 etc). Only input is `data/accuracy/isomer_truth.v1.csv`.
+
+#### ACCURACY-A1.4 - Feature Upgrade (chemistry-aware operator + multi-feature predictor)
+Status: [ ] planned  [x] in-progress  [ ] done
+
+Goal:
+- Improve isomer ordering quality with a chemistry-aware operator and a multi-feature predictor, evaluated on a holdout split by `group_id`.
+
+DoD (facts):
+- Truth dataset unchanged; canonical truth remains reproducible from raw.
+- Train/test split is by `group_id` (7 train groups / 3 test groups, fixed seed).
+- Evidence pack includes `predictions.csv`, `group_metrics.csv`, `metrics.json` (train/test/overall), `best_config.json`, `provenance.json`, `manifest.json`, `checksums.sha256`.
+- KPI gates (test split): `mean_spearman_by_group_test >= 0.55`, `median_spearman_by_group_test >= 0.55`, `pairwise_order_accuracy_overall_test >= 0.65`, `top1_accuracy_mean_test >= 0.40`.
+- Truth-chain closure: publish-run → release(zip+.sha256) → registry → lineage → main CI 3/3.
+
+Hard rule:
+- Do not modify truth files: `data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv`, `data/accuracy/isomer_truth.v1.csv`, `docs/contracts/isomer_truth.v1.md`.
 
 # ROADMAP - HETERO-2 как SaaS (Pfizer-ready evidence pipeline)
 
