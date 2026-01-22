@@ -617,6 +617,22 @@ DoD (truth-chain closure + best-config facts):
 Hard rule:
 - No large dataset downloads (SPICE hdf5 etc). Only input is `data/accuracy/isomer_truth.v1.csv`.
 
+#### ACCURACY-A1.3 - Narrow calibration around A1.2 best-config (logdet_shifted_eps)
+Status: [ ] planned  [x] in-progress  [ ] done
+
+Goal:
+- Narrow sweep around A1.2 best predictor (`logdet_shifted_eps`, `gamma≈0.25`) using group-aware metrics (per `group_id`).
+
+DoD (facts):
+- Truth dataset unchanged; canonical truth remains reproducible from raw.
+- Evidence pack includes `sweep_results.csv`, `best_config.json`, `metrics.json`, `provenance.json`, `checksums.sha256`, `manifest.json`.
+- `metrics.json` includes group-aware fields: `spearman_by_group`, `mean_spearman_by_group`, `median_spearman_by_group`, `pairwise_order_accuracy_by_group_mean`, `top1_accuracy_mean`.
+- KPI targets (facts, not a gate): `mean_spearman_by_group >= 0.55` and `median_spearman_by_group >= 0.50`.
+- Truth-chain closure: publish-run → release(zip+.sha256) → registry → lineage → main CI 3/3.
+
+Hard rule:
+- No large dataset downloads (SPICE hdf5 etc). Only input is `data/accuracy/isomer_truth.v1.csv`.
+
 # ROADMAP - HETERO-2 как SaaS (Pfizer-ready evidence pipeline)
 
 Назначение: зафиксировать целевую картину SaaS и вести разработку через обязательные вехи (milestones).
