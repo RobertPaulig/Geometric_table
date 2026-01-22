@@ -1549,3 +1549,82 @@ separation facts (computed on status==OK rows only):
 - Δ_PASS_rate(GOOD - BAD-constant): 1.000000
 - Δ_median_slack(GOOD - BAD-random): 0.000000
 - Δ_PASS_rate(GOOD - BAD-random): 0.400000
+
+## value-known-bad-good-2026-01-21-r2
+
+- Source commit: 6cbcc31cbd20749cecc0f62d4b68986801c801e8
+
+- Variant: BAD-constant
+  - Release asset: https://github.com/RobertPaulig/Geometric_table/releases/download/value-known-bad-good-2026-01-21-r2/value_known_bad_good_BAD-constant_evidence_pack.zip
+  - SHA256(value_known_bad_good_BAD-constant_evidence_pack.zip): AC12456914248E6D1D0A44AD1827E367532B2A9452B77CA22D26A8A77BB84EE8
+  - Command:
+    python scripts/pilot_generate_input.py --out_dir out_value_m2/suite --rows 200 --k_decoys 20 --seed 0 --full_cover_count 3
+    (scores variant) BAD-constant: all scores equal
+    hetero2-batch --input out_value_m2/suite/input.csv --out_dir out_value_m2/BAD-constant --artifacts light --score_mode external_scores --scores_input out_value_m2/score_variants/scores_BAD-constant.json --k_decoys 20 --workers 2 --timeout_s 60 --maxtasksperchild 100 --seed_strategy per_row --seed 0 --zip_pack
+  - Outcome (facts from summary.csv):
+  - rows_total: 200
+  - rows_ok: 200
+  - status_counts: OK=200, SKIP=0, ERROR=0
+  - top_skip_reasons: (none)
+  - share_rows_with_n_decoys_gt_0: 1.000 (100.0%)
+  - mean_slack: -0.500000
+  - p25_slack: -0.500000
+  - median_slack: -0.500000
+  - p75_slack: -0.500000
+  - pass_rate: 0.000000
+
+- Variant: BAD-random
+  - Release asset: https://github.com/RobertPaulig/Geometric_table/releases/download/value-known-bad-good-2026-01-21-r2/value_known_bad_good_BAD-random_evidence_pack.zip
+  - SHA256(value_known_bad_good_BAD-random_evidence_pack.zip): CE1DC0C1CD03DDA63F0078ECC5F4B71F3CE74B1BE4A9643790B3EE9A552676B5
+  - Command:
+    python scripts/pilot_generate_input.py --out_dir out_value_m2/suite --rows 200 --k_decoys 20 --seed 0 --full_cover_count 3
+    (scores variant) BAD-random: random scores (seed=0)
+    hetero2-batch --input out_value_m2/suite/input.csv --out_dir out_value_m2/BAD-random --artifacts light --score_mode external_scores --scores_input out_value_m2/score_variants/scores_BAD-random.json --k_decoys 20 --workers 2 --timeout_s 60 --maxtasksperchild 100 --seed_strategy per_row --seed 0 --zip_pack
+  - Outcome (facts from summary.csv):
+  - rows_total: 200
+  - rows_ok: 200
+  - status_counts: OK=200, SKIP=0, ERROR=0
+  - top_skip_reasons: (none)
+  - share_rows_with_n_decoys_gt_0: 1.000 (100.0%)
+  - mean_slack: -0.311111
+  - p25_slack: -1.000000
+  - median_slack: 0.000000
+  - p75_slack: 0.000000
+  - pass_rate: 0.600000
+
+- Variant: GOOD-synthetic
+  - Release asset: https://github.com/RobertPaulig/Geometric_table/releases/download/value-known-bad-good-2026-01-21-r2/value_known_bad_good_GOOD-synthetic_evidence_pack.zip
+  - SHA256(value_known_bad_good_GOOD-synthetic_evidence_pack.zip): 84F5215A583D73481DB7612FA92D90BD54AB5BF2D310ECE54BE6667E5FFECEE9
+  - Command:
+    python scripts/pilot_generate_input.py --out_dir out_value_m2/suite --rows 200 --k_decoys 20 --seed 0 --full_cover_count 3
+    (scores variant) GOOD-synthetic: original=1.0, decoys=0.0
+    hetero2-batch --input out_value_m2/suite/input.csv --out_dir out_value_m2/GOOD-synthetic --artifacts light --score_mode external_scores --scores_input out_value_m2/score_variants/scores_GOOD-synthetic.json --k_decoys 20 --workers 2 --timeout_s 60 --maxtasksperchild 100 --seed_strategy per_row --seed 0 --zip_pack
+  - Outcome (facts from summary.csv):
+  - rows_total: 200
+  - rows_ok: 200
+  - status_counts: OK=200, SKIP=0, ERROR=0
+  - top_skip_reasons: (none)
+  - share_rows_with_n_decoys_gt_0: 1.000 (100.0%)
+  - mean_slack: 0.000000
+  - p25_slack: 0.000000
+  - median_slack: 0.000000
+  - p75_slack: 0.000000
+  - pass_rate: 1.000000
+
+- Separation facts (OK-only; no auto-threshold gating):
+separation facts (computed on status==OK rows only):
+- BAD-constant: rows_ok=200/200, mean_slack=-0.500000, p25_slack=-0.500000, median_slack=-0.500000, p75_slack=-0.500000, pass_rate=0.000000
+- BAD-random: rows_ok=200/200, mean_slack=-0.311111, p25_slack=-1.000000, median_slack=0.000000, p75_slack=0.000000, pass_rate=0.600000
+- GOOD-synthetic: rows_ok=200/200, mean_slack=0.000000, p25_slack=0.000000, median_slack=0.000000, p75_slack=0.000000, pass_rate=1.000000
+
+- Δ_mean_slack(GOOD - BAD-constant): 0.500000
+- Δ_p25_slack(GOOD - BAD-constant): 0.500000
+- Δ_median_slack(GOOD - BAD-constant): 0.500000
+- Δ_p75_slack(GOOD - BAD-constant): 0.500000
+- Δ_PASS_rate(GOOD - BAD-constant): 1.000000
+
+- Δ_mean_slack(GOOD - BAD-random): 0.311111
+- Δ_p25_slack(GOOD - BAD-random): 1.000000
+- Δ_median_slack(GOOD - BAD-random): 0.000000
+- Δ_p75_slack(GOOD - BAD-random): 0.000000
+- Δ_PASS_rate(GOOD - BAD-random): 0.400000
