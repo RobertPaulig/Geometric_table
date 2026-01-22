@@ -137,7 +137,7 @@ jobs:
               lines.append(f"    - potential_variant: {op.get('potential_variant')}")
               lines.append(f"    - gamma: {op.get('gamma')}")
 
-          facts_md = "\\n".join(lines) + "\\n"
+          facts_md = "\n".join(lines) + "\n"
           Path("out_accuracy_a1_isomers_a1_4/accuracy_a1_isomers_facts.md").write_text(facts_md, encoding="utf-8")
           gh_out = os.environ.get("GITHUB_OUTPUT")
           if gh_out:
