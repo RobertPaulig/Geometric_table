@@ -1089,3 +1089,19 @@
 - Facts (metrics.json): rows_total=35; groups_total=10; split(train_groups=7, test_groups=3); kpi_verdict=FAIL; test_mean_spearman_by_group=0.5999999999999999; test_median_spearman_by_group=0.4999999999999999; test_pairwise_order_accuracy_overall=0.75; test_top1_accuracy_mean=0.3333333333333333
 - Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/218 (merge: c8144c8d12781fa18fa8db140f4e0dc7dd42e291)
 - CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21257564605
+
+### 2026-01-22 - ACCURACY-A1.5 pairwise ranking (within-group ranking; LOOCV by group_id)
+
+- Parent release (A1.4): https://github.com/RobertPaulig/Geometric_table/releases/tag/accuracy-a1-isomers-2026-01-22-a1_4-r1
+- Code PR (A1.5 runner + tests + publish workflow + roadmap): https://github.com/RobertPaulig/Geometric_table/pull/220 (merge: 9f61b4e55dda142e6fed8668fe074532c4c53d10)
+- CI run (3/3 ci/* on code merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21261301899
+- Publish run (failed; required contexts gate): https://github.com/RobertPaulig/Geometric_table/actions/runs/21261320907
+- Publish run (success): https://github.com/RobertPaulig/Geometric_table/actions/runs/21261442088
+- Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/accuracy-a1-isomers-2026-01-22-a1_5-r2
+- Source commit: 9f61b4e55dda142e6fed8668fe074532c4c53d10
+- Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/accuracy-a1-isomers-2026-01-22-a1_5-r2/accuracy_a1_isomers_evidence_pack.zip
+- SHA256(accuracy_a1_isomers_evidence_pack.zip): 101D6FED30C26B3A2B049203C270E51E118E9EB4164F39A579E3FEDF9FBFD7A1 (verified by download)
+- Pack contains (provenance): data/accuracy/isomer_truth.v1.csv; docs/contracts/isomer_truth.v1.md; data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv (+ .sha256); data/atoms_db_v1.json; predictions.csv; fold_metrics.csv; group_metrics.csv; best_config.json; provenance.json (source_sha_main=9f61b4e55dda142e6fed8668fe074532c4c53d10)
+- Facts (metrics.json): rows_total=35; groups_total=10; cv_method=LOOCV_GROUP_ID; model_type=pairwise_logistic_l2; kpi_verdict=FAIL; mean_spearman_by_group=0.36999999999999994; median_spearman_by_group=0.5499999999999998; pairwise_order_accuracy_overall=0.6956521739130435; top1_accuracy_mean=0.5; worst_groups=[C11H21B1N2O4, C15H24O1, C21H23N3O3]
+- Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/221 (merge: 6d9a2304c35339b7ccd43437149fc721e1a54c4e)
+- CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21261555324
