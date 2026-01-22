@@ -37,6 +37,21 @@ def test_metrics_manifest_and_index(tmp_path: Path) -> None:
     metrics_data = json.loads(metrics.read_text(encoding="utf-8"))
     assert "counts" in metrics_data and "config" in metrics_data
 
+    slack_stats = metrics_data.get("audit_slack_stats_ok", {})
+    assert isinstance(slack_stats, dict)
+    assert slack_stats.get("schema_version") == "audit_slack_stats.v1"
+    for key in [
+        "rows_ok",
+        "rows_ok_with_slack",
+        "rows_ok_with_verdict",
+        "pass_rate_ok",
+        "mean_slack_ok",
+        "p25_slack_ok",
+        "median_slack_ok",
+        "p75_slack_ok",
+    ]:
+        assert key in slack_stats
+
     manifest_data = json.loads(manifest.read_text(encoding="utf-8"))
     files = {f["path"] for f in manifest_data.get("files", []) if isinstance(f, dict)}
     assert "./metrics.json" in files

@@ -87,6 +87,53 @@ def _median(values: List[float]) -> float:
     return float(statistics.median(finite))
 
 
+def _nearest_rank_quantile(values_sorted: List[float], q: float) -> float:
+    if not values_sorted:
+        return float("nan")
+    if not (0.0 <= float(q) <= 1.0):
+        raise ValueError("q must be in [0,1]")
+    # nearest-rank quantile (deterministic)
+    k = max(1, int(round(float(q) * len(values_sorted))))
+    return float(values_sorted[min(k - 1, len(values_sorted) - 1)])
+
+
+def _compute_ok_slack_stats(summary_rows: List[Dict[str, object]]) -> Dict[str, object]:
+    ok_rows = [r for r in summary_rows if r.get("status") == "OK"]
+    slack_values: List[float] = []
+    verdict_values: List[str] = []
+
+    for r in ok_rows:
+        slack_raw = str(r.get("slack", "")).strip()
+        if slack_raw != "":
+            try:
+                slack = float(slack_raw)
+                if math.isfinite(slack):
+                    slack_values.append(slack)
+            except Exception:
+                pass
+
+        verdict = str(r.get("verdict", "")).strip()
+        if verdict:
+            verdict_values.append(verdict)
+
+    slack_values_sorted = sorted(slack_values)
+    pass_rate = float("nan")
+    if verdict_values:
+        pass_rate = sum(1 for v in verdict_values if v == "PASS") / len(verdict_values)
+
+    return {
+        "schema_version": "audit_slack_stats.v1",
+        "rows_ok": int(len(ok_rows)),
+        "rows_ok_with_slack": int(len(slack_values)),
+        "rows_ok_with_verdict": int(len(verdict_values)),
+        "pass_rate_ok": float(pass_rate) if math.isfinite(float(pass_rate)) else float("nan"),
+        "mean_slack_ok": float(statistics.mean(slack_values)) if slack_values else float("nan"),
+        "p25_slack_ok": _nearest_rank_quantile(slack_values_sorted, 0.25),
+        "median_slack_ok": float(statistics.median(slack_values)) if slack_values else float("nan"),
+        "p75_slack_ok": _nearest_rank_quantile(slack_values_sorted, 0.75),
+    }
+
+
 def _write_index_md(
     out_dir: Path,
     summary_rows: List[Dict[str, object]],
@@ -2436,6 +2483,7 @@ def run_batch(
             "guardrails_require_connected": guardrails_require_connected,
             "score_mode": score_mode,
         },
+        "audit_slack_stats_ok": _compute_ok_slack_stats(summary_rows),
     }
     if scf_rows_total > 0:
         metrics["scf"] = {

@@ -246,8 +246,20 @@ jobs:
               except ValueError:
                   raise AssertionError(f"invalid slack value on OK row: {slack_raw!r}")
           
+          def _nearest_rank_quantile(values_sorted: list[float], q: float) -> float:
+              if not values_sorted:
+                  return float("nan")
+              if not (0.0 <= q <= 1.0):
+                  raise AssertionError("q must be in [0,1]")
+              k = max(1, int(round(q * len(values_sorted))))
+              return float(values_sorted[min(k - 1, len(values_sorted) - 1)])
+          
           pass_rate = sum(1 for v in verdict_values if v == "PASS") / len(verdict_values)
+          mean_slack = statistics.mean(slack_values)
+          slack_values_sorted = sorted(slack_values)
+          p25_slack = _nearest_rank_quantile(slack_values_sorted, 0.25)
           median_slack = statistics.median(slack_values)
+          p75_slack = _nearest_rank_quantile(slack_values_sorted, 0.75)
           
           lines = []
           lines.append(f"  - rows_total: {total}")
@@ -263,7 +275,10 @@ jobs:
           else:
               lines.append("  - top_skip_reasons: (none)")
           lines.append(f"  - share_rows_with_n_decoys_gt_0: {share:.3f} ({share*100:.1f}%)")
+          lines.append(f"  - mean_slack: {mean_slack:.6f}")
+          lines.append(f"  - p25_slack: {p25_slack:.6f}")
           lines.append(f"  - median_slack: {median_slack:.6f}")
+          lines.append(f"  - p75_slack: {p75_slack:.6f}")
           lines.append(f"  - pass_rate: {pass_rate:.6f}")
           
           facts_md = "\n".join(lines) + "\n"
@@ -331,8 +346,20 @@ jobs:
               except ValueError:
                   raise AssertionError(f"invalid slack value on OK row: {slack_raw!r}")
           
+          def _nearest_rank_quantile(values_sorted: list[float], q: float) -> float:
+              if not values_sorted:
+                  return float("nan")
+              if not (0.0 <= q <= 1.0):
+                  raise AssertionError("q must be in [0,1]")
+              k = max(1, int(round(q * len(values_sorted))))
+              return float(values_sorted[min(k - 1, len(values_sorted) - 1)])
+          
           pass_rate = sum(1 for v in verdict_values if v == "PASS") / len(verdict_values)
+          mean_slack = statistics.mean(slack_values)
+          slack_values_sorted = sorted(slack_values)
+          p25_slack = _nearest_rank_quantile(slack_values_sorted, 0.25)
           median_slack = statistics.median(slack_values)
+          p75_slack = _nearest_rank_quantile(slack_values_sorted, 0.75)
           
           lines = []
           lines.append(f"  - rows_total: {total}")
@@ -348,7 +375,10 @@ jobs:
           else:
               lines.append("  - top_skip_reasons: (none)")
           lines.append(f"  - share_rows_with_n_decoys_gt_0: {share:.3f} ({share*100:.1f}%)")
+          lines.append(f"  - mean_slack: {mean_slack:.6f}")
+          lines.append(f"  - p25_slack: {p25_slack:.6f}")
           lines.append(f"  - median_slack: {median_slack:.6f}")
+          lines.append(f"  - p75_slack: {p75_slack:.6f}")
           lines.append(f"  - pass_rate: {pass_rate:.6f}")
           
           facts_md = "\n".join(lines) + "\n"
@@ -416,8 +446,20 @@ jobs:
               except ValueError:
                   raise AssertionError(f"invalid slack value on OK row: {slack_raw!r}")
           
+          def _nearest_rank_quantile(values_sorted: list[float], q: float) -> float:
+              if not values_sorted:
+                  return float("nan")
+              if not (0.0 <= q <= 1.0):
+                  raise AssertionError("q must be in [0,1]")
+              k = max(1, int(round(q * len(values_sorted))))
+              return float(values_sorted[min(k - 1, len(values_sorted) - 1)])
+          
           pass_rate = sum(1 for v in verdict_values if v == "PASS") / len(verdict_values)
+          mean_slack = statistics.mean(slack_values)
+          slack_values_sorted = sorted(slack_values)
+          p25_slack = _nearest_rank_quantile(slack_values_sorted, 0.25)
           median_slack = statistics.median(slack_values)
+          p75_slack = _nearest_rank_quantile(slack_values_sorted, 0.75)
           
           lines = []
           lines.append(f"  - rows_total: {total}")
@@ -433,7 +475,10 @@ jobs:
           else:
               lines.append("  - top_skip_reasons: (none)")
           lines.append(f"  - share_rows_with_n_decoys_gt_0: {share:.3f} ({share*100:.1f}%)")
+          lines.append(f"  - mean_slack: {mean_slack:.6f}")
+          lines.append(f"  - p25_slack: {p25_slack:.6f}")
           lines.append(f"  - median_slack: {median_slack:.6f}")
+          lines.append(f"  - p75_slack: {p75_slack:.6f}")
           lines.append(f"  - pass_rate: {pass_rate:.6f}")
           
           facts_md = "\n".join(lines) + "\n"
@@ -457,7 +502,15 @@ jobs:
           import statistics
           from pathlib import Path
           
-          def read_ok_metrics(summary_csv: Path) -> tuple[float, float, int, int]:
+          def _nearest_rank_quantile(values_sorted: list[float], q: float) -> float:
+              if not values_sorted:
+                  return float("nan")
+              if not (0.0 <= q <= 1.0):
+                  raise AssertionError("q must be in [0,1]")
+              k = max(1, int(round(q * len(values_sorted))))
+              return float(values_sorted[min(k - 1, len(values_sorted) - 1)])
+          
+          def read_ok_metrics(summary_csv: Path) -> dict[str, object]:
               rows = list(csv.DictReader(summary_csv.read_text(encoding="utf-8").splitlines()))
               ok_rows = [r for r in rows if str(r.get("status", "")).strip() == "OK"]
               if not ok_rows:
@@ -476,24 +529,58 @@ jobs:
                       raise AssertionError(f"missing verdict on OK row in {summary_csv}")
                   verdict_values.append(verdict)
               
+              slack_values_sorted = sorted(slack_values)
               median_slack = statistics.median(slack_values)
+              mean_slack = statistics.mean(slack_values)
+              p25_slack = _nearest_rank_quantile(slack_values_sorted, 0.25)
+              p75_slack = _nearest_rank_quantile(slack_values_sorted, 0.75)
               pass_rate = sum(1 for v in verdict_values if v == "PASS") / len(verdict_values)
-              return median_slack, pass_rate, len(ok_rows), len(rows)
+              return {
+                  "rows_ok": len(ok_rows),
+                  "rows_total": len(rows),
+                  "mean_slack": mean_slack,
+                  "p25_slack": p25_slack,
+                  "median_slack": median_slack,
+                  "p75_slack": p75_slack,
+                  "pass_rate": pass_rate,
+              }
           
-          bad_med, bad_pass, bad_ok, bad_total = read_ok_metrics(Path("out_value_m2/BAD-constant/summary.csv"))
-          rnd_med, rnd_pass, rnd_ok, rnd_total = read_ok_metrics(Path("out_value_m2/BAD-random/summary.csv"))
-          good_med, good_pass, good_ok, good_total = read_ok_metrics(Path("out_value_m2/GOOD-synthetic/summary.csv"))
+          bad = read_ok_metrics(Path("out_value_m2/BAD-constant/summary.csv"))
+          rnd = read_ok_metrics(Path("out_value_m2/BAD-random/summary.csv"))
+          good = read_ok_metrics(Path("out_value_m2/GOOD-synthetic/summary.csv"))
           
           lines = []
           lines.append("separation facts (computed on status==OK rows only):")
-          lines.append(f"- BAD-constant: rows_ok={bad_ok}/{bad_total}, median_slack={bad_med:.6f}, pass_rate={bad_pass:.6f}")
-          lines.append(f"- BAD-random: rows_ok={rnd_ok}/{rnd_total}, median_slack={rnd_med:.6f}, pass_rate={rnd_pass:.6f}")
-          lines.append(f"- GOOD-synthetic: rows_ok={good_ok}/{good_total}, median_slack={good_med:.6f}, pass_rate={good_pass:.6f}")
+          lines.append(
+              "- BAD-constant: "
+              f"rows_ok={bad['rows_ok']}/{bad['rows_total']}, "
+              f"mean_slack={bad['mean_slack']:.6f}, p25_slack={bad['p25_slack']:.6f}, median_slack={bad['median_slack']:.6f}, p75_slack={bad['p75_slack']:.6f}, "
+              f"pass_rate={bad['pass_rate']:.6f}"
+          )
+          lines.append(
+              "- BAD-random: "
+              f"rows_ok={rnd['rows_ok']}/{rnd['rows_total']}, "
+              f"mean_slack={rnd['mean_slack']:.6f}, p25_slack={rnd['p25_slack']:.6f}, median_slack={rnd['median_slack']:.6f}, p75_slack={rnd['p75_slack']:.6f}, "
+              f"pass_rate={rnd['pass_rate']:.6f}"
+          )
+          lines.append(
+              "- GOOD-synthetic: "
+              f"rows_ok={good['rows_ok']}/{good['rows_total']}, "
+              f"mean_slack={good['mean_slack']:.6f}, p25_slack={good['p25_slack']:.6f}, median_slack={good['median_slack']:.6f}, p75_slack={good['p75_slack']:.6f}, "
+              f"pass_rate={good['pass_rate']:.6f}"
+          )
           lines.append("")
-          lines.append(f"- Δ_median_slack(GOOD - BAD-constant): {(good_med - bad_med):.6f}")
-          lines.append(f"- Δ_PASS_rate(GOOD - BAD-constant): {(good_pass - bad_pass):.6f}")
-          lines.append(f"- Δ_median_slack(GOOD - BAD-random): {(good_med - rnd_med):.6f}")
-          lines.append(f"- Δ_PASS_rate(GOOD - BAD-random): {(good_pass - rnd_pass):.6f}")
+          lines.append(f"- Δ_mean_slack(GOOD - BAD-constant): {(good['mean_slack'] - bad['mean_slack']):.6f}")
+          lines.append(f"- Δ_p25_slack(GOOD - BAD-constant): {(good['p25_slack'] - bad['p25_slack']):.6f}")
+          lines.append(f"- Δ_median_slack(GOOD - BAD-constant): {(good['median_slack'] - bad['median_slack']):.6f}")
+          lines.append(f"- Δ_p75_slack(GOOD - BAD-constant): {(good['p75_slack'] - bad['p75_slack']):.6f}")
+          lines.append(f"- Δ_PASS_rate(GOOD - BAD-constant): {(good['pass_rate'] - bad['pass_rate']):.6f}")
+          lines.append("")
+          lines.append(f"- Δ_mean_slack(GOOD - BAD-random): {(good['mean_slack'] - rnd['mean_slack']):.6f}")
+          lines.append(f"- Δ_p25_slack(GOOD - BAD-random): {(good['p25_slack'] - rnd['p25_slack']):.6f}")
+          lines.append(f"- Δ_median_slack(GOOD - BAD-random): {(good['median_slack'] - rnd['median_slack']):.6f}")
+          lines.append(f"- Δ_p75_slack(GOOD - BAD-random): {(good['p75_slack'] - rnd['p75_slack']):.6f}")
+          lines.append(f"- Δ_PASS_rate(GOOD - BAD-random): {(good['pass_rate'] - rnd['pass_rate']):.6f}")
           
           separation_md = "\n".join(lines) + "\n"
           Path("out_value_m2/separation_facts.md").write_text(separation_md, encoding="utf-8")
