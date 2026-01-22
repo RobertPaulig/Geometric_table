@@ -80,7 +80,7 @@ jobs:
       - name: Validate zip (no unpack)
         run: |
           python -m zipfile -t out_accuracy_a1_isomers/evidence_pack.zip
-          python -m zipfile -l out_accuracy_a1_isomers/evidence_pack.zip | grep -E "manifest.json|checksums.sha256|metrics.json|index.md|summary.csv|data/accuracy/isomer_truth.v1.csv|docs/contracts/isomer_truth.v1.md|data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv"
+          python -m zipfile -l out_accuracy_a1_isomers/evidence_pack.zip | grep -E "manifest.json|checksums.sha256|metrics.json|index.md|summary.csv|data/accuracy/isomer_truth.v1.csv|docs/contracts/isomer_truth.v1.md|data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv|data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv.sha256"
 
       - name: Prepare isomers asset
         run: |
@@ -105,16 +105,16 @@ jobs:
           lines.append(f"  - pairwise_order_accuracy_overall: {mm.get('pairwise_order_accuracy_overall')}")
           lines.append(f"  - top1_accuracy_mean: {mm.get('top1_accuracy_mean')}")
           
-          facts_md = \"\\n\".join(lines) + \"\\n\"
-          Path(\"out_accuracy_a1_isomers/accuracy_a1_isomers_facts.md\").write_text(facts_md, encoding=\"utf-8\")
+          facts_md = "\n".join(lines) + "\n"
+          Path("out_accuracy_a1_isomers/accuracy_a1_isomers_facts.md").write_text(facts_md, encoding="utf-8")
           print(facts_md)
           
-          gh_out = os.environ.get(\"GITHUB_OUTPUT\")
+          gh_out = os.environ.get("GITHUB_OUTPUT")
           if gh_out:
-              with open(gh_out, \"a\", encoding=\"utf-8\") as f:
-                  f.write(\"facts_md<<EOF\\n\")
+              with open(gh_out, "a", encoding="utf-8") as f:
+                  f.write("facts_md<<EOF\n")
                   f.write(facts_md)
-                  f.write(\"EOF\\n\")
+                  f.write("EOF\n")
           PY
 
       - name: Compute SHA256
