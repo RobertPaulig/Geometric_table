@@ -578,14 +578,37 @@ DoD:
 - Contract doc merged: `docs/contracts/isomer_truth.v1.md`.
 - Runner produces `summary.csv/metrics.json/index.md/manifest.json/checksums.sha256/evidence_pack.zip`: `scripts/accuracy_a1_isomers_run.py`.
 
-#### ACCURACY-A1.1 — Evidence pack release (truth-chain closure)
-Статус: [ ] planned  [x] in-progress  [ ] done
+#### ACCURACY-A1.1 - Evidence pack release (truth-chain closure)
+Статус: [ ] planned  [ ] in-progress  [x] done
+
+Proof:
+- Publish run (success): https://github.com/RobertPaulig/Geometric_table/actions/runs/21242635179
+- Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/accuracy-a1-isomers-2026-01-22-r1
+- Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/204 (merge: ee836c9b0dc432e8eaf6a4311853eb4a67338409)
+- Lineage PR: https://github.com/RobertPaulig/Geometric_table/pull/205 (merge: 3ce46f46f706e785495719e8789ab7e647803e8e)
+- CI run (3/3 ci/* on lineage merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21243152174
 
 DoD (A1 is DONE only when the truth-chain is closed):
 - publish-run on main produces an evidence pack asset + `.sha256`.
 - release tag + asset URL + SHA256 recorded in `docs/artefacts_registry.md`.
 - lineage entry added to `docs/90_lineage.md` (append-only).
 - main CI 3/3 green on merge SHAs of registry + lineage PRs.
+
+#### ACCURACY-A1.2 - Isomers: signal repair (sweep predictors + SCF/weights)
+Статус: [ ] planned  [x] in-progress  [ ] done
+
+Goal:
+- Improve isomer ordering signal vs baseline H_trace, without changing the truth dataset and without any large downloads.
+
+DoD (truth-chain closure + best-config facts):
+- Sweep runner produces `sweep_results.csv` + `best_config.json` and an evidence pack zip with provenance inputs.
+- publish-run on main produces a release asset + `.sha256`.
+- registry entry records baseline metrics + best metrics + best_config (append-only).
+- lineage entry records the same tag/asset/SHA256 + references to PRs/runs (append-only).
+- main CI 3/3 green on merge SHAs of registry + lineage PRs.
+
+Hard rule:
+- No large dataset downloads (SPICE hdf5 etc). Only input is `data/accuracy/isomer_truth.v1.csv`.
 
 # ROADMAP - HETERO-2 как SaaS (Pfizer-ready evidence pipeline)
 
