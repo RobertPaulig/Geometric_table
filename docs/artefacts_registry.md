@@ -1643,3 +1643,30 @@ separation facts (computed on status==OK rows only):
   - mean_spearman_pred_vs_truth: 0.0533647488893285
   - pairwise_order_accuracy_overall: 0.5
   - top1_accuracy_mean: 0.2
+
+## accuracy-a1-isomers-2026-01-22-r2
+
+- Source commit: 13c2ee2d66bad98a811962181b4198c5f271a9d8
+- Release asset: https://github.com/RobertPaulig/Geometric_table/releases/download/accuracy-a1-isomers-2026-01-22-r2/accuracy_a1_isomers_evidence_pack.zip
+- SHA256(accuracy_a1_isomers_evidence_pack.zip): E04117E5AB26B7248507AEA21159F98512274B8051ADFFD30D0ADA98F2D4A0D4
+- Command:
+  python scripts/build_isomer_truth_v1.py
+  python scripts/accuracy_a1_isomers_sweep.py --input_csv data/accuracy/isomer_truth.v1.csv --out_dir out_accuracy_a1_isomers_sweep --edge_weight_modes unweighted,bond_order,bond_order_delta_chi --potential_modes static,self_consistent --gammas 0.0,0.25,0.5,1.0 --predictors free_energy_beta,heat_trace_beta,logdet_shifted_eps --betas 0.5,1.0,2.0 --baseline_gamma 1.0
+- Outcome (facts from metrics.json):
+  - rows_total: 35
+  - groups_total: 10
+  - verdict: SIGNAL_OK (mean_spearman_pred_vs_truth >= 0.2)
+  - baseline (A1.1; H_trace):
+    - mean_spearman_pred_vs_truth: -0.022816061641181683
+    - pairwise_order_accuracy_overall: 0.5434782608695652
+    - top1_accuracy_mean: 0.3
+  - best (A1.2; sweep):
+    - mean_spearman_pred_vs_truth: 0.3799999999999999
+    - pairwise_order_accuracy_overall: 0.6956521739130435
+    - top1_accuracy_mean: 0.5
+  - best_config:
+    - predictor: logdet_shifted_eps
+    - edge_weight_mode: unweighted
+    - potential_mode: static
+    - potential_scale_gamma: 0.25
+    - beta: None
