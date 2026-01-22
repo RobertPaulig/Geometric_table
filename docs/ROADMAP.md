@@ -646,7 +646,19 @@ Hard rule:
 - No large dataset downloads (SPICE hdf5 etc). Only input is `data/accuracy/isomer_truth.v1.csv`.
 
 #### ACCURACY-A1.4 - Feature Upgrade (chemistry-aware operator + multi-feature predictor)
-Status: [ ] planned  [x] in-progress  [ ] done
+Status: [ ] planned  [ ] in-progress  [x] done
+
+Proof:
+- Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/accuracy-a1-isomers-2026-01-22-a1_4-r1
+- Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/218 (merge: c8144c8d12781fa18fa8db140f4e0dc7dd42e291)
+- Lineage PR: https://github.com/RobertPaulig/Geometric_table/pull/219 (merge: c5f31b1c847486e1201e2d5de7576162a468854b)
+- CI run (3/3 ci/* on lineage merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21257778533
+
+Outcome (facts):
+- Release tag: `accuracy-a1-isomers-2026-01-22-a1_4-r1`
+- SHA256(zip): `785DD76FCD254EB46E447693BF10FC4C97BD33468BF3AE7FF850D6201DED864B`
+- KPI verdict: `FAIL`
+- Test metrics (facts): `mean_spearman_by_group_test=0.60`, `median_spearman_by_group_test=0.50`, `pairwise_order_accuracy_overall_test=0.75`, `top1_accuracy_mean_test=0.333...`
 
 Goal:
 - Improve isomer ordering quality with a chemistry-aware operator and a multi-feature predictor, evaluated on a holdout split by `group_id`.
@@ -656,6 +668,22 @@ DoD (facts):
 - Train/test split is by `group_id` (7 train groups / 3 test groups, fixed seed).
 - Evidence pack includes `predictions.csv`, `group_metrics.csv`, `metrics.json` (train/test/overall), `best_config.json`, `provenance.json`, `manifest.json`, `checksums.sha256`.
 - KPI gates (test split): `mean_spearman_by_group_test >= 0.55`, `median_spearman_by_group_test >= 0.55`, `pairwise_order_accuracy_overall_test >= 0.65`, `top1_accuracy_mean_test >= 0.40`.
+- Truth-chain closure: publish-run → release(zip+.sha256) → registry → lineage → main CI 3/3.
+
+Hard rule:
+- Do not modify truth files: `data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv`, `data/accuracy/isomer_truth.v1.csv`, `docs/contracts/isomer_truth.v1.md`.
+
+#### ACCURACY-A1.5 - Pairwise ranking + LOOCV by group_id
+Status: [ ] planned  [x] in-progress  [ ] done
+
+Goal:
+- Improve stability on worst groups and top-1 selection by training a pairwise ranking model within each `group_id`, evaluated via leave-one-group-out CV (LOOCV).
+
+DoD (facts):
+- Truth dataset unchanged; canonical truth remains reproducible from raw.
+- CV method is LOOCV by `group_id` (every group is a test fold once; seed fixed for fold order).
+- Evidence pack includes `predictions.csv` (out-of-sample), `fold_metrics.csv`, `metrics.json`, `best_config.json`, `provenance.json`, `manifest.json`, `checksums.sha256`.
+- KPI gates (LOOCV test folds): `mean_spearman_by_group_test >= 0.55`, `median_spearman_by_group_test >= 0.55`, `pairwise_order_accuracy_overall_test >= 0.70`, `top1_accuracy_mean_test >= 0.40`.
 - Truth-chain closure: publish-run → release(zip+.sha256) → registry → lineage → main CI 3/3.
 
 Hard rule:
