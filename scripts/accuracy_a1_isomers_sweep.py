@@ -149,6 +149,13 @@ def _write_manifest(out_dir: Path, *, config: dict[str, object], files: list[dic
     (out_dir / "manifest.json").write_text(json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
 
 
+def _write_provenance(out_dir: Path, *, payload: dict[str, object]) -> None:
+    (out_dir / "provenance.json").write_text(
+        json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
 def _compute_file_infos(out_dir: Path, *, skip_names: set[str] | None = None) -> list[dict[str, object]]:
     skip = skip_names or set()
     infos: list[dict[str, object]] = []
@@ -197,6 +204,7 @@ def _predict_from_eigvals(
     predictor: str,
     beta: float | None,
     eps: float,
+    shift: float,
     occ_k: int,
 ) -> float:
     name = str(predictor)
@@ -218,10 +226,13 @@ def _predict_from_eigvals(
 
     if name == "logdet_shifted_eps":
         e = float(eps)
+        s = float(shift)
         if e <= 0.0:
             raise AccuracyA1SweepError("eps must be > 0")
+        if s < 0.0:
+            raise AccuracyA1SweepError("shift must be >= 0")
         shifted = vals - float(np.min(vals))
-        return float(np.sum(np.log(shifted + e)))
+        return float(np.sum(np.log(shifted + s + e)))
 
     if name == "occupied_sum_k":
         k = int(occ_k)
@@ -316,9 +327,11 @@ def _compute_grouped_records(
     return records, by_group
 
 
-def _compute_metrics_from_grouped(by_group: dict[str, list[dict[str, object]]]) -> tuple[dict[str, float], list[dict[str, object]]]:
+def _compute_metrics_from_grouped(by_group: dict[str, list[dict[str, object]]]) -> tuple[dict[str, object], list[dict[str, object]]]:
     per_group: list[dict[str, object]] = []
     spearmans: list[float] = []
+    spearman_by_group: dict[str, float] = {}
+    pairwise_accs: list[float] = []
     top1_hits = 0
     pairwise_correct = 0
     pairwise_total = 0
@@ -328,9 +341,12 @@ def _compute_metrics_from_grouped(by_group: dict[str, list[dict[str, object]]]) 
         truth = [float(r["truth_rel_kcalmol"]) for r in group_sorted]
         pred = [float(r["pred_rel"]) for r in group_sorted]
         sp = _spearman_corr(pred, truth)
+        spearman_by_group[gid] = float(sp)
         if math.isfinite(sp):
             spearmans.append(float(sp))
         c, t, acc = _pairwise_order_accuracy(truth, pred)
+        if math.isfinite(acc):
+            pairwise_accs.append(float(acc))
         pairwise_correct += int(c)
         pairwise_total += int(t)
 
@@ -354,9 +370,17 @@ def _compute_metrics_from_grouped(by_group: dict[str, list[dict[str, object]]]) 
             }
         )
 
+    mean_sp = float(statistics.fmean(spearmans)) if spearmans else float("nan")
+    median_sp = float(statistics.median(spearmans)) if spearmans else float("nan")
+    pair_by_group_mean = float(statistics.fmean(pairwise_accs)) if pairwise_accs else float("nan")
+
     metrics = {
-        "mean_spearman_pred_vs_truth": float(statistics.fmean(spearmans)) if spearmans else float("nan"),
+        "spearman_by_group": spearman_by_group,
+        "mean_spearman_pred_vs_truth": mean_sp,
+        "mean_spearman_by_group": mean_sp,
+        "median_spearman_by_group": median_sp,
         "pairwise_order_accuracy_overall": (float(pairwise_correct) / float(pairwise_total)) if pairwise_total else float("nan"),
+        "pairwise_order_accuracy_by_group_mean": pair_by_group_mean,
         "top1_accuracy_mean": float(top1_hits) / float(len(by_group)) if by_group else float("nan"),
     }
     return metrics, per_group
@@ -378,18 +402,14 @@ def _baseline_pred_raw(rows: Sequence[_Row], *, gamma: float) -> dict[str, float
     return out
 
 
-def _sweep_pred_raw(
+def _compute_eigvals_by_id(
     rows: Sequence[_Row],
     *,
     edge_weight_mode: str,
     potential_mode: str,
     gamma: float,
-    predictor: str,
-    beta: float | None,
-    eps: float,
-    occ_k: int,
-) -> dict[str, float]:
-    out: dict[str, float] = {}
+) -> dict[str, np.ndarray]:
+    out: dict[str, np.ndarray] = {}
     ew_mode = str(edge_weight_mode)
     pot_mode = str(potential_mode)
     for row in rows:
@@ -409,14 +429,37 @@ def _sweep_pred_raw(
             eig = dos.get("eigvals_H") or []
         else:
             eig = dos.get("eigvals_WH") or dos.get("eigvals_H") or []
-        eigvals = np.asarray(eig, dtype=float)
-        pred = _predict_from_eigvals(eigvals, predictor=predictor, beta=beta, eps=float(eps), occ_k=int(occ_k))
-        out[row.mid] = float(pred)
+        out[row.mid] = np.asarray(eig, dtype=float).reshape(-1)
+    return out
+
+
+def _predict_raw_from_eigvals_by_id(
+    eigvals_by_id: dict[str, np.ndarray],
+    *,
+    predictor: str,
+    beta: float | None,
+    eps: float,
+    shift: float,
+    occ_k: int,
+) -> dict[str, float]:
+    out: dict[str, float] = {}
+    for mid, eigvals in eigvals_by_id.items():
+        out[mid] = float(
+            _predict_from_eigvals(
+                eigvals,
+                predictor=predictor,
+                beta=beta,
+                eps=float(eps),
+                shift=float(shift),
+                occ_k=int(occ_k),
+            )
+        )
     return out
 
 
 def run_accuracy_a1_isomers_sweep(
     *,
+    experiment_id: str,
     input_csv: Path,
     out_dir: Path,
     edge_weight_modes: list[str],
@@ -424,11 +467,14 @@ def run_accuracy_a1_isomers_sweep(
     gammas: list[float],
     predictors: list[str],
     betas: list[float],
-    eps: float,
+    eps_values: list[float],
+    shift_values: list[float],
     occ_k: int,
     baseline_gamma: float,
     signal_gate_spearman: float,
     signal_gate_pairwise: float,
+    kpi_mean_spearman_by_group_min: float | None = None,
+    kpi_median_spearman_by_group_min: float | None = None,
 ) -> None:
     if not input_csv.exists():
         raise AccuracyA1SweepError(f"missing input_csv: {input_csv}")
@@ -458,12 +504,34 @@ def run_accuracy_a1_isomers_sweep(
     best_cfg: dict[str, object] | None = None
     best_records: list[dict[str, object]] | None = None
     best_grouped: dict[str, list[dict[str, object]]] | None = None
-    best_metrics: dict[str, float] | None = None
+    best_metrics: dict[str, object] | None = None
     best_per_group: list[dict[str, object]] | None = None
+
+    eps_sweep = [float(e) for e in eps_values] if eps_values else [1e-6]
+    shift_sweep = [float(s) for s in shift_values] if shift_values else [0.0]
+    for e in eps_sweep:
+        if e <= 0.0:
+            raise AccuracyA1SweepError("eps_values must be > 0")
+    for s in shift_sweep:
+        if s < 0.0:
+            raise AccuracyA1SweepError("shift_values must be >= 0")
+
+    eigvals_cache: dict[tuple[str, str, float], dict[str, np.ndarray]] = {}
+    for edge_weight_mode in edge_weight_modes:
+        for potential_mode in potential_modes:
+            for gamma in gammas:
+                key = (str(edge_weight_mode), str(potential_mode), float(gamma))
+                eigvals_cache[key] = _compute_eigvals_by_id(
+                    rows,
+                    edge_weight_mode=str(edge_weight_mode),
+                    potential_mode=str(potential_mode),
+                    gamma=float(gamma),
+                )
 
     for predictor in predictors:
         pred_name = str(predictor)
         needs_beta = pred_name in {"free_energy_beta", "heat_trace_beta"}
+        needs_logdet_params = pred_name == "logdet_shifted_eps"
         beta_values: list[float | None] = [None]
         if needs_beta:
             beta_values = [float(b) for b in betas]
@@ -471,56 +539,61 @@ def run_accuracy_a1_isomers_sweep(
         for edge_weight_mode in edge_weight_modes:
             for potential_mode in potential_modes:
                 for gamma in gammas:
+                    eigvals_by_id = eigvals_cache[(str(edge_weight_mode), str(potential_mode), float(gamma))]
                     for beta in beta_values:
-                        pred = _sweep_pred_raw(
-                            rows,
-                            edge_weight_mode=str(edge_weight_mode),
-                            potential_mode=str(potential_mode),
-                            gamma=float(gamma),
-                            predictor=pred_name,
-                            beta=float(beta) if beta is not None else None,
-                            eps=float(eps),
-                            occ_k=int(occ_k),
-                        )
-                        records, grouped = _compute_grouped_records(rows, pred_raw_by_id=pred)
-                        m, pg = _compute_metrics_from_grouped(grouped)
-                        mean_sp = float(m.get("mean_spearman_pred_vs_truth", float("nan")))
-                        pair_acc = float(m.get("pairwise_order_accuracy_overall", float("nan")))
-                        top1 = float(m.get("top1_accuracy_mean", float("nan")))
+                        eps_iter = eps_sweep if needs_logdet_params else [eps_sweep[0]]
+                        shift_iter = shift_sweep if needs_logdet_params else [shift_sweep[0]]
+                        for eps in eps_iter:
+                            for shift in shift_iter:
+                                pred = _predict_raw_from_eigvals_by_id(
+                                    eigvals_by_id,
+                                    predictor=pred_name,
+                                    beta=float(beta) if beta is not None else None,
+                                    eps=float(eps),
+                                    shift=float(shift),
+                                    occ_k=int(occ_k),
+                                )
+                                records, grouped = _compute_grouped_records(rows, pred_raw_by_id=pred)
+                                m, pg = _compute_metrics_from_grouped(grouped)
+                                mean_sp = float(m.get("mean_spearman_pred_vs_truth", float("nan")))
+                                pair_acc = float(m.get("pairwise_order_accuracy_overall", float("nan")))
+                                top1 = float(m.get("top1_accuracy_mean", float("nan")))
 
-                        row_out: dict[str, object] = {
-                            "predictor": pred_name,
-                            "edge_weight_mode": str(edge_weight_mode),
-                            "potential_mode": str(potential_mode),
-                            "gamma": float(gamma),
-                            "beta": "" if beta is None else float(beta),
-                            "eps": float(eps),
-                            "occ_k": int(occ_k),
-                            "mean_spearman_pred_vs_truth": mean_sp,
-                            "pairwise_order_accuracy_overall": pair_acc,
-                            "top1_accuracy_mean": top1,
-                        }
-                        sweep_rows.append(row_out)
+                                row_out: dict[str, object] = {
+                                    "predictor": pred_name,
+                                    "edge_weight_mode": str(edge_weight_mode),
+                                    "potential_mode": str(potential_mode),
+                                    "gamma": float(gamma),
+                                    "beta": "" if beta is None else float(beta),
+                                    "eps": float(eps),
+                                    "shift": float(shift),
+                                    "occ_k": int(occ_k),
+                                    "mean_spearman_pred_vs_truth": mean_sp,
+                                    "pairwise_order_accuracy_overall": pair_acc,
+                                    "top1_accuracy_mean": top1,
+                                }
+                                sweep_rows.append(row_out)
 
-                        score_sp = mean_sp if math.isfinite(mean_sp) else float("-inf")
-                        score_pair = pair_acc if math.isfinite(pair_acc) else float("-inf")
-                        score_top1 = top1 if math.isfinite(top1) else float("-inf")
-                        key = (score_sp, score_pair, score_top1)
-                        if best_key is None or key > best_key:
-                            best_key = key
-                            best_cfg = {
-                                "predictor": pred_name,
-                                "edge_weight_mode": str(edge_weight_mode),
-                                "potential_mode": str(potential_mode),
-                                "potential_scale_gamma": float(gamma),
-                                "beta": None if beta is None else float(beta),
-                                "eps": float(eps),
-                                "occ_k": int(occ_k),
-                            }
-                            best_records = records
-                            best_grouped = grouped
-                            best_metrics = m
-                            best_per_group = pg
+                                score_sp = mean_sp if math.isfinite(mean_sp) else float("-inf")
+                                score_pair = pair_acc if math.isfinite(pair_acc) else float("-inf")
+                                score_top1 = top1 if math.isfinite(top1) else float("-inf")
+                                key = (score_sp, score_pair, score_top1)
+                                if best_key is None or key > best_key:
+                                    best_key = key
+                                    best_cfg = {
+                                        "predictor": pred_name,
+                                        "edge_weight_mode": str(edge_weight_mode),
+                                        "potential_mode": str(potential_mode),
+                                        "potential_scale_gamma": float(gamma),
+                                        "beta": None if beta is None else float(beta),
+                                        "eps": float(eps),
+                                        "shift": float(shift),
+                                        "occ_k": int(occ_k),
+                                    }
+                                    best_records = records
+                                    best_grouped = grouped
+                                    best_metrics = m
+                                    best_per_group = pg
 
     if best_cfg is None or best_records is None or best_grouped is None or best_metrics is None or best_per_group is None:
         raise AccuracyA1SweepError("no sweep configs produced a best result")
@@ -536,6 +609,7 @@ def run_accuracy_a1_isomers_sweep(
             "gamma",
             "beta",
             "eps",
+            "shift",
             "occ_k",
             "mean_spearman_pred_vs_truth",
             "pairwise_order_accuracy_overall",
@@ -567,7 +641,22 @@ def run_accuracy_a1_isomers_sweep(
         verdict = "SIGNAL_OK"
         reason = f"pairwise_order_accuracy_overall >= {signal_gate_pairwise}"
 
+    kpi_payload: dict[str, object] | None = None
+    if kpi_mean_spearman_by_group_min is not None or kpi_median_spearman_by_group_min is not None:
+        mean_min = 0.0 if kpi_mean_spearman_by_group_min is None else float(kpi_mean_spearman_by_group_min)
+        med_min = 0.0 if kpi_median_spearman_by_group_min is None else float(kpi_median_spearman_by_group_min)
+        mean_val = float(best_metrics.get("mean_spearman_by_group", float("nan")))
+        med_val = float(best_metrics.get("median_spearman_by_group", float("nan")))
+        ok = bool(math.isfinite(mean_val) and math.isfinite(med_val) and mean_val >= mean_min and med_val >= med_min)
+        kpi_payload = {
+            "mean_spearman_by_group_min": mean_min,
+            "median_spearman_by_group_min": med_min,
+            "verdict": "PASS" if ok else "FAIL",
+            "reason": f"mean={mean_val}, median={med_val}",
+        }
+
     metrics_payload: dict[str, object] = {
+        "experiment_id": str(experiment_id),
         "config": {
             "sweep": {
                 "edge_weight_modes": list(edge_weight_modes),
@@ -575,7 +664,8 @@ def run_accuracy_a1_isomers_sweep(
                 "gammas": [float(x) for x in gammas],
                 "predictors": list(predictors),
                 "betas": [float(x) for x in betas],
-                "eps": float(eps),
+                "eps_values": [float(x) for x in eps_sweep],
+                "shift_values": [float(x) for x in shift_sweep],
                 "occ_k": int(occ_k),
             },
             "signal_gates": {
@@ -588,21 +678,27 @@ def run_accuracy_a1_isomers_sweep(
         "best": {"config": best_cfg, "metrics": best_metrics, "per_group": best_per_group},
         "verdict": {"code": verdict, "reason": reason},
     }
+    if kpi_payload is not None:
+        metrics_payload["kpi"] = kpi_payload
     (out_dir / "metrics.json").write_text(json.dumps(metrics_payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
 
     index_lines = [
-        "# ACCURACY-A1.2 (Isomers) signal repair sweep",
+        f"# {experiment_id} (Isomers) sweep",
         "",
         f"- verdict: {verdict}" + (f" ({reason})" if reason else ""),
         "",
         "Baseline (A1.1; H_trace):",
         f"- mean_spearman_pred_vs_truth: {baseline_metrics.get('mean_spearman_pred_vs_truth')}",
+        f"- median_spearman_by_group: {baseline_metrics.get('median_spearman_by_group')}",
         f"- pairwise_order_accuracy_overall: {baseline_metrics.get('pairwise_order_accuracy_overall')}",
+        f"- pairwise_order_accuracy_by_group_mean: {baseline_metrics.get('pairwise_order_accuracy_by_group_mean')}",
         f"- top1_accuracy_mean: {baseline_metrics.get('top1_accuracy_mean')}",
         "",
         "Best (from sweep):",
         f"- mean_spearman_pred_vs_truth: {best_metrics.get('mean_spearman_pred_vs_truth')}",
+        f"- median_spearman_by_group: {best_metrics.get('median_spearman_by_group')}",
         f"- pairwise_order_accuracy_overall: {best_metrics.get('pairwise_order_accuracy_overall')}",
+        f"- pairwise_order_accuracy_by_group_mean: {best_metrics.get('pairwise_order_accuracy_by_group_mean')}",
         f"- top1_accuracy_mean: {best_metrics.get('top1_accuracy_mean')}",
         "",
         "Best config:",
@@ -611,6 +707,14 @@ def run_accuracy_a1_isomers_sweep(
         "```",
         "",
     ]
+    if kpi_payload is not None:
+        index_lines.extend(
+            [
+                "KPI (optional):",
+                f"- verdict: {kpi_payload.get('verdict')} ({kpi_payload.get('reason')})",
+                "",
+            ]
+        )
     (out_dir / "index.md").write_text("\n".join(index_lines) + "\n", encoding="utf-8")
 
     repo_root = Path(__file__).resolve().parents[1]
@@ -636,13 +740,32 @@ def run_accuracy_a1_isomers_sweep(
         except Exception as exc:
             raise AccuracyA1SweepError(f"failed to copy provenance file {src} -> {rel_dst}") from exc
 
-    config_for_manifest = {
+    provenance: dict[str, object] = {
+        "experiment_id": str(experiment_id),
+        "git_sha": _detect_git_sha(),
+        "python_version": platform.python_version(),
+        "timestamp_utc": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+        "command": " ".join([Path(sys.argv[0]).name] + sys.argv[1:]),
         "input_csv": input_csv.as_posix(),
         "input_sha256_normalized": _sha256_text_normalized(input_csv),
         "baseline_config": baseline_config,
         "best_config": best_cfg,
         "verdict": {"code": verdict, "reason": reason},
     }
+    if kpi_payload is not None:
+        provenance["kpi"] = kpi_payload
+    _write_provenance(out_dir, payload=provenance)
+
+    config_for_manifest = {
+        "experiment_id": str(experiment_id),
+        "input_csv": input_csv.as_posix(),
+        "input_sha256_normalized": _sha256_text_normalized(input_csv),
+        "baseline_config": baseline_config,
+        "best_config": best_cfg,
+        "verdict": {"code": verdict, "reason": reason},
+    }
+    if kpi_payload is not None:
+        config_for_manifest["kpi"] = kpi_payload
     file_infos = _compute_file_infos(out_dir, skip_names={"manifest.json", "checksums.sha256", "evidence_pack.zip"})
     manifest_files = list(file_infos)
     manifest_files.append({"path": "./manifest.json", "size_bytes": None, "sha256": None})
@@ -666,7 +789,8 @@ def _parse_list_float(values: Sequence[str]) -> list[float]:
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Run ACCURACY-A1.2 isomers sweep (signal repair) and build an evidence pack.")
+    p = argparse.ArgumentParser(description="Run ACCURACY-A1 isomers sweep and build an evidence pack.")
+    p.add_argument("--experiment_id", type=str, default="ACCURACY-A1.2", help="Experiment/Roadmap label to embed in the pack.")
     p.add_argument("--input_csv", type=Path, default=DEFAULT_INPUT_CSV, help="Canonical isomer truth CSV.")
     p.add_argument("--out_dir", type=Path, default=DEFAULT_OUT_DIR, help="Output directory.")
     p.add_argument(
@@ -700,13 +824,31 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Comma-separated list of beta values (used by *_beta predictors).",
     )
     p.add_argument("--eps", type=float, default=1e-6, help="Epsilon for logdet_shifted_eps.")
+    p.add_argument(
+        "--eps_values",
+        type=str,
+        default="",
+        help="Optional comma-separated list of eps values for logdet_shifted_eps. If empty, uses --eps only.",
+    )
+    p.add_argument(
+        "--shift_values",
+        type=str,
+        default="0.0",
+        help="Comma-separated list of shift values for logdet_shifted_eps.",
+    )
     p.add_argument("--occ_k", type=int, default=5, help="k for occupied_sum_k predictor.")
     p.add_argument("--baseline_gamma", type=float, default=float(POTENTIAL_SCALE_GAMMA_DEFAULT), help="Gamma for baseline H_trace (A1.1).")
     p.add_argument("--signal_gate_spearman", type=float, default=0.20, help="Signal gate threshold for mean Spearman.")
     p.add_argument("--signal_gate_pairwise", type=float, default=0.60, help="Signal gate threshold for pairwise order accuracy.")
+    p.add_argument("--kpi_mean_spearman_by_group_min", type=float, default=None, help="Optional KPI gate: mean_spearman_by_group >= value.")
+    p.add_argument("--kpi_median_spearman_by_group_min", type=float, default=None, help="Optional KPI gate: median_spearman_by_group >= value.")
     args = p.parse_args(argv)
     args.gammas = _parse_list_float(_parse_list_str(args.gammas))
     args.betas = _parse_list_float(_parse_list_str(args.betas))
+    eps_vals = _parse_list_float(_parse_list_str(args.eps_values)) if str(args.eps_values).strip() else [float(args.eps)]
+    args.eps_values = eps_vals
+    shift_vals = _parse_list_float(_parse_list_str(args.shift_values))
+    args.shift_values = shift_vals if shift_vals else [0.0]
     args.edge_weight_modes = list(args.edge_weight_modes)
     args.potential_modes = list(args.potential_modes)
     args.predictors = list(args.predictors)
@@ -716,6 +858,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     run_accuracy_a1_isomers_sweep(
+        experiment_id=str(args.experiment_id),
         input_csv=args.input_csv,
         out_dir=args.out_dir,
         edge_weight_modes=list(args.edge_weight_modes),
@@ -723,11 +866,14 @@ def main(argv: list[str] | None = None) -> int:
         gammas=list(args.gammas),
         predictors=list(args.predictors),
         betas=list(args.betas),
-        eps=float(args.eps),
+        eps_values=list(args.eps_values),
+        shift_values=list(args.shift_values),
         occ_k=int(args.occ_k),
         baseline_gamma=float(args.baseline_gamma),
         signal_gate_spearman=float(args.signal_gate_spearman),
         signal_gate_pairwise=float(args.signal_gate_pairwise),
+        kpi_mean_spearman_by_group_min=args.kpi_mean_spearman_by_group_min,
+        kpi_median_spearman_by_group_min=args.kpi_median_spearman_by_group_min,
     )
     print(f"wrote: {args.out_dir.as_posix()}")
     print(f"zip: {(args.out_dir / 'evidence_pack.zip').as_posix()}")
