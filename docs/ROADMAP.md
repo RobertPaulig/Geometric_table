@@ -689,6 +689,22 @@ DoD (facts):
 Hard rule:
 - Do not modify truth files: `data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv`, `data/accuracy/isomer_truth.v1.csv`, `docs/contracts/isomer_truth.v1.md`.
 
+#### ACCURACY-A2 - Self-consistent functional (graph-only)
+Status: [x] planned  [ ] in-progress  [ ] done
+
+Goal:
+- Fix worst-group inversions by scoring isomers with a self-consistent functional on the 2D graph (no 3D, no new datasets).
+
+DoD (facts):
+- Truth dataset unchanged; canonical truth remains reproducible from raw.
+- CV method is LOOCV by `group_id` (every group is a test fold once; seed fixed for fold order).
+- Evidence pack includes `predictions.csv` (out-of-sample), `fold_metrics.csv`, `group_metrics.csv`, `metrics.json`, `best_config.json`, `provenance.json`, `manifest.json`, `checksums.sha256`.
+- KPI gates (LOOCV test folds): `mean_spearman_by_group_test >= 0.55`, `median_spearman_by_group_test >= 0.55`, `pairwise_order_accuracy_overall_test >= 0.70`, `top1_accuracy_mean_test >= 0.40`.
+- Truth-chain closure: publish-run ¢Å' release(zip+.sha256) ¢Å' registry ¢Å' lineage ¢Å' main CI 3/3.
+
+Hard rule:
+- Do not modify truth files: `data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv`, `data/accuracy/isomer_truth.v1.csv`, `docs/contracts/isomer_truth.v1.md`.
+
 # ROADMAP - HETERO-2 как SaaS (Pfizer-ready evidence pipeline)
 
 Назначение: зафиксировать целевую картину SaaS и вести разработку через обязательные вехи (milestones).
