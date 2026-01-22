@@ -142,9 +142,9 @@ jobs:
           gh_out = os.environ.get("GITHUB_OUTPUT")
           if gh_out:
               with open(gh_out, "a", encoding="utf-8") as f:
-                  f.write("facts_md<<EOF\\n")
+                  f.write("facts_md<<EOF\n")
                   f.write(facts_md)
-                  f.write("EOF\\n")
+                  f.write("EOF\n")
           PY
 
       - name: Compute SHA256
