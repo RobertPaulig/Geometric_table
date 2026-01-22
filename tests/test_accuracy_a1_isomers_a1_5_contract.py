@@ -41,6 +41,7 @@ def test_accuracy_a1_isomers_a1_5_pairwise_rank_contract(tmp_path: Path) -> None
         out_dir / "predictions.csv",
         out_dir / "summary.csv",
         out_dir / "fold_metrics.csv",
+        out_dir / "group_metrics.csv",
         out_dir / "best_config.json",
         out_dir / "metrics.json",
         out_dir / "index.md",
@@ -76,12 +77,19 @@ def test_accuracy_a1_isomers_a1_5_pairwise_rank_contract(tmp_path: Path) -> None
         set(fold_rows[0].keys())
     )
 
+    group_rows = list(csv.DictReader((out_dir / "group_metrics.csv").read_text(encoding="utf-8").splitlines()))
+    assert len(group_rows) == 10
+    assert {"group_id", "n", "spearman_pred_vs_truth", "pairwise_order_accuracy", "top1_accuracy"}.issubset(set(group_rows[0].keys()))
+
     metrics = json.loads((out_dir / "metrics.json").read_text(encoding="utf-8"))
-    assert metrics["schema_version"] == "accuracy_a1_isomers_a1_5.v1"
+    assert metrics["schema_version"] == "accuracy_a1_isomers_a1_5.v2"
     assert metrics["dataset"]["rows_total"] == 35
     assert metrics["dataset"]["groups_total"] == 10
-    assert metrics["best_config"]["model"]["type"] in {"pairwise_logistic_l2", "pairwise_rank_ridge"}
+    assert metrics["model_type"] in {"pairwise_logistic_l2", "pairwise_rank_ridge"}
     assert "kpi" in metrics
+    assert "worst_groups" in metrics
+    assert len(list(metrics["worst_groups"])) == 3
+    assert metrics["files"]["group_metrics_csv"] == "group_metrics.csv"
 
     zip_path = out_dir / "evidence_pack.zip"
     with zipfile.ZipFile(zip_path, "r") as zf:
@@ -89,6 +97,7 @@ def test_accuracy_a1_isomers_a1_5_pairwise_rank_contract(tmp_path: Path) -> None
         for required in [
             "predictions.csv",
             "fold_metrics.csv",
+            "group_metrics.csv",
             "metrics.json",
             "index.md",
             "best_config.json",
@@ -102,4 +111,3 @@ def test_accuracy_a1_isomers_a1_5_pairwise_rank_contract(tmp_path: Path) -> None
             "data/atoms_db_v1.json",
         ]:
             assert required in names
-

@@ -88,10 +88,24 @@ jobs:
             --kpi_pairwise_order_accuracy_overall_test_min 0.70 \
             --kpi_top1_accuracy_mean_test_min 0.40
 
+      - name: Gate provenance source SHA matches HEAD
+        run: |
+          python - << 'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+
+          head = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+          prov = json.loads(Path("out_accuracy_a1_isomers_a1_5/provenance.json").read_text(encoding="utf-8"))
+          source_sha = str(prov.get("source_sha_main") or "")
+          assert source_sha == head, f"provenance source_sha_main mismatch: {source_sha} != {head}"
+          print(f"provenance_source_sha_main={source_sha}")
+          PY
+
       - name: Validate zip (no unpack)
         run: |
           python -m zipfile -t out_accuracy_a1_isomers_a1_5/evidence_pack.zip
-          python -m zipfile -l out_accuracy_a1_isomers_a1_5/evidence_pack.zip | grep -E "manifest.json|provenance.json|checksums.sha256|metrics.json|index.md|summary.csv|predictions.csv|fold_metrics.csv|best_config.json|data/accuracy/isomer_truth.v1.csv|docs/contracts/isomer_truth.v1.md|data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv|data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv.sha256|data/atoms_db_v1.json"
+          python -m zipfile -l out_accuracy_a1_isomers_a1_5/evidence_pack.zip | grep -E "manifest.json|provenance.json|checksums.sha256|metrics.json|index.md|summary.csv|predictions.csv|fold_metrics.csv|group_metrics.csv|best_config.json|data/accuracy/isomer_truth.v1.csv|docs/contracts/isomer_truth.v1.md|data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv|data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv.sha256|data/atoms_db_v1.json"
 
       - name: Prepare isomers asset
         run: |
@@ -110,27 +124,37 @@ jobs:
           cv = metrics.get("cv", {}) if isinstance(metrics, dict) else {}
           kpi = metrics.get("kpi", {}) if isinstance(metrics, dict) else {}
           m = metrics.get("metrics", {}) if isinstance(metrics, dict) else {}
-          test_m = m.get("test", {}) if isinstance(m, dict) else {}
-          best_cfg = metrics.get("best_config", {}) if isinstance(metrics, dict) else {}
-          model = best_cfg.get("model", {}) if isinstance(best_cfg, dict) else {}
+          test_m = m.get("loocv_test", {}) if isinstance(m, dict) else {}
+          model_type = metrics.get("model_type", "") if isinstance(metrics, dict) else ""
+          op = metrics.get("operator", {}) if isinstance(metrics, dict) else {}
+          worst = metrics.get("worst_groups", []) if isinstance(metrics, dict) else []
 
           lines = []
           lines.append(f"  - rows_total: {dataset.get('rows_total')}")
           lines.append(f"  - groups_total: {dataset.get('groups_total')}")
           lines.append(f"  - cv_method: {cv.get('method')}")
-          lines.append(f"  - model_type: {model.get('type')}")
+          lines.append(f"  - model_type: {model_type}")
           lines.append(f"  - kpi_verdict: {kpi.get('verdict')} ({kpi.get('reason') or ''})")
           lines.append("  - test_metrics:")
           lines.append(f"    - mean_spearman_by_group: {test_m.get('mean_spearman_by_group')}")
           lines.append(f"    - median_spearman_by_group: {test_m.get('median_spearman_by_group')}")
           lines.append(f"    - pairwise_order_accuracy_overall: {test_m.get('pairwise_order_accuracy_overall')}")
           lines.append(f"    - top1_accuracy_mean: {test_m.get('top1_accuracy_mean')}")
-          op = best_cfg.get("operator", {}) if isinstance(best_cfg, dict) else {}
           if isinstance(op, dict):
               lines.append("  - operator:")
               lines.append(f"    - edge_weight_mode: {op.get('edge_weight_mode')}")
               lines.append(f"    - potential_variant: {op.get('potential_variant')}")
               lines.append(f"    - gamma: {op.get('gamma')}")
+          if isinstance(worst, list) and worst:
+              lines.append("  - worst_groups:")
+              for rec in worst[:3]:
+                  if not isinstance(rec, dict):
+                      continue
+                  gid = rec.get("group_id")
+                  sp = rec.get("spearman_pred_vs_truth")
+                  t1 = rec.get("top1_accuracy")
+                  pa = rec.get("pairwise_order_accuracy")
+                  lines.append(f"    - {gid}: spearman={sp}, top1={t1}, pairwise_acc={pa}")
 
           facts_md = "\n".join(lines) + "\n"
           Path("out_accuracy_a1_isomers_a1_5/accuracy_a1_isomers_facts.md").write_text(facts_md, encoding="utf-8")
@@ -159,7 +183,7 @@ jobs:
             python scripts/build_isomer_truth_v1.py
           - Run:
             python scripts/accuracy_a1_isomers_pairwise_rank.py --experiment_id ACCURACY-A1.5 --input_csv data/accuracy/isomer_truth.v1.csv --out_dir out_accuracy_a1_isomers_a1_5 --seed 0 --gamma 0.28 --model_type pairwise_logistic_l2 --model_l2_lambda 1e-3 --model_lr 0.1 --model_max_iter 2000 --model_tol 1e-6 --kpi_mean_spearman_by_group_test_min 0.55 --kpi_median_spearman_by_group_test_min 0.55 --kpi_pairwise_order_accuracy_overall_test_min 0.70 --kpi_top1_accuracy_mean_test_min 0.40
-          - Pack: summary.csv, predictions.csv, fold_metrics.csv, metrics.json, index.md, best_config.json, provenance.json, manifest.json, checksums.sha256, accuracy_a1_isomers_evidence_pack.zip
+          - Pack: summary.csv, predictions.csv, fold_metrics.csv, group_metrics.csv, metrics.json, index.md, best_config.json, provenance.json, manifest.json, checksums.sha256, accuracy_a1_isomers_evidence_pack.zip
           - SHA256(accuracy_a1_isomers_evidence_pack.zip): ${{ steps.hash.outputs.sha256 }}
           - Outcome (facts from metrics.json):
           ${{ steps.facts.outputs.facts_md }}

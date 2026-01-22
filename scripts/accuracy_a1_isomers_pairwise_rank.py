@@ -807,6 +807,27 @@ def run_accuracy_a1_isomers_pairwise_rank(
         "top1_accuracy_mean": float(top1_mean),
     }
 
+    def _finite_or(value: float, fallback: float) -> float:
+        return float(value) if math.isfinite(float(value)) else float(fallback)
+
+    worst_groups = sorted(
+        [
+            {
+                "group_id": str(gid),
+                "spearman_pred_vs_truth": float(gm.get("spearman_pred_vs_truth", float("nan"))),
+                "pairwise_order_accuracy": float(gm.get("pairwise_order_accuracy", float("nan"))),
+                "top1_accuracy": float(gm.get("top1_accuracy", float("nan"))),
+            }
+            for gid, gm in group_metrics_all.items()
+        ],
+        key=lambda x: (
+            _finite_or(float(x["spearman_pred_vs_truth"]), -2.0),
+            _finite_or(float(x["top1_accuracy"]), 0.0),
+            _finite_or(float(x["pairwise_order_accuracy"]), 0.0),
+            str(x["group_id"]),
+        ),
+    )[:3]
+
     ok = (
         math.isfinite(float(metrics_test["mean_spearman_by_group"]))
         and float(metrics_test["mean_spearman_by_group"]) >= float(kpi_mean_spearman_by_group_test_min)
@@ -875,6 +896,27 @@ def run_accuracy_a1_isomers_pairwise_rank(
             row["truth_best_ids"] = json.dumps(list(rec.get("truth_best_ids") or []), ensure_ascii=False)
             w.writerow(row)
 
+    group_metrics_path = out_dir / "group_metrics.csv"
+    with group_metrics_path.open("w", encoding="utf-8", newline="") as f:
+        fieldnames = [
+            "group_id",
+            "n",
+            "truth_spread_kcalmol",
+            "spearman_pred_vs_truth",
+            "pairwise_order_accuracy",
+            "pairwise_correct",
+            "pairwise_total",
+            "top1_accuracy",
+            "pred_best_id",
+            "truth_best_ids",
+        ]
+        w = csv.DictWriter(f, fieldnames=fieldnames, lineterminator="\n")
+        w.writeheader()
+        for gid, gm in sorted(group_metrics_all.items(), key=lambda x: x[0]):
+            row = {k: gm.get(k, "") for k in fieldnames}
+            row["truth_best_ids"] = json.dumps(list(gm.get("truth_best_ids") or []), ensure_ascii=False)
+            w.writerow(row)
+
     best_cfg: dict[str, object] = {
         "operator": {
             "edge_weight_mode": "bond_order",
@@ -914,18 +956,36 @@ def run_accuracy_a1_isomers_pairwise_rank(
     (out_dir / "best_config.json").write_text(json.dumps(best_cfg, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
 
     metrics_payload: dict[str, object] = {
-        "schema_version": "accuracy_a1_isomers_a1_5.v1",
+        "schema_version": "accuracy_a1_isomers_a1_5.v2",
         "experiment_id": str(experiment_id),
         "dataset": {
             "rows_total": int(len(all_records)),
             "groups_total": int(len(group_ids)),
         },
         "cv": best_cfg.get("cv", {}),
-        "best_config": best_cfg,
+        "operator": {
+            "edge_weight_mode": "bond_order",
+            "potential_variant": str(potential_variant),
+            "gamma": float(gamma),
+        },
+        "model_type": str(best_cfg.get("model", {}).get("type", "")),
+        "files": {
+            "summary_csv": "summary.csv",
+            "predictions_csv": "predictions.csv",
+            "fold_metrics_csv": "fold_metrics.csv",
+            "group_metrics_csv": "group_metrics.csv",
+            "metrics_json": "metrics.json",
+            "best_config_json": "best_config.json",
+            "provenance_json": "provenance.json",
+            "manifest_json": "manifest.json",
+            "checksums_sha256": "checksums.sha256",
+            "evidence_pack_zip": "evidence_pack.zip",
+        },
         "metrics": {
-            "test": metrics_test,
+            "loocv_test": metrics_test,
         },
         "kpi": kpi_payload,
+        "worst_groups": list(worst_groups),
     }
     (out_dir / "metrics.json").write_text(json.dumps(metrics_payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
 
@@ -970,8 +1030,10 @@ def run_accuracy_a1_isomers_pairwise_rank(
     shutil.copyfile(contract, out_dir / "docs/contracts/isomer_truth.v1.md")
     shutil.copyfile(atoms_db, out_dir / "data/atoms_db_v1.json")
 
+    source_sha_main = _detect_git_sha()
     provenance_payload: dict[str, object] = {
-        "git_sha": _detect_git_sha(),
+        "source_sha_main": str(source_sha_main),
+        "git_sha": str(source_sha_main),
         "python_version": platform.python_version(),
         "timestamp_utc": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
         "command": " ".join([Path(sys.argv[0]).name] + sys.argv[1:]),
