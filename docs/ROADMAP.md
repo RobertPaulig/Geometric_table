@@ -595,7 +595,14 @@ DoD (A1 is DONE only when the truth-chain is closed):
 - main CI 3/3 green on merge SHAs of registry + lineage PRs.
 
 #### ACCURACY-A1.2 - Isomers: signal repair (sweep predictors + SCF/weights)
-Статус: [ ] planned  [x] in-progress  [ ] done
+Статус: [ ] planned  [ ] in-progress  [x] done
+
+Proof:
+- Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/accuracy-a1-isomers-2026-01-22-r2
+- Publish run (success): https://github.com/RobertPaulig/Geometric_table/actions/runs/21246627533
+- Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/208 (merge: 47f723f7e1e84864e1fe585052a9e4e9aa491adc)
+- Lineage PR: https://github.com/RobertPaulig/Geometric_table/pull/209 (merge: df4b0f9278a5e3be8d4adab17fd26f22d3d593d6)
+- CI run (3/3 ci/* on lineage merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21246973597
 
 Goal:
 - Improve isomer ordering signal vs baseline H_trace, without changing the truth dataset and without any large downloads.
