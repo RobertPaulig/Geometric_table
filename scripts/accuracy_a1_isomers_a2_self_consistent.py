@@ -544,6 +544,10 @@ class _A2FullFunctionalConfig:
     coef_beta: float
     coef_gamma: float
     mass_mode: str  # "Z" or "sqrtZ"
+    rho_floor: float = 0.0
+    sc_damping: float = 1.0
+    sc_max_backtracks: int = 3
+    gauge_fix_phi_mean: bool = False
 
 
 def _heat_kernel_diagonal(H: np.ndarray, *, tau: float) -> np.ndarray:
@@ -644,6 +648,206 @@ def _solve_scf_full_functional_v1(
     )
 
 
+def _solve_scf_full_functional_v1_variationally_stable(
+    *,
+    laplacian: np.ndarray,
+    v0: np.ndarray,
+    heat_tau: float,
+    phi_eps: float,
+    rho_floor: float,
+    sc_iters: int,
+    sc_eta: float,
+    sc_damping: float,
+    sc_clip: float,
+    sc_max_backtracks: int,
+    coef_alpha: float,
+    coef_beta: float,
+    coef_gamma: float,
+    mvec: np.ndarray,
+) -> tuple[
+    np.ndarray,
+    np.ndarray,
+    np.ndarray,
+    np.ndarray,
+    list[dict[str, object]],
+    bool,
+    int,
+    float,
+    list[float],
+    list[int],
+    list[float],
+]:
+    """
+    ACCURACY-A2.2: variationally-stable SCF (monotone relaxation on the final E).
+
+    Law:
+      - rho = diag(exp(-tau * H))  (heat-kernel diagonal)
+      - phi = -log(max(rho, rho_floor) + eps), then gauge-fix: phi -= mean(phi)
+      - a = -L phi
+      - V* = V0 + eta * clip(a, c)
+      - V_next = (1-d) * V + d * V*
+      - backtracking: if E_next > E_prev then eta *= 0.5 (max 3)
+    """
+    lap = np.asarray(laplacian, dtype=float)
+    if lap.ndim != 2 or lap.shape[0] != lap.shape[1]:
+        raise AccuracyA2SelfConsistentError("laplacian must be square")
+
+    v0_vec = np.asarray(v0, dtype=float).reshape(-1)
+    n = int(lap.shape[0])
+    if v0_vec.size != n:
+        raise AccuracyA2SelfConsistentError("v0 must have shape (n,)")
+
+    eps = float(phi_eps)
+    if eps <= 0.0 or not math.isfinite(eps):
+        raise AccuracyA2SelfConsistentError("phi_eps must be > 0 and finite")
+
+    iters = int(sc_iters)
+    if iters < 0 or iters > 5:
+        raise AccuracyA2SelfConsistentError("sc_iters must be in [0,5]")
+
+    eta0 = float(sc_eta)
+    if not math.isfinite(eta0):
+        raise AccuracyA2SelfConsistentError("sc_eta must be finite")
+
+    damping = float(sc_damping)
+    if damping < 0.0 or damping > 1.0 or not math.isfinite(damping):
+        raise AccuracyA2SelfConsistentError("sc_damping must be in [0,1] and finite")
+
+    clip = float(sc_clip)
+    if clip <= 0.0 or not math.isfinite(clip):
+        raise AccuracyA2SelfConsistentError("sc_clip must be > 0 and finite")
+
+    rho_floor_val = float(rho_floor)
+    if rho_floor_val < 0.0 or not math.isfinite(rho_floor_val):
+        raise AccuracyA2SelfConsistentError("rho_floor must be >= 0 and finite")
+
+    max_bt = int(sc_max_backtracks)
+    if max_bt < 0 or max_bt > 3:
+        raise AccuracyA2SelfConsistentError("sc_max_backtracks must be in [0,3]")
+
+    m0 = np.asarray(mvec, dtype=float).reshape(-1)
+    if m0.size != n:
+        raise AccuracyA2SelfConsistentError("mvec must have shape (n,)")
+
+    alpha = float(coef_alpha)
+    beta = float(coef_beta)
+    gamma = float(coef_gamma)
+    if not (math.isfinite(alpha) and math.isfinite(beta) and math.isfinite(gamma)):
+        raise AccuracyA2SelfConsistentError("coef_alpha/beta/gamma must be finite")
+
+    def _state_for_v(v_vec: np.ndarray) -> tuple[np.ndarray, float, np.ndarray, np.ndarray, float]:
+        H = lap + np.diag(v_vec)
+        rho_raw = _heat_kernel_diagonal(H, tau=float(heat_tau))
+        if rho_raw.size != n:
+            raise AccuracyA2SelfConsistentError("invalid rho shape")
+
+        if rho_floor_val > 0.0:
+            floor_mask = rho_raw < rho_floor_val
+            floor_rate = float(np.mean(floor_mask)) if floor_mask.size else 0.0
+            rho = np.maximum(rho_raw, rho_floor_val)
+        else:
+            floor_rate = 0.0
+            rho = rho_raw
+
+        phi = -np.log(rho + eps)
+        phi = np.asarray(phi - float(np.mean(phi)), dtype=float)  # gauge-fix
+        curvature = -np.asarray(lap @ phi, dtype=float)
+
+        grad_energy = float(phi.T @ (lap @ phi))
+        curv_l1 = float(np.sum(np.abs(curvature)))
+        mass_phi = float(np.sum(m0 * phi))
+        E = float(alpha * grad_energy + beta * curv_l1 + gamma * mass_phi)
+        if not math.isfinite(E):
+            raise AccuracyA2SelfConsistentError("non-finite E in SCF")
+
+        return rho_raw, float(floor_rate), phi, curvature, float(E)
+
+    v = v0_vec.copy()
+    rho_raw, floor_rate, phi, curvature, E = _state_for_v(v)
+
+    residual_final = 0.0
+    E_trace: list[float] = [float(E)]
+    accepted_backtracks: list[int] = []
+    rho_floor_rate_trace: list[float] = [float(floor_rate)]
+    trace: list[dict[str, object]] = []
+    monotonic_ok = True
+    iters_done = 0
+
+    for t in range(iters):
+        iters_done = int(t + 1)
+        eta_k = float(eta0)
+        accepted = False
+        bt_used = 0
+        E_prev = float(E)
+        v_prev = v.copy()
+        residual_inf = 0.0
+
+        for bt in range(max_bt + 1):
+            bt_used = int(bt)
+            upd = float(eta_k) * np.clip(curvature, -clip, clip)
+            v_star = v0_vec + upd
+            v_cand = (1.0 - damping) * v + damping * v_star
+
+            rho_raw_c, floor_rate_c, phi_c, curvature_c, E_c = _state_for_v(v_cand)
+            dv = np.asarray(v_cand - v, dtype=float)
+            residual_inf = float(np.max(np.abs(dv))) if dv.size else 0.0
+
+            if E_c <= E_prev:
+                accepted = True
+                v = np.asarray(v_cand, dtype=float)
+                rho_raw = np.asarray(rho_raw_c, dtype=float)
+                floor_rate = float(floor_rate_c)
+                phi = np.asarray(phi_c, dtype=float)
+                curvature = np.asarray(curvature_c, dtype=float)
+                E = float(E_c)
+                residual_final = float(residual_inf)
+                break
+
+            eta_k *= 0.5
+
+        trace.append(
+            {
+                "iter": int(t + 1),
+                "accepted": bool(accepted),
+                "accepted_backtracks": int(bt_used),
+                "eta_used": float(eta_k),
+                "E_prev": float(E_prev),
+                "E_next": float(E),
+                "residual_inf": float(residual_inf),
+                "rho_floor_rate": float(floor_rate),
+                "min_V": float(np.min(v)),
+                "max_V": float(np.max(v)),
+                "mean_V": float(np.mean(v)),
+                "min_rho": float(np.min(rho_raw)),
+                "max_rho": float(np.max(rho_raw)),
+                "mean_rho": float(np.mean(rho_raw)),
+            }
+        )
+
+        accepted_backtracks.append(int(bt_used))
+        E_trace.append(float(E))
+        rho_floor_rate_trace.append(float(floor_rate))
+
+        if not accepted:
+            monotonic_ok = False
+            v = v_prev
+            break
+
+    return (
+        np.asarray(v, dtype=float),
+        np.asarray(rho_raw, dtype=float),
+        np.asarray(phi, dtype=float),
+        np.asarray(curvature, dtype=float),
+        list(trace),
+        bool(monotonic_ok),
+        int(iters_done),
+        float(residual_final),
+        list(E_trace),
+        list(accepted_backtracks),
+        list(rho_floor_rate_trace),
+    )
+
+
 def _mass_vector(types: Sequence[int], *, mode: str) -> np.ndarray:
     mz = str(mode)
     z = np.asarray([float(int(t)) for t in types], dtype=float)
@@ -702,6 +906,93 @@ def _a2_full_functional_default_configs() -> list[_A2FullFunctionalConfig]:
 
     if len(configs) > 20:
         raise AccuracyA2SelfConsistentError("A2.1 search budget exceeded: configs > 20")
+    return configs
+
+
+def _a2_full_functional_a2_2_default_configs() -> list[_A2FullFunctionalConfig]:
+    """
+    ACCURACY-A2.2: keep the functional fixed; search only SCF stability knobs (budget <= 20).
+    """
+    configs: list[_A2FullFunctionalConfig] = []
+    phi_eps_default = 1e-6
+    sc_clip_default = 0.5
+
+    base_tau = [0.5, 1.0, 2.0]
+    base_eta = [0.1, 0.05]
+    base_floor = [0.0, 1e-12]
+
+    # Base: K=3, damping=0.5 (12 configs)
+    for tau in base_tau:
+        for eta in base_eta:
+            for rf in base_floor:
+                cfg_id = f"a2_2_{len(configs) + 1:03d}"
+                configs.append(
+                    _A2FullFunctionalConfig(
+                        config_id=cfg_id,
+                        heat_tau=float(tau),
+                        phi_eps=float(phi_eps_default),
+                        rho_floor=float(rf),
+                        sc_iters=3,
+                        sc_eta=float(eta),
+                        sc_damping=0.5,
+                        sc_clip=float(sc_clip_default),
+                        sc_max_backtracks=3,
+                        gauge_fix_phi_mean=True,
+                        coef_alpha=1.0,
+                        coef_beta=1.0,
+                        coef_gamma=1.0,
+                        mass_mode="Z",
+                    )
+                )
+
+    # Extra: smaller damping at tau=1.0 (4 configs)
+    for eta in base_eta:
+        for rf in base_floor:
+            cfg_id = f"a2_2_{len(configs) + 1:03d}"
+            configs.append(
+                _A2FullFunctionalConfig(
+                    config_id=cfg_id,
+                    heat_tau=1.0,
+                    phi_eps=float(phi_eps_default),
+                    rho_floor=float(rf),
+                    sc_iters=3,
+                    sc_eta=float(eta),
+                    sc_damping=0.2,
+                    sc_clip=float(sc_clip_default),
+                    sc_max_backtracks=3,
+                    gauge_fix_phi_mean=True,
+                    coef_alpha=1.0,
+                    coef_beta=1.0,
+                    coef_gamma=1.0,
+                    mass_mode="Z",
+                )
+            )
+
+    # Extra: more iterations at tau=1.0 (4 configs) -> total 20
+    for eta in base_eta:
+        for rf in base_floor:
+            cfg_id = f"a2_2_{len(configs) + 1:03d}"
+            configs.append(
+                _A2FullFunctionalConfig(
+                    config_id=cfg_id,
+                    heat_tau=1.0,
+                    phi_eps=float(phi_eps_default),
+                    rho_floor=float(rf),
+                    sc_iters=5,
+                    sc_eta=float(eta),
+                    sc_damping=0.5,
+                    sc_clip=float(sc_clip_default),
+                    sc_max_backtracks=3,
+                    gauge_fix_phi_mean=True,
+                    coef_alpha=1.0,
+                    coef_beta=1.0,
+                    coef_gamma=1.0,
+                    mass_mode="Z",
+                )
+            )
+
+    if len(configs) > 20:
+        raise AccuracyA2SelfConsistentError("A2.2 search budget exceeded: configs > 20")
     return configs
 
 
@@ -988,6 +1279,7 @@ def _full_functional_terms_for_row(
     edge_aromatic_mult: float,
     edge_delta_chi_alpha: float,
     cfg: _A2FullFunctionalConfig,
+    scf_mode: str,
 ) -> dict[str, float | int | bool]:
     w_adj = _weighted_adjacency_from_bonds(
         n=int(row.n_heavy_atoms),
@@ -1012,15 +1304,50 @@ def _full_functional_terms_for_row(
         v_chi_coeff=float(v_chi_coeff),
     )
 
-    v, rho, phi, curvature, _, sc_converged, sc_iters, residual_final = _solve_scf_full_functional_v1(
-        laplacian=lap,
-        v0=v0,
-        heat_tau=float(cfg.heat_tau),
-        phi_eps=float(cfg.phi_eps),
-        sc_iters=int(cfg.sc_iters),
-        sc_eta=float(cfg.sc_eta),
-        sc_clip=float(cfg.sc_clip),
-    )
+    mvec = _mass_vector(row.types, mode=str(cfg.mass_mode))
+    mode = str(scf_mode)
+    if mode == "a2_2":
+        (
+            v,
+            rho,
+            phi,
+            curvature,
+            _,
+            sc_converged,
+            sc_iters,
+            residual_final,
+            E_trace,
+            accepted_backtracks,
+            rho_floor_rate_trace,
+        ) = _solve_scf_full_functional_v1_variationally_stable(
+            laplacian=lap,
+            v0=v0,
+            heat_tau=float(cfg.heat_tau),
+            phi_eps=float(cfg.phi_eps),
+            rho_floor=float(cfg.rho_floor),
+            sc_iters=int(cfg.sc_iters),
+            sc_eta=float(cfg.sc_eta),
+            sc_damping=float(cfg.sc_damping),
+            sc_clip=float(cfg.sc_clip),
+            sc_max_backtracks=int(cfg.sc_max_backtracks),
+            coef_alpha=float(cfg.coef_alpha),
+            coef_beta=float(cfg.coef_beta),
+            coef_gamma=float(cfg.coef_gamma),
+            mvec=mvec,
+        )
+    else:
+        v, rho, phi, curvature, _, sc_converged, sc_iters, residual_final = _solve_scf_full_functional_v1(
+            laplacian=lap,
+            v0=v0,
+            heat_tau=float(cfg.heat_tau),
+            phi_eps=float(cfg.phi_eps),
+            sc_iters=int(cfg.sc_iters),
+            sc_eta=float(cfg.sc_eta),
+            sc_clip=float(cfg.sc_clip),
+        )
+        E_trace = []
+        accepted_backtracks = []
+        rho_floor_rate_trace = []
 
     if rho.size != int(row.n_heavy_atoms) or phi.size != int(row.n_heavy_atoms) or curvature.size != int(row.n_heavy_atoms):
         raise AccuracyA2SelfConsistentError(f"invalid SCF output shapes for id={row.mid}")
@@ -1031,7 +1358,6 @@ def _full_functional_terms_for_row(
     curv_l1 = float(np.sum(np.abs(curvature)))
     curv_l2 = float(np.linalg.norm(curvature))
     curv_maxabs = float(np.max(np.abs(curvature))) if curvature.size else 0.0
-    mvec = _mass_vector(row.types, mode=str(cfg.mass_mode))
     mass_phi = float(np.sum(mvec * phi))
 
     term_grad = float(cfg.coef_alpha) * float(grad_energy)
@@ -1058,11 +1384,19 @@ def _full_functional_terms_for_row(
         "sc_iters": int(sc_iters),
         "sc_residual_final": float(residual_final),
         "sc_converged": bool(sc_converged),
+        "sc_rho_floor_rate_max": float(max(rho_floor_rate_trace) if rho_floor_rate_trace else 0.0),
+        "sc_rho_floor_rate_final": float(rho_floor_rate_trace[-1] if rho_floor_rate_trace else 0.0),
+        "sc_accepted_backtracks_mean": float(
+            float(sum(int(x) for x in accepted_backtracks)) / float(len(accepted_backtracks)) if accepted_backtracks else 0.0
+        ),
+        "sc_accepted_backtracks_max": int(max((int(x) for x in accepted_backtracks), default=0)),
+        "sc_E_trace": "|".join(f"{float(x):.12g}" for x in E_trace) if E_trace else "",
         "min_V": float(np.min(v)),
         "max_V": float(np.max(v)),
         "mean_V": float(np.mean(v)),
     }
-    if not all(isinstance(payload[k], bool) or math.isfinite(float(payload[k])) for k in payload if k not in {"sc_iters", "sc_converged"}):
+    non_numeric_keys = {"sc_iters", "sc_converged", "sc_E_trace"}
+    if not all(isinstance(payload[k], bool) or math.isfinite(float(payload[k])) for k in payload if k not in non_numeric_keys):
         raise AccuracyA2SelfConsistentError(f"non-finite functional terms for id={row.mid}: {payload}")
     return payload
 
@@ -1553,6 +1887,7 @@ def run_accuracy_a1_isomers_a2_full_functional_v1(
     kpi_pairwise_order_accuracy_overall_test_min: float,
     kpi_median_spearman_by_group_test_min: float,
     kpi_top1_accuracy_mean_test_min: float,
+    full_functional_mode: str = "a2_1",
 ) -> None:
     if not input_csv.exists():
         raise AccuracyA2SelfConsistentError(f"missing input_csv: {input_csv}")
@@ -1569,10 +1904,14 @@ def run_accuracy_a1_isomers_a2_full_functional_v1(
 
     truth_rel_by_id = _group_truth_min_center(rows_sorted)
 
-    configs = _a2_full_functional_default_configs()
+    mode = str(full_functional_mode)
+    if mode == "a2_2":
+        configs = _a2_full_functional_a2_2_default_configs()
+    else:
+        configs = _a2_full_functional_default_configs()
     cfg_by_id = {c.config_id: c for c in configs}
     if len(cfg_by_id) != len(configs):
-        raise AccuracyA2SelfConsistentError("duplicate config_id in A2.1 search space")
+        raise AccuracyA2SelfConsistentError("duplicate config_id in full functional search space")
 
     eval_by_config: dict[str, dict[str, dict[str, float | int | bool]]] = {}
     group_metrics_by_config: dict[str, dict[str, dict[str, object]]] = {}
@@ -1596,6 +1935,7 @@ def run_accuracy_a1_isomers_a2_full_functional_v1(
                 edge_aromatic_mult=float(edge_aromatic_mult),
                 edge_delta_chi_alpha=float(edge_delta_chi_alpha),
                 cfg=cfg,
+                scf_mode=str(mode),
             )
 
         eval_by_config[str(cfg.config_id)] = terms_by_id
@@ -1628,9 +1968,13 @@ def run_accuracy_a1_isomers_a2_full_functional_v1(
                 "config_id": str(cfg.config_id),
                 "heat_tau": float(cfg.heat_tau),
                 "phi_eps": float(cfg.phi_eps),
+                "rho_floor": float(cfg.rho_floor),
                 "sc_iters": int(cfg.sc_iters),
                 "sc_eta": float(cfg.sc_eta),
+                "sc_damping": float(cfg.sc_damping),
                 "sc_clip": float(cfg.sc_clip),
+                "sc_max_backtracks": int(cfg.sc_max_backtracks),
+                "gauge_fix_phi_mean": bool(cfg.gauge_fix_phi_mean),
                 "coef_alpha": float(cfg.coef_alpha),
                 "coef_beta": float(cfg.coef_beta),
                 "coef_gamma": float(cfg.coef_gamma),
@@ -1794,9 +2138,13 @@ def run_accuracy_a1_isomers_a2_full_functional_v1(
                     "n_heavy_atoms": int(r.n_heavy_atoms),
                     "heat_tau": float(cfg.heat_tau),
                     "phi_eps": float(cfg.phi_eps),
+                    "rho_floor": float(cfg.rho_floor),
                     "sc_iters": int(cfg.sc_iters),
                     "sc_eta": float(cfg.sc_eta),
+                    "sc_damping": float(cfg.sc_damping),
                     "sc_clip": float(cfg.sc_clip),
+                    "sc_max_backtracks": int(cfg.sc_max_backtracks),
+                    "gauge_fix_phi_mean": bool(cfg.gauge_fix_phi_mean),
                     "coef_alpha": float(cfg.coef_alpha),
                     "coef_beta": float(cfg.coef_beta),
                     "coef_gamma": float(cfg.coef_gamma),
@@ -1815,6 +2163,11 @@ def run_accuracy_a1_isomers_a2_full_functional_v1(
                     "E": float(t["E"]),
                     "sc_residual_final": float(t["sc_residual_final"]),
                     "sc_converged": bool(t["sc_converged"]),
+                    "sc_rho_floor_rate_max": float(t.get("sc_rho_floor_rate_max", 0.0)),
+                    "sc_rho_floor_rate_final": float(t.get("sc_rho_floor_rate_final", 0.0)),
+                    "sc_accepted_backtracks_mean": float(t.get("sc_accepted_backtracks_mean", 0.0)),
+                    "sc_accepted_backtracks_max": int(t.get("sc_accepted_backtracks_max", 0) or 0),
+                    "sc_E_trace": str(t.get("sc_E_trace", "")),
                 }
             )
 
@@ -2031,8 +2384,10 @@ def run_accuracy_a1_isomers_a2_full_functional_v1(
         for rec in sorted(diagnostics_rows, key=lambda rr: (int(rr.get("fold_id") or 0), str(rr.get("group_id") or ""), str(rr.get("id") or ""))):
             w.writerow({k: rec.get(k, "") for k in fieldnames})
 
+    schema_version = "accuracy_a1_isomers_a2_2.v1" if mode == "a2_2" else "accuracy_a1_isomers_a2_1.v1"
+    a2_variant_label = "full_functional_v1_heat_kernel_a2_2" if mode == "a2_2" else "full_functional_v1_heat_kernel"
     best_cfg: dict[str, object] = {
-        "a2_variant": "full_functional_v1_heat_kernel",
+        "a2_variant": str(a2_variant_label),
         "operator_fixed": {
             "potential_gamma": float(potential_gamma),
             "potential_variant": str(potential_variant),
@@ -2059,9 +2414,13 @@ def run_accuracy_a1_isomers_a2_full_functional_v1(
                 "config_id": str(c.config_id),
                 "heat_tau": float(c.heat_tau),
                 "phi_eps": float(c.phi_eps),
+                "rho_floor": float(c.rho_floor),
                 "sc_iters": int(c.sc_iters),
                 "sc_eta": float(c.sc_eta),
+                "sc_damping": float(c.sc_damping),
                 "sc_clip": float(c.sc_clip),
+                "sc_max_backtracks": int(c.sc_max_backtracks),
+                "gauge_fix_phi_mean": bool(c.gauge_fix_phi_mean),
                 "coef_alpha": float(c.coef_alpha),
                 "coef_beta": float(c.coef_beta),
                 "coef_gamma": float(c.coef_gamma),
@@ -2084,7 +2443,7 @@ def run_accuracy_a1_isomers_a2_full_functional_v1(
     (out_dir / "best_config.json").write_text(json.dumps(best_cfg, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
 
     metrics_payload: dict[str, object] = {
-        "schema_version": "accuracy_a1_isomers_a2_1.v1",
+        "schema_version": str(schema_version),
         "experiment_id": str(experiment_id),
         "dataset": {
             "rows_total": int(len(rows_sorted)),
@@ -2115,8 +2474,9 @@ def run_accuracy_a1_isomers_a2_full_functional_v1(
     }
     (out_dir / "metrics.json").write_text(json.dumps(metrics_payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
 
+    title = "A2.2 variationally-stable SCF" if mode == "a2_2" else "A2.1 full functional (heat-kernel diag + SCF)"
     index_lines = [
-        f"# {experiment_id} (Isomers) A2.1 full functional (heat-kernel diag + SCF)",
+        f"# {experiment_id} (Isomers) {title}",
         "",
         "LOOCV (by group_id) metrics:",
         "",
@@ -2208,8 +2568,12 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--a2_variant",
         type=str,
         default="self_consistent_v1",
-        choices=["self_consistent_v1", "full_functional_v1"],
-        help="A2 runner variant: legacy self-consistent functional (v1) or A2.1 full functional (heat-kernel) + SCF.",
+        choices=["self_consistent_v1", "full_functional_v1", "full_functional_v1_a2_2"],
+        help=(
+            "A2 runner variant: legacy self-consistent functional (v1), "
+            "A2.1 full functional (heat-kernel diag + SCF), or "
+            "A2.2 full functional with variationally-stable SCF (monotone backtracking)."
+        ),
     )
     p.add_argument("--experiment_id", type=str, default="ACCURACY-A2", help="Experiment/Roadmap label to embed in the pack.")
     p.add_argument("--input_csv", type=Path, default=DEFAULT_INPUT_CSV, help="Canonical isomer truth CSV.")
@@ -2279,6 +2643,30 @@ def main(argv: list[str] | None = None) -> int:
             kpi_pairwise_order_accuracy_overall_test_min=float(args.kpi_pairwise_order_accuracy_overall_test_min),
             kpi_median_spearman_by_group_test_min=float(args.kpi_median_spearman_by_group_test_min),
             kpi_top1_accuracy_mean_test_min=float(args.kpi_top1_accuracy_mean_test_min),
+        )
+    elif variant == "full_functional_v1_a2_2":
+        run_accuracy_a1_isomers_a2_full_functional_v1(
+            experiment_id=str(args.experiment_id),
+            input_csv=Path(args.input_csv),
+            out_dir=Path(args.out_dir),
+            seed=int(args.seed),
+            potential_gamma=float(args.gamma),
+            potential_variant=str(args.potential_variant),
+            v_deg_coeff=float(args.v_deg_coeff),
+            v_valence_coeff=float(args.v_valence_coeff),
+            v_arom_coeff=float(args.v_arom_coeff),
+            v_ring_coeff=float(args.v_ring_coeff),
+            v_charge_coeff=float(args.v_charge_coeff),
+            v_chi_coeff=float(args.v_chi_coeff),
+            edge_weight_mode=str(args.edge_weight_mode),
+            edge_aromatic_mult=float(args.edge_aromatic_mult),
+            edge_delta_chi_alpha=float(args.edge_delta_chi_alpha),
+            calibrator_ridge_lambda=float(args.calibrator_ridge_lambda),
+            kpi_mean_spearman_by_group_test_min=float(args.kpi_mean_spearman_by_group_test_min),
+            kpi_pairwise_order_accuracy_overall_test_min=float(args.kpi_pairwise_order_accuracy_overall_test_min),
+            kpi_median_spearman_by_group_test_min=float(args.kpi_median_spearman_by_group_test_min),
+            kpi_top1_accuracy_mean_test_min=float(args.kpi_top1_accuracy_mean_test_min),
+            full_functional_mode="a2_2",
         )
     elif variant == "self_consistent_v1":
         run_accuracy_a1_isomers_a2_self_consistent(
