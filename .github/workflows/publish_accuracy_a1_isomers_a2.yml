@@ -279,6 +279,8 @@ jobs:
   registry-pr:
     needs: [build-pack, publish-release]
     runs-on: ubuntu-latest
+    outputs:
+      registry_pr_url: ${{ steps.registry_cpr.outputs.pull-request-url }}
 
     steps:
       - uses: actions/checkout@v4
@@ -328,6 +330,93 @@ jobs:
           REPO: ${{ github.repository }}
           BRANCH: "automation/artefact-${{ inputs.tag }}"
           PR_URL: ${{ steps.registry_cpr.outputs.pull-request-url }}
+        run: |
+          set -euo pipefail
+          echo "Automation PR: $PR_URL"
+          echo "Triggering pytest workflow on branch: $BRANCH"
+
+          gh workflow run pytest.yml --ref "$BRANCH" --repo "$REPO"
+
+          RUN_ID=""
+          for i in $(seq 1 30); do
+            RUN_ID=$(gh run list --workflow pytest.yml --branch "$BRANCH" --event workflow_dispatch --limit 1 --json databaseId --jq '.[0].databaseId' --repo "$REPO" 2>/dev/null || true)
+            if [ -n "$RUN_ID" ] && [ "$RUN_ID" != "null" ]; then
+              break
+            fi
+            sleep 2
+          done
+
+          if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
+            echo "ERROR: failed to locate dispatched pytest run"
+            gh run list --workflow pytest.yml --branch "$BRANCH" --limit 5 --repo "$REPO" || true
+            exit 1
+          fi
+
+          RUN_URL=$(gh run view "$RUN_ID" --json url --jq '.url' --repo "$REPO")
+          TESTED_SHA=$(gh run view "$RUN_ID" --json headSha --jq '.headSha' --repo "$REPO")
+          echo "pytest run url: $RUN_URL"
+          echo "tested_sha: $TESTED_SHA"
+
+          gh run watch "$RUN_ID" --exit-status --repo "$REPO"
+
+  lineage-pr:
+    needs: [build-pack, publish-release, registry-pr]
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: "main"
+
+      - name: Append lineage entry (append-only)
+        env:
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RELEASE_URL: https://github.com/${{ github.repository }}/releases/tag/${{ inputs.tag }}
+          REGISTRY_PR_URL: ${{ needs.registry-pr.outputs.registry_pr_url }}
+        run: |
+          FILE="docs/90_lineage.md"
+          if [ ! -f "$FILE" ]; then
+            echo "# Lineage (append-only)" > "$FILE"
+            echo "" >> "$FILE"
+          fi
+
+          DATE_UTC=$(date -u +%Y-%m-%d)
+
+          cat >> "$FILE" << EOF
+
+          ### ${DATE_UTC} - ACCURACY-A2 isomers self-consistent functional (graph-only)
+
+          - Source commit: ${{ needs.build-pack.outputs.source_sha }}
+          - Publish run: ${RUN_URL}
+          - Release tag: ${RELEASE_URL}
+          - Asset: ${{ needs.build-pack.outputs.asset_url }}
+          - SHA256(accuracy_a1_isomers_evidence_pack.zip): ${{ needs.build-pack.outputs.sha256 }}
+          - Registry PR: ${REGISTRY_PR_URL}
+          - Outcome (facts from metrics.json):
+          ${{ needs.build-pack.outputs.facts_md }}
+          EOF
+
+      - name: Create PR with lineage update
+        id: lineage_cpr
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: "automation/lineage-${{ inputs.tag }}"
+          title: "Add lineage entry for ${{ inputs.tag }}"
+          commit-message: "docs: add lineage entry for ${{ inputs.tag }}"
+          body: |
+            Automated update: appended lineage entry after publishing ACCURACY-A2 isomers evidence pack.
+          base: "main"
+          add-paths: |
+            docs/90_lineage.md
+
+      - name: Trigger CI (pytest workflow_dispatch) for automation PR branch
+        if: steps.lineage_cpr.outputs.pull-request-url != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          BRANCH: "automation/lineage-${{ inputs.tag }}"
+          PR_URL: ${{ steps.lineage_cpr.outputs.pull-request-url }}
         run: |
           set -euo pipefail
           echo "Automation PR: $PR_URL"
