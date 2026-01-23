@@ -1156,3 +1156,32 @@
     - C15H24O1: spearman=-0.9999999999999998, top1=0.0, pairwise_acc=0.0
     - C22H22N4O2: spearman=-0.9999999999999998, top1=0.0, pairwise_acc=0.0
     - C20H25N3O2: spearman=-0.7999999999999998, top1=0.0, pairwise_acc=0.16666666666666666
+
+### 2026-01-23 - ACCURACY-A2.2 isomers full functional v1 (variationally-stable SCF)
+
+- Source commit: 8ee3c424dbe39fd1daab842d3ce2f2786704e80c
+- Publish run: https://github.com/RobertPaulig/Geometric_table/actions/runs/21274484646
+- Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/accuracy-a1-isomers-2026-01-23-a2_2-r1
+- Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/accuracy-a1-isomers-2026-01-23-a2_2-r1/accuracy_a1_isomers_evidence_pack.zip
+- SHA256(accuracy_a1_isomers_evidence_pack.zip): 24504681610E2C0382C08B2310D93AEFB9C6E54C4059CD5D0CC6ACF2DBDA257A
+- Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/231
+- Outcome (facts from metrics.json):
+  - rows_total: 35
+  - groups_total: 10
+  - kpi.verdict: FAIL
+  - loocv_test_functional_only:
+    - mean_spearman_by_group: -0.039999999999999994
+    - median_spearman_by_group: 0.3499999999999999
+    - pairwise_order_accuracy_overall: 0.5 (23/46)
+    - top1_accuracy_mean: 0.2
+    - num_groups_spearman_negative: 4
+  - loocv_test_calibrated_linear:
+    - mean_spearman_by_group: 0.009999999999999998
+    - median_spearman_by_group: 0.14999999999999997
+    - pairwise_order_accuracy_overall: 0.5217391304347826 (24/46)
+    - top1_accuracy_mean: 0.1
+    - num_groups_spearman_negative: 4
+  - worst_groups:
+    - C21H23N3O3: spearman=-0.9999999999999998, top1=0.0, pairwise_acc=0.0
+    - C15H24O1: spearman=-0.9999999999999998, top1=0.0, pairwise_acc=0.0
+    - C22H22N4O2: spearman=-0.9999999999999998, top1=0.0, pairwise_acc=0.0
