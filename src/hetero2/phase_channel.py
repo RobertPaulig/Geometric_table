@@ -21,7 +21,7 @@ class PhaseChannelConfig:
 def normalize_flux_phi(phi: float) -> float:
     """
     Normalize a flux parameter to the canonical interval [-pi, pi].
-    This guarantees 2π-periodicity for exp(i*A).
+    This guarantees 2*pi periodicity for exp(i*A).
     """
     two_pi = 2.0 * math.pi
     return ((float(phi) + math.pi) % two_pi) - math.pi
@@ -31,6 +31,11 @@ def _order_simple_cycle_atoms(*, ring_edges: list[tuple[int, int]]) -> list[int]
     """
     Given the undirected edges of a simple cycle, return a deterministic atom order
     [v0, v1, ..., v_{m-1}] around the cycle.
+
+    Deterministic orientation rule (A3.2 contract):
+    - rotate so the first vertex is the minimum atom index in the cycle
+    - choose the direction by picking the lexicographically smaller of the two possible
+      traversals starting from that vertex (clockwise vs counter-clockwise)
     """
     if not ring_edges:
         raise ValueError("ring_edges must be non-empty")
@@ -46,25 +51,30 @@ def _order_simple_cycle_atoms(*, ring_edges: list[tuple[int, int]]) -> list[int]
         if len(vs) != 2:
             raise ValueError(f"expected simple cycle degree=2, got degree={len(vs)} for atom {k}")
 
+    def _walk(*, start: int, nxt: int) -> list[int]:
+        cycle = [start, nxt]
+        prev = start
+        cur = nxt
+        while True:
+            n0, n1 = adj[cur]
+            nn = n0 if n0 != prev else n1
+            if nn == start:
+                break
+            if nn in cycle:
+                raise ValueError("cycle reconstruction failed (revisited atom)")
+            cycle.append(nn)
+            prev, cur = cur, nn
+        if len(cycle) < 3:
+            raise ValueError("cycle length must be >= 3")
+        return cycle
+
     start = min(adj.keys())
-    next_atom = min(adj[start])
+    n_a, n_b = sorted(adj[start])
 
-    cycle = [start, next_atom]
-    prev = start
-    cur = next_atom
-    while True:
-        n0, n1 = adj[cur]
-        nxt = n0 if n0 != prev else n1
-        if nxt == start:
-            break
-        if nxt in cycle:
-            raise ValueError("cycle reconstruction failed (revisited atom)")
-        cycle.append(nxt)
-        prev, cur = cur, nxt
+    cyc_a = _walk(start=start, nxt=n_a)
+    cyc_b = _walk(start=start, nxt=n_b)
 
-    if len(cycle) < 3:
-        raise ValueError("cycle length must be >= 3")
-    return cycle
+    return cyc_a if tuple(cyc_a) <= tuple(cyc_b) else cyc_b
 
 
 def sssr_cycles_from_mol(mol: "Chem.Mol") -> list[list[int]]:
@@ -105,7 +115,7 @@ def ring_edges_from_cycles(cycles: Iterable[Iterable[int]]) -> set[frozenset[int
 def phase_matrix_flux_on_cycles(*, n: int, cycles: Iterable[Iterable[int]], phi: float) -> np.ndarray:
     """
     Build an antisymmetric phase matrix A for a graph with n nodes, by distributing
-    a single global flux Φ across each cycle as ±Φ/m per oriented edge (m = cycle length).
+    a single global flux Phi across each cycle as +/-Phi/m per oriented edge (m = cycle length).
 
     If an undirected edge belongs to multiple SSSR cycles, contributions are summed.
     """
