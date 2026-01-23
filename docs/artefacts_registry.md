@@ -1754,3 +1754,25 @@ separation facts (computed on status==OK rows only):
     - C11H21B1N2O4: spearman=-0.4999999999999999, top1=0.0, pairwise_acc=0.3333333333333333
     - C15H24O1: spearman=-0.4999999999999999, top1=0.0, pairwise_acc=0.3333333333333333
     - C21H23N3O3: spearman=-0.4999999999999999, top1=0.0, pairwise_acc=0.3333333333333333
+
+## accuracy-a1-isomers-2026-01-23-a2-r1
+
+- Source commit: 48e530faffd70a67905be03de0ac6a2d85cc0c55
+- Release asset: https://github.com/RobertPaulig/Geometric_table/releases/download/accuracy-a1-isomers-2026-01-23-a2-r1/accuracy_a1_isomers_evidence_pack.zip
+- SHA256(accuracy_a1_isomers_evidence_pack.zip): D407C9FD85DFE87130D092E571B49F42B115836801BB80EF0B0C3843DB6E7A72
+- Command:
+  python scripts/build_isomer_truth_v1.py
+  python scripts/accuracy_a1_isomers_a2_self_consistent.py --experiment_id ACCURACY-A2 --input_csv data/accuracy/isomer_truth.v1.csv --out_dir out_accuracy_a1_isomers_a2 --seed 0 --gamma 0.28 --potential_variant epsilon_z --edge_weight_mode bond_order_delta_chi --sc_max_iter 5 --eta_a 0.1 --eta_phi 0.0 --update_clip 0.5 --model_type pairwise_rank_ridge --model_ridge_lambda 1e-3 --kpi_mean_spearman_by_group_test_min 0.55 --kpi_median_spearman_by_group_test_min 0.55 --kpi_pairwise_order_accuracy_overall_test_min 0.70 --kpi_top1_accuracy_mean_test_min 0.40
+- Outcome (facts from metrics.json):
+  - rows_total: 35
+  - groups_total: 10
+  - kpi.verdict: FAIL
+  - loocv_test:
+    - mean_spearman_by_group: 0.15999999999999998
+    - median_spearman_by_group: 0.3999999999999999
+    - pairwise_order_accuracy_overall: 0.5869565217391305 (27/46)
+    - top1_accuracy_mean: 0.4
+  - worst_groups:
+    - C13H20O1: spearman=-0.9999999999999998, top1=0.0, pairwise_acc=0.0
+    - C15H24O1: spearman=-0.9999999999999998, top1=0.0, pairwise_acc=0.0
+    - C22H22N4O2: spearman=-0.4999999999999999, top1=0.0, pairwise_acc=0.3333333333333333
