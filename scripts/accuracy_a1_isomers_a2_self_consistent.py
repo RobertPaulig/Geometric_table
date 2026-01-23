@@ -533,6 +533,179 @@ def _solve_self_consistent_functional(
 
 
 @dataclass(frozen=True)
+class _A2FullFunctionalConfig:
+    config_id: str
+    heat_tau: float
+    phi_eps: float
+    sc_iters: int
+    sc_eta: float
+    sc_clip: float
+    coef_alpha: float
+    coef_beta: float
+    coef_gamma: float
+    mass_mode: str  # "Z" or "sqrtZ"
+
+
+def _heat_kernel_diagonal(H: np.ndarray, *, tau: float) -> np.ndarray:
+    tau_val = float(tau)
+    if tau_val <= 0.0 or not math.isfinite(tau_val):
+        raise AccuracyA2SelfConsistentError("heat_tau must be > 0 and finite")
+    H0 = np.asarray(H, dtype=float)
+    if H0.ndim != 2 or H0.shape[0] != H0.shape[1]:
+        raise AccuracyA2SelfConsistentError("H must be square")
+    eigvals, eigvecs = np.linalg.eigh(H0)
+    eigvals = np.asarray(eigvals, dtype=float).reshape(-1)
+    eigvecs = np.asarray(eigvecs, dtype=float)
+    weights = np.exp(-tau_val * eigvals)
+    rho = (eigvecs**2) @ weights
+    return np.asarray(rho, dtype=float).reshape(-1)
+
+
+def _solve_scf_full_functional_v1(
+    *,
+    laplacian: np.ndarray,
+    v0: np.ndarray,
+    heat_tau: float,
+    phi_eps: float,
+    sc_iters: int,
+    sc_eta: float,
+    sc_clip: float,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, list[dict[str, object]], bool, int, float]:
+    lap = np.asarray(laplacian, dtype=float)
+    if lap.ndim != 2 or lap.shape[0] != lap.shape[1]:
+        raise AccuracyA2SelfConsistentError("laplacian must be square")
+
+    v0_vec = np.asarray(v0, dtype=float).reshape(-1)
+    n = int(lap.shape[0])
+    if v0_vec.size != n:
+        raise AccuracyA2SelfConsistentError("v0 must have shape (n,)")
+
+    eps = float(phi_eps)
+    if eps <= 0.0 or not math.isfinite(eps):
+        raise AccuracyA2SelfConsistentError("phi_eps must be > 0 and finite")
+
+    iters = int(sc_iters)
+    if iters < 0 or iters > 5:
+        raise AccuracyA2SelfConsistentError("sc_iters must be in [0,5]")
+
+    eta = float(sc_eta)
+    if not math.isfinite(eta):
+        raise AccuracyA2SelfConsistentError("sc_eta must be finite")
+
+    clip = float(sc_clip)
+    if clip <= 0.0 or not math.isfinite(clip):
+        raise AccuracyA2SelfConsistentError("sc_clip must be > 0 and finite")
+
+    v = v0_vec.copy()
+    trace: list[dict[str, object]] = []
+    residual_final = 0.0
+
+    for t in range(iters):
+        H = lap + np.diag(v)
+        rho = _heat_kernel_diagonal(H, tau=float(heat_tau))
+        phi = -np.log(rho + eps)
+        curvature = -np.asarray(lap @ phi, dtype=float)
+
+        upd = float(eta) * np.clip(curvature, -clip, clip)
+        v_next = v0_vec + upd
+        dv = np.asarray(v_next - v, dtype=float)
+        residual_inf = float(np.max(np.abs(dv))) if dv.size else 0.0
+        residual_final = float(residual_inf)
+
+        trace.append(
+            {
+                "iter": int(t + 1),
+                "residual_inf": float(residual_inf),
+                "min_V": float(np.min(v_next)),
+                "max_V": float(np.max(v_next)),
+                "mean_V": float(np.mean(v_next)),
+                "min_rho": float(np.min(rho)),
+                "max_rho": float(np.max(rho)),
+                "mean_rho": float(np.mean(rho)),
+            }
+        )
+        v = v_next
+
+    H_final = lap + np.diag(v)
+    rho_final = _heat_kernel_diagonal(H_final, tau=float(heat_tau))
+    phi_final = -np.log(rho_final + eps)
+    curvature_final = -np.asarray(lap @ phi_final, dtype=float)
+    converged = bool(residual_final <= 1e-6) if iters else True
+
+    return (
+        np.asarray(v, dtype=float),
+        np.asarray(rho_final, dtype=float),
+        np.asarray(phi_final, dtype=float),
+        np.asarray(curvature_final, dtype=float),
+        list(trace),
+        bool(converged),
+        int(iters),
+        float(residual_final),
+    )
+
+
+def _mass_vector(types: Sequence[int], *, mode: str) -> np.ndarray:
+    mz = str(mode)
+    z = np.asarray([float(int(t)) for t in types], dtype=float)
+    if mz == "Z":
+        return z
+    if mz == "sqrtZ":
+        return np.sqrt(z)
+    raise AccuracyA2SelfConsistentError(f"invalid mass_mode: {mz}")
+
+
+def _a2_full_functional_default_configs() -> list[_A2FullFunctionalConfig]:
+    configs: list[_A2FullFunctionalConfig] = []
+    phi_eps_default = 1e-6
+    sc_clip_default = 0.5
+
+    base_tau = [0.5, 1.0, 2.0]
+    mass_modes = ["Z", "sqrtZ"]
+    coef_sets = [(1.0, 1.0, 1.0), (1.0, 0.5, 1.0)]
+    for tau in base_tau:
+        for mz in mass_modes:
+            for a, b, g in coef_sets:
+                cfg_id = f"ffv1_{len(configs) + 1:03d}"
+                configs.append(
+                    _A2FullFunctionalConfig(
+                        config_id=cfg_id,
+                        heat_tau=float(tau),
+                        phi_eps=float(phi_eps_default),
+                        sc_iters=0,
+                        sc_eta=0.0,
+                        sc_clip=float(sc_clip_default),
+                        coef_alpha=float(a),
+                        coef_beta=float(b),
+                        coef_gamma=float(g),
+                        mass_mode=str(mz),
+                    )
+                )
+
+    sc_tau = [0.5, 1.0, 2.0, 4.0]
+    for tau in sc_tau:
+        for mz in mass_modes:
+            cfg_id = f"ffv1_{len(configs) + 1:03d}"
+            configs.append(
+                _A2FullFunctionalConfig(
+                    config_id=cfg_id,
+                    heat_tau=float(tau),
+                    phi_eps=float(phi_eps_default),
+                    sc_iters=3,
+                    sc_eta=0.1,
+                    sc_clip=float(sc_clip_default),
+                    coef_alpha=1.0,
+                    coef_beta=1.0,
+                    coef_gamma=1.0,
+                    mass_mode=str(mz),
+                )
+            )
+
+    if len(configs) > 20:
+        raise AccuracyA2SelfConsistentError("A2.1 search budget exceeded: configs > 20")
+    return configs
+
+
+@dataclass(frozen=True)
 class _Row:
     mid: str
     gid: str
@@ -637,6 +810,78 @@ def _compute_group_metrics(records: list[dict[str, object]]) -> dict[str, dict[s
     return out
 
 
+def _compute_group_metrics_for_pred_rel(records: list[dict[str, object]], *, pred_rel_key: str) -> dict[str, dict[str, object]]:
+    by_group: dict[str, list[dict[str, object]]] = {}
+    for r in records:
+        gid = str(r.get("group_id") or "")
+        by_group.setdefault(gid, []).append(r)
+
+    out: dict[str, dict[str, object]] = {}
+    for gid, group in by_group.items():
+        group_sorted = sorted(group, key=lambda rr: str(rr.get("id")))
+        truth = [float(rr["truth_rel_kcalmol"]) for rr in group_sorted]
+        pred = [float(rr[pred_rel_key]) for rr in group_sorted]
+        spearman = _spearman_corr(pred, truth)
+        correct, total, acc = _pairwise_order_accuracy(truth, pred)
+
+        best_pred_idx = int(np.argmin(np.asarray(pred, dtype=float)))
+        truth_min = float(min(truth))
+        truth_best = {str(group_sorted[i]["id"]) for i, t in enumerate(truth) if float(t) == truth_min}
+        pred_best = str(group_sorted[best_pred_idx]["id"])
+        top1 = 1.0 if pred_best in truth_best else 0.0
+
+        out[gid] = {
+            "group_id": str(gid),
+            "n": int(len(group_sorted)),
+            "spearman_pred_vs_truth": float(spearman),
+            "pairwise_order_accuracy": float(acc),
+            "pairwise_correct": int(correct),
+            "pairwise_total": int(total),
+            "top1_accuracy": float(top1),
+            "pred_best_id": pred_best,
+            "truth_best_ids": sorted(truth_best),
+        }
+    return out
+
+
+def _aggregate_metrics_from_group_metrics(group_metrics: dict[str, dict[str, object]]) -> dict[str, float | int]:
+    spearmans = [
+        float(v.get("spearman_pred_vs_truth", float("nan")))
+        for v in group_metrics.values()
+        if math.isfinite(float(v.get("spearman_pred_vs_truth", float("nan"))))
+    ]
+    mean_spearman = float(statistics.fmean(spearmans)) if spearmans else float("nan")
+    median_spearman = float(statistics.median(spearmans)) if spearmans else float("nan")
+
+    top1s = [
+        float(v.get("top1_accuracy", float("nan")))
+        for v in group_metrics.values()
+        if math.isfinite(float(v.get("top1_accuracy", float("nan"))))
+    ]
+    top1_mean = float(statistics.fmean(top1s)) if top1s else float("nan")
+
+    pair_correct = sum(int(v.get("pairwise_correct") or 0) for v in group_metrics.values())
+    pair_total = sum(int(v.get("pairwise_total") or 0) for v in group_metrics.values())
+    pair_acc = float(pair_correct) / float(pair_total) if pair_total else float("nan")
+
+    num_negative = sum(
+        1
+        for v in group_metrics.values()
+        if not math.isfinite(float(v.get("spearman_pred_vs_truth", float("nan"))))
+        or float(v.get("spearman_pred_vs_truth", float("nan"))) < 0.0
+    )
+
+    return {
+        "mean_spearman_by_group": float(mean_spearman),
+        "median_spearman_by_group": float(median_spearman),
+        "pairwise_order_accuracy_overall": float(pair_acc),
+        "pairwise_correct": int(pair_correct),
+        "pairwise_total": int(pair_total),
+        "top1_accuracy_mean": float(top1_mean),
+        "num_groups_spearman_negative": int(num_negative),
+    }
+
+
 def _is_finite_dict(d: dict[str, float]) -> bool:
     return all(math.isfinite(float(v)) for v in d.values())
 
@@ -725,6 +970,101 @@ def _functional_features_for_row(
         raise AccuracyA2SelfConsistentError(f"non-finite features for id={row.mid}: {feats}")
 
     return feats
+
+
+def _full_functional_terms_for_row(
+    row: _Row,
+    *,
+    atoms_db: AtomsDbV1,
+    potential_gamma: float,
+    potential_variant: str,
+    v_deg_coeff: float,
+    v_valence_coeff: float,
+    v_arom_coeff: float,
+    v_ring_coeff: float,
+    v_charge_coeff: float,
+    v_chi_coeff: float,
+    edge_weight_mode: str,
+    edge_aromatic_mult: float,
+    edge_delta_chi_alpha: float,
+    cfg: _A2FullFunctionalConfig,
+) -> dict[str, float | int | bool]:
+    w_adj = _weighted_adjacency_from_bonds(
+        n=int(row.n_heavy_atoms),
+        bonds=row.bonds,
+        types=row.types,
+        atoms_db=atoms_db,
+        edge_weight_mode=str(edge_weight_mode),
+        aromatic_mult=float(edge_aromatic_mult),
+        delta_chi_alpha=float(edge_delta_chi_alpha),
+    )
+    lap = _laplacian_from_adjacency(w_adj)
+    v0 = _build_base_potential(
+        row,
+        atoms_db=atoms_db,
+        gamma=float(potential_gamma),
+        potential_variant=str(potential_variant),
+        v_deg_coeff=float(v_deg_coeff),
+        v_valence_coeff=float(v_valence_coeff),
+        v_arom_coeff=float(v_arom_coeff),
+        v_ring_coeff=float(v_ring_coeff),
+        v_charge_coeff=float(v_charge_coeff),
+        v_chi_coeff=float(v_chi_coeff),
+    )
+
+    v, rho, phi, curvature, _, sc_converged, sc_iters, residual_final = _solve_scf_full_functional_v1(
+        laplacian=lap,
+        v0=v0,
+        heat_tau=float(cfg.heat_tau),
+        phi_eps=float(cfg.phi_eps),
+        sc_iters=int(cfg.sc_iters),
+        sc_eta=float(cfg.sc_eta),
+        sc_clip=float(cfg.sc_clip),
+    )
+
+    if rho.size != int(row.n_heavy_atoms) or phi.size != int(row.n_heavy_atoms) or curvature.size != int(row.n_heavy_atoms):
+        raise AccuracyA2SelfConsistentError(f"invalid SCF output shapes for id={row.mid}")
+    if not math.isfinite(float(np.min(rho))) or float(np.min(rho)) < 0.0:
+        raise AccuracyA2SelfConsistentError(f"invalid rho for id={row.mid}")
+
+    grad_energy = float(phi.T @ (lap @ phi))
+    curv_l1 = float(np.sum(np.abs(curvature)))
+    curv_l2 = float(np.linalg.norm(curvature))
+    curv_maxabs = float(np.max(np.abs(curvature))) if curvature.size else 0.0
+    mvec = _mass_vector(row.types, mode=str(cfg.mass_mode))
+    mass_phi = float(np.sum(mvec * phi))
+
+    term_grad = float(cfg.coef_alpha) * float(grad_energy)
+    term_curv = float(cfg.coef_beta) * float(curv_l1)
+    term_mass = float(cfg.coef_gamma) * float(mass_phi)
+    E = float(term_grad + term_curv + term_mass)
+
+    phi_std = float(np.std(phi)) if phi.size else 0.0
+    payload: dict[str, float | int | bool] = {
+        "E": float(E),
+        "grad_energy": float(grad_energy),
+        "curv_l1": float(curv_l1),
+        "curv_l2": float(curv_l2),
+        "curv_maxabs": float(curv_maxabs),
+        "mass_phi": float(mass_phi),
+        "term_grad": float(term_grad),
+        "term_curv": float(term_curv),
+        "term_mass": float(term_mass),
+        "rho_min": float(np.min(rho)),
+        "rho_mean": float(np.mean(rho)),
+        "phi_min": float(np.min(phi)),
+        "phi_max": float(np.max(phi)),
+        "phi_std": float(phi_std),
+        "sc_iters": int(sc_iters),
+        "sc_residual_final": float(residual_final),
+        "sc_converged": bool(sc_converged),
+        "min_V": float(np.min(v)),
+        "max_V": float(np.max(v)),
+        "mean_V": float(np.mean(v)),
+    }
+    if not all(isinstance(payload[k], bool) or math.isfinite(float(payload[k])) for k in payload if k not in {"sc_iters", "sc_converged"}):
+        raise AccuracyA2SelfConsistentError(f"non-finite functional terms for id={row.mid}: {payload}")
+    return payload
 
 
 def run_accuracy_a1_isomers_a2_self_consistent(
@@ -1191,8 +1531,686 @@ def run_accuracy_a1_isomers_a2_self_consistent(
     _write_zip_pack(out_dir, zip_name="evidence_pack.zip")
 
 
+def run_accuracy_a1_isomers_a2_full_functional_v1(
+    *,
+    experiment_id: str,
+    input_csv: Path,
+    out_dir: Path,
+    seed: int,
+    potential_gamma: float,
+    potential_variant: str,
+    v_deg_coeff: float,
+    v_valence_coeff: float,
+    v_arom_coeff: float,
+    v_ring_coeff: float,
+    v_charge_coeff: float,
+    v_chi_coeff: float,
+    edge_weight_mode: str,
+    edge_aromatic_mult: float,
+    edge_delta_chi_alpha: float,
+    calibrator_ridge_lambda: float,
+    kpi_mean_spearman_by_group_test_min: float,
+    kpi_pairwise_order_accuracy_overall_test_min: float,
+    kpi_median_spearman_by_group_test_min: float,
+    kpi_top1_accuracy_mean_test_min: float,
+) -> None:
+    if not input_csv.exists():
+        raise AccuracyA2SelfConsistentError(f"missing input_csv: {input_csv}")
+
+    rows = _load_rows(input_csv)
+    rows_sorted = sorted(rows, key=lambda rr: (str(rr.gid), str(rr.mid)))
+    group_ids = sorted({r.gid for r in rows_sorted})
+    if len(group_ids) < 2:
+        raise AccuracyA2SelfConsistentError("need at least 2 groups for LOOCV")
+
+    atoms_db = load_atoms_db_v1()
+    if not atoms_db.potential_by_atomic_num:
+        raise AccuracyA2SelfConsistentError("atoms_db_v1 must provide epsilon(Z)")
+
+    truth_rel_by_id = _group_truth_min_center(rows_sorted)
+
+    configs = _a2_full_functional_default_configs()
+    cfg_by_id = {c.config_id: c for c in configs}
+    if len(cfg_by_id) != len(configs):
+        raise AccuracyA2SelfConsistentError("duplicate config_id in A2.1 search space")
+
+    eval_by_config: dict[str, dict[str, dict[str, float | int | bool]]] = {}
+    group_metrics_by_config: dict[str, dict[str, dict[str, object]]] = {}
+    search_rows: list[dict[str, object]] = []
+
+    for cfg in configs:
+        terms_by_id: dict[str, dict[str, float | int | bool]] = {}
+        for r in rows_sorted:
+            terms_by_id[r.mid] = _full_functional_terms_for_row(
+                r,
+                atoms_db=atoms_db,
+                potential_gamma=float(potential_gamma),
+                potential_variant=str(potential_variant),
+                v_deg_coeff=float(v_deg_coeff),
+                v_valence_coeff=float(v_valence_coeff),
+                v_arom_coeff=float(v_arom_coeff),
+                v_ring_coeff=float(v_ring_coeff),
+                v_charge_coeff=float(v_charge_coeff),
+                v_chi_coeff=float(v_chi_coeff),
+                edge_weight_mode=str(edge_weight_mode),
+                edge_aromatic_mult=float(edge_aromatic_mult),
+                edge_delta_chi_alpha=float(edge_delta_chi_alpha),
+                cfg=cfg,
+            )
+
+        eval_by_config[str(cfg.config_id)] = terms_by_id
+
+        min_E_by_gid: dict[str, float] = {}
+        for gid in group_ids:
+            e_vals = [float(terms_by_id[r.mid]["E"]) for r in rows_sorted if r.gid == gid]
+            if not e_vals:
+                raise AccuracyA2SelfConsistentError("empty group while building config metrics")
+            min_E_by_gid[str(gid)] = float(min(e_vals))
+
+        records_cfg: list[dict[str, object]] = []
+        for r in rows_sorted:
+            e = float(terms_by_id[r.mid]["E"])
+            records_cfg.append(
+                {
+                    "id": str(r.mid),
+                    "group_id": str(r.gid),
+                    "smiles": str(r.smiles),
+                    "truth_rel_kcalmol": float(truth_rel_by_id[r.mid]),
+                    "pred_raw": float(e),
+                    "pred_rel": float(float(e) - float(min_E_by_gid[str(r.gid)])),
+                }
+            )
+        gm = _compute_group_metrics(records_cfg)
+        group_metrics_by_config[str(cfg.config_id)] = gm
+        agg = _aggregate_metrics_from_group_metrics(gm)
+        search_rows.append(
+            {
+                "config_id": str(cfg.config_id),
+                "heat_tau": float(cfg.heat_tau),
+                "phi_eps": float(cfg.phi_eps),
+                "sc_iters": int(cfg.sc_iters),
+                "sc_eta": float(cfg.sc_eta),
+                "sc_clip": float(cfg.sc_clip),
+                "coef_alpha": float(cfg.coef_alpha),
+                "coef_beta": float(cfg.coef_beta),
+                "coef_gamma": float(cfg.coef_gamma),
+                "mass_mode": str(cfg.mass_mode),
+                **{k: agg[k] for k in sorted(agg.keys())},
+            }
+        )
+
+    rng = random.Random(int(seed))
+    fold_order = list(group_ids)
+    rng.shuffle(fold_order)
+
+    def _finite_or(value: float, fallback: float) -> float:
+        return float(value) if math.isfinite(float(value)) else float(fallback)
+
+    fold_selection: list[dict[str, object]] = []
+    selected_cfg_by_test_gid: dict[str, str] = {}
+    for fold_id, test_gid in enumerate(fold_order):
+        train_gids = [g for g in group_ids if g != test_gid]
+        best_key: tuple[object, ...] | None = None
+        best_cfg_id: str | None = None
+        best_train_stats: dict[str, object] = {}
+        for cfg in configs:
+            gm = group_metrics_by_config[str(cfg.config_id)]
+            spearmans = [float(gm[str(g)].get("spearman_pred_vs_truth", float("nan"))) for g in train_gids]
+            num_neg = sum(1 for s in spearmans if not math.isfinite(float(s)) or float(s) < 0.0)
+            spearmans_for_median = [_finite_or(float(s), -1.0) for s in spearmans]
+            median = float(statistics.median(spearmans_for_median)) if spearmans_for_median else float("nan")
+            mean = float(statistics.fmean(spearmans_for_median)) if spearmans_for_median else float("nan")
+            key = (int(num_neg), -float(median), -float(mean), str(cfg.config_id))
+            if best_key is None or key < best_key:
+                best_key = key
+                best_cfg_id = str(cfg.config_id)
+                best_train_stats = {
+                    "train_num_groups_spearman_negative": int(num_neg),
+                    "train_median_spearman_by_group": float(median),
+                    "train_mean_spearman_by_group": float(mean),
+                }
+
+        if best_cfg_id is None:
+            raise AccuracyA2SelfConsistentError("failed to select config for fold")
+        selected_cfg_by_test_gid[str(test_gid)] = str(best_cfg_id)
+        fold_selection.append(
+            {
+                "fold_id": int(fold_id),
+                "test_group_id": str(test_gid),
+                "selected_config_id": str(best_cfg_id),
+                **best_train_stats,
+            }
+        )
+
+    fold_selection_by_id: dict[int, dict[str, object]] = {int(r.get("fold_id", -1)): r for r in fold_selection}
+    if len(fold_selection_by_id) != len(fold_selection):
+        raise AccuracyA2SelfConsistentError("duplicate fold_id in fold_selection")
+
+    feature_names_cal = ["grad_energy", "curv_l1", "mass_phi"]
+    calibrator_lambda = float(calibrator_ridge_lambda)
+    if calibrator_lambda < 0.0 or not math.isfinite(calibrator_lambda):
+        raise AccuracyA2SelfConsistentError("calibrator_ridge_lambda must be >= 0 and finite")
+
+    all_records: list[dict[str, object]] = []
+    fold_rows: list[dict[str, object]] = []
+    fold_weights: list[dict[str, object]] = []
+    diagnostics_rows: list[dict[str, object]] = []
+
+    for fold_id, test_gid in enumerate(fold_order):
+        cfg_id = str(selected_cfg_by_test_gid[str(test_gid)])
+        cfg = cfg_by_id[cfg_id]
+        terms_by_id = eval_by_config[cfg_id]
+
+        train_rows = [r for r in rows_sorted if r.gid != test_gid]
+        test_rows = [r for r in rows_sorted if r.gid == test_gid]
+        if not test_rows:
+            raise AccuracyA2SelfConsistentError("empty test group")
+
+        pred_raw_func: dict[str, float] = {r.mid: float(terms_by_id[r.mid]["E"]) for r in test_rows}
+        min_func = min(float(pred_raw_func[r.mid]) for r in test_rows)
+
+        X_train = np.asarray([[float(terms_by_id[r.mid][k]) for k in feature_names_cal] for r in train_rows], dtype=float)
+        mean = np.mean(X_train, axis=0)
+        std = np.std(X_train, axis=0)
+        std = np.where(std == 0.0, 1.0, std)
+
+        X_std_by_id: dict[str, np.ndarray] = {}
+        for r in rows_sorted:
+            x = np.asarray([float(terms_by_id[r.mid][k]) for k in feature_names_cal], dtype=float)
+            X_std_by_id[r.mid] = (x - mean) / std
+
+        X_pairs_list: list[np.ndarray] = []
+        y_deltas_list: list[float] = []
+        train_by_group: dict[str, list[_Row]] = {}
+        for r in train_rows:
+            train_by_group.setdefault(r.gid, []).append(r)
+
+        for gid, group in train_by_group.items():
+            group_sorted = sorted(group, key=lambda rr: str(rr.mid))
+            for i in range(len(group_sorted)):
+                for j in range(i + 1, len(group_sorted)):
+                    a = group_sorted[i]
+                    b = group_sorted[j]
+                    ta = float(truth_rel_by_id[a.mid])
+                    tb = float(truth_rel_by_id[b.mid])
+                    if ta == tb:
+                        continue
+                    xa = X_std_by_id[a.mid]
+                    xb = X_std_by_id[b.mid]
+                    diff = xa - xb
+                    delta = float(ta - tb)
+                    X_pairs_list.append(diff)
+                    y_deltas_list.append(float(delta))
+                    X_pairs_list.append(-diff)
+                    y_deltas_list.append(float(-delta))
+
+        X_pairs = np.asarray(X_pairs_list, dtype=float)
+        y_deltas = np.asarray(y_deltas_list, dtype=float)
+        w = _fit_pairwise_rank_ridge(X_pairs, y_deltas, ridge_lambda=float(calibrator_lambda))
+
+        fold_weights.append(
+            {
+                "fold_id": int(fold_id),
+                "test_group_id": str(test_gid),
+                "selected_config_id": str(cfg_id),
+                "n_train_groups": int(len(train_by_group)),
+                "train_groups": sorted(train_by_group.keys()),
+                "n_train_pairs": int(X_pairs.shape[0]),
+                "standardization_mean": [float(x) for x in mean.tolist()],
+                "standardization_std": [float(x) for x in std.tolist()],
+                "weights": {feature_names_cal[i]: float(w[i]) for i in range(len(feature_names_cal))},
+            }
+        )
+
+        pred_raw_cal: dict[str, float] = {}
+        for r in test_rows:
+            pred_raw_cal[r.mid] = float(np.dot(w, X_std_by_id[r.mid]))
+        min_cal = min(float(pred_raw_cal[r.mid]) for r in test_rows)
+
+        for r in test_rows:
+            all_records.append(
+                {
+                    "fold_id": int(fold_id),
+                    "selected_config_id": str(cfg_id),
+                    "id": str(r.mid),
+                    "group_id": str(r.gid),
+                    "smiles": str(r.smiles),
+                    "truth_rel_kcalmol": float(truth_rel_by_id[r.mid]),
+                    "pred_raw": float(pred_raw_func[r.mid]),
+                    "pred_rel": float(float(pred_raw_func[r.mid]) - float(min_func)),
+                    "pred_raw_calibrated_linear": float(pred_raw_cal[r.mid]),
+                    "pred_rel_calibrated_linear": float(float(pred_raw_cal[r.mid]) - float(min_cal)),
+                }
+            )
+
+            t = terms_by_id[r.mid]
+            diagnostics_rows.append(
+                {
+                    "fold_id": int(fold_id),
+                    "selected_config_id": str(cfg_id),
+                    "id": str(r.mid),
+                    "group_id": str(r.gid),
+                    "smiles": str(r.smiles),
+                    "n_heavy_atoms": int(r.n_heavy_atoms),
+                    "heat_tau": float(cfg.heat_tau),
+                    "phi_eps": float(cfg.phi_eps),
+                    "sc_iters": int(cfg.sc_iters),
+                    "sc_eta": float(cfg.sc_eta),
+                    "sc_clip": float(cfg.sc_clip),
+                    "coef_alpha": float(cfg.coef_alpha),
+                    "coef_beta": float(cfg.coef_beta),
+                    "coef_gamma": float(cfg.coef_gamma),
+                    "mass_mode": str(cfg.mass_mode),
+                    "rho_min": float(t["rho_min"]),
+                    "rho_mean": float(t["rho_mean"]),
+                    "phi_min": float(t["phi_min"]),
+                    "phi_max": float(t["phi_max"]),
+                    "phi_std": float(t["phi_std"]),
+                    "curv_l1": float(t["curv_l1"]),
+                    "curv_l2": float(t["curv_l2"]),
+                    "curv_maxabs": float(t["curv_maxabs"]),
+                    "term_grad": float(t["term_grad"]),
+                    "term_curv": float(t["term_curv"]),
+                    "term_mass": float(t["term_mass"]),
+                    "E": float(t["E"]),
+                    "sc_residual_final": float(t["sc_residual_final"]),
+                    "sc_converged": bool(t["sc_converged"]),
+                }
+            )
+
+        test_records = [rr for rr in all_records if str(rr.get("group_id")) == str(test_gid)]
+        group_metrics_fold_func = _compute_group_metrics(test_records)
+        gm_func = group_metrics_fold_func.get(str(test_gid))
+        if gm_func is None:
+            raise AccuracyA2SelfConsistentError("missing fold group metrics (functional_only)")
+
+        group_metrics_fold_cal = _compute_group_metrics_for_pred_rel(test_records, pred_rel_key="pred_rel_calibrated_linear")
+        gm_cal = group_metrics_fold_cal.get(str(test_gid))
+        if gm_cal is None:
+            raise AccuracyA2SelfConsistentError("missing fold group metrics (calibrated_linear)")
+
+        sel = fold_selection_by_id.get(int(fold_id))
+        if sel is None:
+            raise AccuracyA2SelfConsistentError("missing fold selection record")
+
+        fold_rows.append(
+            {
+                "fold_id": int(fold_id),
+                "test_group_id": str(test_gid),
+                "selected_config_id": str(cfg_id),
+                "train_num_groups_spearman_negative": int(sel.get("train_num_groups_spearman_negative") or 0),
+                "train_median_spearman_by_group": float(sel.get("train_median_spearman_by_group") or float("nan")),
+                "train_mean_spearman_by_group": float(sel.get("train_mean_spearman_by_group") or float("nan")),
+                "n": int(gm_func.get("n") or 0),
+                "spearman_pred_vs_truth": float(gm_func.get("spearman_pred_vs_truth") or float("nan")),
+                "pairwise_order_accuracy": float(gm_func.get("pairwise_order_accuracy") or float("nan")),
+                "pairwise_correct": int(gm_func.get("pairwise_correct") or 0),
+                "pairwise_total": int(gm_func.get("pairwise_total") or 0),
+                "top1_accuracy": float(gm_func.get("top1_accuracy") or float("nan")),
+                "pred_best_id": str(gm_func.get("pred_best_id") or ""),
+                "truth_best_ids": gm_func.get("truth_best_ids") or [],
+                "spearman_pred_vs_truth_calibrated_linear": float(gm_cal.get("spearman_pred_vs_truth") or float("nan")),
+                "pairwise_order_accuracy_calibrated_linear": float(gm_cal.get("pairwise_order_accuracy") or float("nan")),
+                "top1_accuracy_calibrated_linear": float(gm_cal.get("top1_accuracy") or float("nan")),
+            }
+        )
+
+    group_metrics_func = _compute_group_metrics(all_records)
+    group_metrics_cal = _compute_group_metrics_for_pred_rel(all_records, pred_rel_key="pred_rel_calibrated_linear")
+    metrics_test_func = _aggregate_metrics_from_group_metrics(group_metrics_func)
+    metrics_test_cal = _aggregate_metrics_from_group_metrics(group_metrics_cal)
+
+    negative_spearman_groups_test = sorted(
+        [
+            str(gid)
+            for gid, gm in group_metrics_func.items()
+            if not math.isfinite(float(gm.get("spearman_pred_vs_truth", float("nan"))))
+            or float(gm.get("spearman_pred_vs_truth", float("nan"))) < 0.0
+        ]
+    )
+
+    worst_groups = sorted(
+        [
+            {
+                "group_id": str(gid),
+                "spearman_pred_vs_truth": float(gm.get("spearman_pred_vs_truth", float("nan"))),
+                "pairwise_order_accuracy": float(gm.get("pairwise_order_accuracy", float("nan"))),
+                "top1_accuracy": float(gm.get("top1_accuracy", float("nan"))),
+            }
+            for gid, gm in group_metrics_func.items()
+        ],
+        key=lambda x: (
+            _finite_or(float(x["spearman_pred_vs_truth"]), 0.0),
+            _finite_or(float(x["top1_accuracy"]), 0.0),
+            _finite_or(float(x["pairwise_order_accuracy"]), 0.0),
+        ),
+    )[:3]
+
+    worst_groups_cal = sorted(
+        [
+            {
+                "group_id": str(gid),
+                "spearman_pred_vs_truth": float(gm.get("spearman_pred_vs_truth", float("nan"))),
+                "pairwise_order_accuracy": float(gm.get("pairwise_order_accuracy", float("nan"))),
+                "top1_accuracy": float(gm.get("top1_accuracy", float("nan"))),
+            }
+            for gid, gm in group_metrics_cal.items()
+        ],
+        key=lambda x: (
+            _finite_or(float(x["spearman_pred_vs_truth"]), 0.0),
+            _finite_or(float(x["top1_accuracy"]), 0.0),
+            _finite_or(float(x["pairwise_order_accuracy"]), 0.0),
+        ),
+    )[:3]
+
+    kpi_payload: dict[str, object] = {
+        "mean_spearman_by_group_test_min": float(kpi_mean_spearman_by_group_test_min),
+        "pairwise_order_accuracy_overall_test_min": float(kpi_pairwise_order_accuracy_overall_test_min),
+        "median_spearman_by_group_test_min": float(kpi_median_spearman_by_group_test_min),
+        "top1_accuracy_mean_test_min": float(kpi_top1_accuracy_mean_test_min),
+        "mean_spearman_by_group_test": float(metrics_test_func["mean_spearman_by_group"]),
+        "pairwise_order_accuracy_overall_test": float(metrics_test_func["pairwise_order_accuracy_overall"]),
+        "median_spearman_by_group_test": float(metrics_test_func["median_spearman_by_group"]),
+        "top1_accuracy_mean_test": float(metrics_test_func["top1_accuracy_mean"]),
+        "num_groups_spearman_negative_test": int(metrics_test_func["num_groups_spearman_negative"]),
+        "num_groups_spearman_negative_test_max": 0,
+    }
+
+    ok = (
+        math.isfinite(float(kpi_payload["mean_spearman_by_group_test"]))
+        and float(kpi_payload["mean_spearman_by_group_test"]) >= float(kpi_payload["mean_spearman_by_group_test_min"])
+        and math.isfinite(float(kpi_payload["median_spearman_by_group_test"]))
+        and float(kpi_payload["median_spearman_by_group_test"]) >= float(kpi_payload["median_spearman_by_group_test_min"])
+        and math.isfinite(float(kpi_payload["pairwise_order_accuracy_overall_test"]))
+        and float(kpi_payload["pairwise_order_accuracy_overall_test"]) >= float(kpi_payload["pairwise_order_accuracy_overall_test_min"])
+        and math.isfinite(float(kpi_payload["top1_accuracy_mean_test"]))
+        and float(kpi_payload["top1_accuracy_mean_test"]) >= float(kpi_payload["top1_accuracy_mean_test_min"])
+        and int(kpi_payload["num_groups_spearman_negative_test"]) <= int(kpi_payload["num_groups_spearman_negative_test_max"])
+    )
+    kpi_payload["verdict"] = "PASS" if ok else "FAIL"
+    kpi_payload["reason"] = (
+        f"mean_spearman_by_group_test={kpi_payload['mean_spearman_by_group_test']}, "
+        f"median_spearman_by_group_test={kpi_payload['median_spearman_by_group_test']}, "
+        f"pairwise_order_accuracy_overall_test={kpi_payload['pairwise_order_accuracy_overall_test']}, "
+        f"top1_accuracy_mean_test={kpi_payload['top1_accuracy_mean_test']}, "
+        f"num_groups_spearman_negative_test={kpi_payload['num_groups_spearman_negative_test']}"
+    )
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    search_results_path = out_dir / "search_results.csv"
+    with search_results_path.open("w", encoding="utf-8", newline="") as f:
+        fieldnames = list(search_rows[0].keys()) if search_rows else []
+        w = csv.DictWriter(f, fieldnames=fieldnames, lineterminator="\n")
+        w.writeheader()
+        for rec in search_rows:
+            w.writerow({k: rec.get(k, "") for k in fieldnames})
+
+    predictions_path = out_dir / "predictions.csv"
+    with predictions_path.open("w", encoding="utf-8", newline="") as f:
+        fieldnames = [
+            "fold_id",
+            "selected_config_id",
+            "id",
+            "group_id",
+            "smiles",
+            "truth_rel_kcalmol",
+            "pred_raw",
+            "pred_rel",
+            "pred_raw_calibrated_linear",
+            "pred_rel_calibrated_linear",
+        ]
+        w = csv.DictWriter(f, fieldnames=fieldnames, lineterminator="\n")
+        w.writeheader()
+        for rec in sorted(all_records, key=lambda rr: (int(rr["fold_id"]), str(rr["group_id"]), str(rr["id"]))):
+            w.writerow({k: rec.get(k, "") for k in fieldnames})
+
+    summary_path = out_dir / "summary.csv"
+    shutil.copyfile(predictions_path, summary_path)
+
+    fold_metrics_path = out_dir / "fold_metrics.csv"
+    with fold_metrics_path.open("w", encoding="utf-8", newline="") as f:
+        fieldnames = [
+            "fold_id",
+            "test_group_id",
+            "selected_config_id",
+            "train_num_groups_spearman_negative",
+            "train_median_spearman_by_group",
+            "train_mean_spearman_by_group",
+            "n",
+            "spearman_pred_vs_truth",
+            "pairwise_order_accuracy",
+            "pairwise_correct",
+            "pairwise_total",
+            "top1_accuracy",
+            "pred_best_id",
+            "truth_best_ids",
+            "spearman_pred_vs_truth_calibrated_linear",
+            "pairwise_order_accuracy_calibrated_linear",
+            "top1_accuracy_calibrated_linear",
+        ]
+        w = csv.DictWriter(f, fieldnames=fieldnames, lineterminator="\n")
+        w.writeheader()
+        for rec in sorted(fold_rows, key=lambda rr: int(rr.get("fold_id") or 0)):
+            row = {k: rec.get(k, "") for k in fieldnames}
+            row["truth_best_ids"] = json.dumps(list(rec.get("truth_best_ids") or []), ensure_ascii=False)
+            w.writerow(row)
+
+    group_metrics_path = out_dir / "group_metrics.csv"
+    with group_metrics_path.open("w", encoding="utf-8", newline="") as f:
+        fieldnames = [
+            "group_id",
+            "n",
+            "spearman_pred_vs_truth",
+            "pairwise_order_accuracy",
+            "pairwise_correct",
+            "pairwise_total",
+            "top1_accuracy",
+            "pred_best_id",
+            "truth_best_ids",
+            "spearman_pred_vs_truth_calibrated_linear",
+            "pairwise_order_accuracy_calibrated_linear",
+            "top1_accuracy_calibrated_linear",
+        ]
+        w = csv.DictWriter(f, fieldnames=fieldnames, lineterminator="\n")
+        w.writeheader()
+        for gid, gm in sorted(group_metrics_func.items(), key=lambda x: str(x[0])):
+            row = {k: gm.get(k, "") for k in fieldnames}
+            row["truth_best_ids"] = json.dumps(list(gm.get("truth_best_ids") or []), ensure_ascii=False)
+            gm_cal = group_metrics_cal.get(str(gid), {})
+            row["spearman_pred_vs_truth_calibrated_linear"] = gm_cal.get("spearman_pred_vs_truth", "")
+            row["pairwise_order_accuracy_calibrated_linear"] = gm_cal.get("pairwise_order_accuracy", "")
+            row["top1_accuracy_calibrated_linear"] = gm_cal.get("top1_accuracy", "")
+            w.writerow(row)
+
+    diagnostics_path = out_dir / "diagnostics.csv"
+    with diagnostics_path.open("w", encoding="utf-8", newline="") as f:
+        fieldnames = list(diagnostics_rows[0].keys()) if diagnostics_rows else []
+        w = csv.DictWriter(f, fieldnames=fieldnames, lineterminator="\n")
+        w.writeheader()
+        for rec in sorted(diagnostics_rows, key=lambda rr: (int(rr.get("fold_id") or 0), str(rr.get("group_id") or ""), str(rr.get("id") or ""))):
+            w.writerow({k: rec.get(k, "") for k in fieldnames})
+
+    best_cfg: dict[str, object] = {
+        "a2_variant": "full_functional_v1_heat_kernel",
+        "operator_fixed": {
+            "potential_gamma": float(potential_gamma),
+            "potential_variant": str(potential_variant),
+            "v_deg_coeff": float(v_deg_coeff),
+            "v_valence_coeff": float(v_valence_coeff),
+            "v_arom_coeff": float(v_arom_coeff),
+            "v_ring_coeff": float(v_ring_coeff),
+            "v_charge_coeff": float(v_charge_coeff),
+            "v_chi_coeff": float(v_chi_coeff),
+            "edge_weight_mode": str(edge_weight_mode),
+            "edge_aromatic_mult": float(edge_aromatic_mult),
+            "edge_delta_chi_alpha": float(edge_delta_chi_alpha),
+        },
+        "search": {
+            "space_size": int(len(configs)),
+            "budget": int(len(configs)),
+            "chosen_by_train_only": True,
+            "train_selection_metric_primary": "num_negative_spearman",
+            "train_selection_metric_secondary": "median_spearman",
+            "results_csv": "search_results.csv",
+        },
+        "candidates": [
+            {
+                "config_id": str(c.config_id),
+                "heat_tau": float(c.heat_tau),
+                "phi_eps": float(c.phi_eps),
+                "sc_iters": int(c.sc_iters),
+                "sc_eta": float(c.sc_eta),
+                "sc_clip": float(c.sc_clip),
+                "coef_alpha": float(c.coef_alpha),
+                "coef_beta": float(c.coef_beta),
+                "coef_gamma": float(c.coef_gamma),
+                "mass_mode": str(c.mass_mode),
+            }
+            for c in configs
+        ],
+        "fold_selection": list(fold_selection),
+        "calibrator": {
+            "mode": "calibrated_linear_pairwise_rank_ridge",
+            "feature_names": list(feature_names_cal),
+            "ridge_lambda": float(calibrator_lambda),
+            "fold_weights": list(fold_weights),
+        },
+        "cv": {
+            "seed": int(seed),
+            "fold_order": list(fold_order),
+        },
+    }
+    (out_dir / "best_config.json").write_text(json.dumps(best_cfg, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+
+    metrics_payload: dict[str, object] = {
+        "schema_version": "accuracy_a1_isomers_a2_1.v1",
+        "experiment_id": str(experiment_id),
+        "dataset": {
+            "rows_total": int(len(rows_sorted)),
+            "groups_total": int(len(group_ids)),
+        },
+        "input_csv": input_csv.as_posix(),
+        "input_sha256_normalized": _sha256_text_normalized(input_csv),
+        "best_config": best_cfg,
+        "metrics_loocv_test_functional_only": dict(metrics_test_func),
+        "metrics_loocv_test_calibrated_linear": dict(metrics_test_cal),
+        "kpi": kpi_payload,
+        "negative_spearman_groups_test": list(negative_spearman_groups_test),
+        "worst_groups": worst_groups,
+        "worst_groups_calibrated_linear": worst_groups_cal,
+        "files": {
+            "summary_csv": "summary.csv",
+            "predictions_csv": "predictions.csv",
+            "fold_metrics_csv": "fold_metrics.csv",
+            "group_metrics_csv": "group_metrics.csv",
+            "diagnostics_csv": "diagnostics.csv",
+            "metrics_json": "metrics.json",
+            "best_config_json": "best_config.json",
+            "provenance_json": "provenance.json",
+            "manifest_json": "manifest.json",
+            "checksums_sha256": "checksums.sha256",
+            "index_md": "index.md",
+        },
+    }
+    (out_dir / "metrics.json").write_text(json.dumps(metrics_payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+
+    index_lines = [
+        f"# {experiment_id} (Isomers) A2.1 full functional (heat-kernel diag + SCF)",
+        "",
+        "LOOCV (by group_id) metrics:",
+        "",
+        "Functional-only:",
+        f"- mean_spearman_by_group: {metrics_test_func.get('mean_spearman_by_group')}",
+        f"- median_spearman_by_group: {metrics_test_func.get('median_spearman_by_group')}",
+        f"- pairwise_order_accuracy_overall: {metrics_test_func.get('pairwise_order_accuracy_overall')} ({metrics_test_func.get('pairwise_correct')}/{metrics_test_func.get('pairwise_total')})",
+        f"- top1_accuracy_mean: {metrics_test_func.get('top1_accuracy_mean')}",
+        f"- num_groups_spearman_negative: {metrics_test_func.get('num_groups_spearman_negative')}",
+        "",
+        "Calibrated-linear (pairwise rank ridge):",
+        f"- mean_spearman_by_group: {metrics_test_cal.get('mean_spearman_by_group')}",
+        f"- median_spearman_by_group: {metrics_test_cal.get('median_spearman_by_group')}",
+        f"- pairwise_order_accuracy_overall: {metrics_test_cal.get('pairwise_order_accuracy_overall')} ({metrics_test_cal.get('pairwise_correct')}/{metrics_test_cal.get('pairwise_total')})",
+        f"- top1_accuracy_mean: {metrics_test_cal.get('top1_accuracy_mean')}",
+        f"- num_groups_spearman_negative: {metrics_test_cal.get('num_groups_spearman_negative')}",
+        "",
+        "KPI (functional-only):",
+        f"- verdict: {kpi_payload.get('verdict')}",
+        f"- reason: {kpi_payload.get('reason')}",
+        "",
+        "Worst groups (functional-only):",
+        "```json",
+        json.dumps(worst_groups, ensure_ascii=False, sort_keys=True, indent=2),
+        "```",
+        "",
+    ]
+    (out_dir / "index.md").write_text("\n".join(index_lines) + "\n", encoding="utf-8")
+
+    repo_root = Path(__file__).resolve().parents[1]
+    extra_files: list[tuple[Path, Path]] = [
+        (Path("data/accuracy/isomer_truth.v1.csv"), input_csv),
+        (Path("docs/contracts/isomer_truth.v1.md"), repo_root / "docs/contracts/isomer_truth.v1.md"),
+        (Path("data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv"), repo_root / "data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv"),
+        (
+            Path("data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv.sha256"),
+            repo_root / "data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv.sha256",
+        ),
+        (Path("data/atoms_db_v1.json"), repo_root / "data/atoms_db_v1.json"),
+    ]
+    for rel_dst, src in extra_files:
+        try:
+            if not src.exists():
+                continue
+            dst = out_dir / rel_dst
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(src, dst)
+        except Exception as exc:
+            raise AccuracyA2SelfConsistentError(f"failed to copy provenance file {src} -> {rel_dst}") from exc
+
+    provenance: dict[str, object] = {
+        "experiment_id": str(experiment_id),
+        "git_sha": _detect_git_sha(),
+        "source_sha_main": _detect_git_sha(),
+        "python_version": platform.python_version(),
+        "timestamp_utc": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+        "command": " ".join([Path(sys.argv[0]).name] + sys.argv[1:]),
+        "input_csv": input_csv.as_posix(),
+        "input_sha256_normalized": _sha256_text_normalized(input_csv),
+        "search_space_size": int(len(configs)),
+        "budget": int(len(configs)),
+        "chosen_by_train_only": True,
+        "train_selection_metric_primary": "num_negative_spearman",
+        "train_selection_metric_secondary": "median_spearman",
+        "best_config": best_cfg,
+        "kpi": kpi_payload,
+    }
+    _write_provenance(out_dir, payload=provenance)
+
+    config_for_manifest = {
+        "experiment_id": str(experiment_id),
+        "input_csv": input_csv.as_posix(),
+        "input_sha256_normalized": _sha256_text_normalized(input_csv),
+        "best_config": best_cfg,
+        "kpi": kpi_payload,
+    }
+    file_infos = _compute_file_infos(out_dir, skip_names={"manifest.json", "checksums.sha256", "evidence_pack.zip"})
+    manifest_files = list(file_infos)
+    manifest_files.append({"path": "./manifest.json", "size_bytes": None, "sha256": None})
+    _write_manifest(out_dir, config=config_for_manifest, files=manifest_files)
+    file_infos_final = _compute_file_infos(out_dir, skip_names={"checksums.sha256", "evidence_pack.zip"})
+    _write_checksums(out_dir, file_infos_final)
+    _write_zip_pack(out_dir, zip_name="evidence_pack.zip")
+
+
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Run ACCURACY-A2 isomers self-consistent functional (LOOCV by group_id) and build an evidence pack.")
+    p.add_argument(
+        "--a2_variant",
+        type=str,
+        default="self_consistent_v1",
+        choices=["self_consistent_v1", "full_functional_v1"],
+        help="A2 runner variant: legacy self-consistent functional (v1) or A2.1 full functional (heat-kernel) + SCF.",
+    )
     p.add_argument("--experiment_id", type=str, default="ACCURACY-A2", help="Experiment/Roadmap label to embed in the pack.")
     p.add_argument("--input_csv", type=Path, default=DEFAULT_INPUT_CSV, help="Canonical isomer truth CSV.")
     p.add_argument("--out_dir", type=Path, default=DEFAULT_OUT_DIR, help="Output directory.")
@@ -1227,6 +2245,8 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--model_max_iter", type=int, default=2000, help="Max iterations for pairwise logistic.")
     p.add_argument("--model_tol", type=float, default=1e-6, help="Gradient norm tolerance for pairwise logistic.")
 
+    p.add_argument("--calibrator_ridge_lambda", type=float, default=1e-3, help="Ridge lambda for calibrated_linear mode (A2.1).")
+
     p.add_argument("--kpi_mean_spearman_by_group_test_min", type=float, default=0.55, help="KPI gate (LOOCV test): mean spearman by group >= value.")
     p.add_argument("--kpi_median_spearman_by_group_test_min", type=float, default=0.55, help="KPI gate (LOOCV test): median spearman by group >= value.")
     p.add_argument("--kpi_pairwise_order_accuracy_overall_test_min", type=float, default=0.70, help="KPI gate (LOOCV test): overall pairwise order accuracy >= value.")
@@ -1236,42 +2256,69 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
-    run_accuracy_a1_isomers_a2_self_consistent(
-        experiment_id=str(args.experiment_id),
-        input_csv=Path(args.input_csv),
-        out_dir=Path(args.out_dir),
-        seed=int(args.seed),
-        gamma=float(args.gamma),
-        potential_variant=str(args.potential_variant),
-        v_deg_coeff=float(args.v_deg_coeff),
-        v_valence_coeff=float(args.v_valence_coeff),
-        v_arom_coeff=float(args.v_arom_coeff),
-        v_ring_coeff=float(args.v_ring_coeff),
-        v_charge_coeff=float(args.v_charge_coeff),
-        v_chi_coeff=float(args.v_chi_coeff),
-        edge_weight_mode=str(args.edge_weight_mode),
-        edge_aromatic_mult=float(args.edge_aromatic_mult),
-        edge_delta_chi_alpha=float(args.edge_delta_chi_alpha),
-        sc_occ_k=int(args.sc_occ_k),
-        sc_tau=float(args.sc_tau),
-        sc_max_iter=int(args.sc_max_iter),
-        sc_tol=float(args.sc_tol),
-        sc_damping=float(args.sc_damping),
-        phi_eps=float(args.phi_eps),
-        eta_a=float(args.eta_a),
-        eta_phi=float(args.eta_phi),
-        update_clip=float(args.update_clip) if args.update_clip is not None else None,
-        model_type=str(args.model_type),
-        model_ridge_lambda=float(args.model_ridge_lambda),
-        model_l2_lambda=float(args.model_l2_lambda),
-        model_lr=float(args.model_lr),
-        model_max_iter=int(args.model_max_iter),
-        model_tol=float(args.model_tol),
-        kpi_mean_spearman_by_group_test_min=float(args.kpi_mean_spearman_by_group_test_min),
-        kpi_median_spearman_by_group_test_min=float(args.kpi_median_spearman_by_group_test_min),
-        kpi_pairwise_order_accuracy_overall_test_min=float(args.kpi_pairwise_order_accuracy_overall_test_min),
-        kpi_top1_accuracy_mean_test_min=float(args.kpi_top1_accuracy_mean_test_min),
-    )
+    variant = str(args.a2_variant)
+    if variant == "full_functional_v1":
+        run_accuracy_a1_isomers_a2_full_functional_v1(
+            experiment_id=str(args.experiment_id),
+            input_csv=Path(args.input_csv),
+            out_dir=Path(args.out_dir),
+            seed=int(args.seed),
+            potential_gamma=float(args.gamma),
+            potential_variant=str(args.potential_variant),
+            v_deg_coeff=float(args.v_deg_coeff),
+            v_valence_coeff=float(args.v_valence_coeff),
+            v_arom_coeff=float(args.v_arom_coeff),
+            v_ring_coeff=float(args.v_ring_coeff),
+            v_charge_coeff=float(args.v_charge_coeff),
+            v_chi_coeff=float(args.v_chi_coeff),
+            edge_weight_mode=str(args.edge_weight_mode),
+            edge_aromatic_mult=float(args.edge_aromatic_mult),
+            edge_delta_chi_alpha=float(args.edge_delta_chi_alpha),
+            calibrator_ridge_lambda=float(args.calibrator_ridge_lambda),
+            kpi_mean_spearman_by_group_test_min=float(args.kpi_mean_spearman_by_group_test_min),
+            kpi_pairwise_order_accuracy_overall_test_min=float(args.kpi_pairwise_order_accuracy_overall_test_min),
+            kpi_median_spearman_by_group_test_min=float(args.kpi_median_spearman_by_group_test_min),
+            kpi_top1_accuracy_mean_test_min=float(args.kpi_top1_accuracy_mean_test_min),
+        )
+    elif variant == "self_consistent_v1":
+        run_accuracy_a1_isomers_a2_self_consistent(
+            experiment_id=str(args.experiment_id),
+            input_csv=Path(args.input_csv),
+            out_dir=Path(args.out_dir),
+            seed=int(args.seed),
+            gamma=float(args.gamma),
+            potential_variant=str(args.potential_variant),
+            v_deg_coeff=float(args.v_deg_coeff),
+            v_valence_coeff=float(args.v_valence_coeff),
+            v_arom_coeff=float(args.v_arom_coeff),
+            v_ring_coeff=float(args.v_ring_coeff),
+            v_charge_coeff=float(args.v_charge_coeff),
+            v_chi_coeff=float(args.v_chi_coeff),
+            edge_weight_mode=str(args.edge_weight_mode),
+            edge_aromatic_mult=float(args.edge_aromatic_mult),
+            edge_delta_chi_alpha=float(args.edge_delta_chi_alpha),
+            sc_occ_k=int(args.sc_occ_k),
+            sc_tau=float(args.sc_tau),
+            sc_max_iter=int(args.sc_max_iter),
+            sc_tol=float(args.sc_tol),
+            sc_damping=float(args.sc_damping),
+            phi_eps=float(args.phi_eps),
+            eta_a=float(args.eta_a),
+            eta_phi=float(args.eta_phi),
+            update_clip=float(args.update_clip) if args.update_clip is not None else None,
+            model_type=str(args.model_type),
+            model_ridge_lambda=float(args.model_ridge_lambda),
+            model_l2_lambda=float(args.model_l2_lambda),
+            model_lr=float(args.model_lr),
+            model_max_iter=int(args.model_max_iter),
+            model_tol=float(args.model_tol),
+            kpi_mean_spearman_by_group_test_min=float(args.kpi_mean_spearman_by_group_test_min),
+            kpi_median_spearman_by_group_test_min=float(args.kpi_median_spearman_by_group_test_min),
+            kpi_pairwise_order_accuracy_overall_test_min=float(args.kpi_pairwise_order_accuracy_overall_test_min),
+            kpi_top1_accuracy_mean_test_min=float(args.kpi_top1_accuracy_mean_test_min),
+        )
+    else:
+        raise AccuracyA2SelfConsistentError(f"invalid a2_variant: {variant}")
     return 0
 
 

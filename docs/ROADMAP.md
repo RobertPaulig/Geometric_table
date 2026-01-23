@@ -690,7 +690,10 @@ Hard rule:
 - Do not modify truth files: `data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv`, `data/accuracy/isomer_truth.v1.csv`, `docs/contracts/isomer_truth.v1.md`.
 
 #### ACCURACY-A2 - Self-consistent functional (graph-only)
-Status: [x] planned  [ ] in-progress  [ ] done
+Status: [ ] planned  [ ] in-progress  [x] done
+
+Truth-chain (facts):
+- Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/accuracy-a1-isomers-2026-01-23-a2-r1
 
 Goal:
 - Fix worst-group inversions by scoring isomers with a self-consistent functional on the 2D graph (no 3D, no new datasets).
@@ -700,6 +703,22 @@ DoD (facts):
 - CV method is LOOCV by `group_id` (every group is a test fold once; seed fixed for fold order).
 - Evidence pack includes `predictions.csv` (out-of-sample), `fold_metrics.csv`, `group_metrics.csv`, `metrics.json`, `best_config.json`, `provenance.json`, `manifest.json`, `checksums.sha256`.
 - KPI gates (LOOCV test folds): `mean_spearman_by_group_test >= 0.55`, `median_spearman_by_group_test >= 0.55`, `pairwise_order_accuracy_overall_test >= 0.70`, `top1_accuracy_mean_test >= 0.40`.
+- Truth-chain closure: publish-run → release(zip+.sha256) → registry → lineage → main CI 3/3.
+
+Hard rule:
+- Do not modify truth files: `data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv`, `data/accuracy/isomer_truth.v1.csv`, `docs/contracts/isomer_truth.v1.md`.
+
+#### ACCURACY-A2.1 - Full functional v1 (heat-kernel diag + fixed SCF update)
+Status: [x] planned  [ ] in-progress  [ ] done
+
+Goal:
+- Implement the full A2 functional law (rho = diag(exp(-tau*H)) + fixed SCF update) and evaluate LOOCV by `group_id`.
+
+DoD (facts):
+- Truth dataset unchanged; canonical truth remains reproducible from raw.
+- CV method is LOOCV by `group_id` (every group is a test fold once; seed fixed for fold order).
+- Evidence pack includes `predictions.csv` (out-of-sample), `fold_metrics.csv`, `group_metrics.csv`, `diagnostics.csv`, `search_results.csv`, `metrics.json`, `best_config.json`, `provenance.json`, `manifest.json`, `checksums.sha256`.
+- KPI gates (LOOCV test folds): `mean_spearman_by_group_test >= 0.55`, `median_spearman_by_group_test >= 0.55`, `pairwise_order_accuracy_overall_test >= 0.70`, `top1_accuracy_mean_test >= 0.40`, `num_groups_spearman_negative_test == 0`.
 - Truth-chain closure: publish-run → release(zip+.sha256) → registry → lineage → main CI 3/3.
 
 Hard rule:
