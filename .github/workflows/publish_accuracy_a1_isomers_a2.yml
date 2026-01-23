@@ -73,23 +73,18 @@ jobs:
           assert gen_sha == tracked_sha, "canonical truth mismatch: raw -> generated != tracked"
           PY
 
-      - name: Run ACCURACY-A2 isomers self-consistent functional (LOOCV by group_id)
+      - name: Run ACCURACY-A2.1 isomers full functional v1 (heat-kernel diag + SCF, LOOCV by group_id)
         run: |
           python scripts/accuracy_a1_isomers_a2_self_consistent.py \
-            --experiment_id "ACCURACY-A2" \
+            --a2_variant full_functional_v1 \
+            --experiment_id "ACCURACY-A2.1" \
             --input_csv data/accuracy/isomer_truth.v1.csv \
             --out_dir out_accuracy_a1_isomers_a2 \
             --seed 0 \
             --gamma 0.28 \
             --potential_variant epsilon_z \
             --edge_weight_mode bond_order_delta_chi \
-            --sc_max_iter 5 \
-            --eta_a 0.1 \
-            --eta_phi 0.0 \
-            --update_clip 0.5 \
-            --model_type pairwise_rank_ridge \
-            --model_ridge_lambda 1e-3 \
-            --kpi_mean_spearman_by_group_test_min 0.55 \
+            --calibrator_ridge_lambda 1e-3 \
             --kpi_median_spearman_by_group_test_min 0.55 \
             --kpi_pairwise_order_accuracy_overall_test_min 0.70 \
             --kpi_top1_accuracy_mean_test_min 0.40
@@ -111,7 +106,7 @@ jobs:
       - name: Validate zip (no unpack)
         run: |
           python -m zipfile -t out_accuracy_a1_isomers_a2/evidence_pack.zip
-          python -m zipfile -l out_accuracy_a1_isomers_a2/evidence_pack.zip | grep -E "manifest.json|provenance.json|checksums.sha256|metrics.json|index.md|summary.csv|predictions.csv|fold_metrics.csv|group_metrics.csv|best_config.json|data/accuracy/isomer_truth.v1.csv|docs/contracts/isomer_truth.v1.md|data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv|data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv.sha256|data/atoms_db_v1.json"
+          python -m zipfile -l out_accuracy_a1_isomers_a2/evidence_pack.zip | grep -E "manifest.json|provenance.json|checksums.sha256|metrics.json|index.md|summary.csv|predictions.csv|fold_metrics.csv|group_metrics.csv|best_config.json|diagnostics.csv|search_results.csv|data/accuracy/isomer_truth.v1.csv|docs/contracts/isomer_truth.v1.md|data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv|data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv.sha256|data/atoms_db_v1.json"
 
       - name: Prepare isomers asset
         run: |
@@ -127,7 +122,8 @@ jobs:
 
           metrics = json.loads(Path("out_accuracy_a1_isomers_a2/metrics.json").read_text(encoding="utf-8"))
           ds = metrics.get("dataset", {}) if isinstance(metrics, dict) else {}
-          mm = metrics.get("metrics_loocv_test", {}) if isinstance(metrics, dict) else {}
+          mm0 = metrics.get("metrics_loocv_test_functional_only", {}) if isinstance(metrics, dict) else {}
+          mm1 = metrics.get("metrics_loocv_test_calibrated_linear", {}) if isinstance(metrics, dict) else {}
           kpi = metrics.get("kpi", {}) if isinstance(metrics, dict) else {}
           worst = metrics.get("worst_groups", []) if isinstance(metrics, dict) else []
 
@@ -135,11 +131,18 @@ jobs:
           lines.append(f"  - rows_total: {ds.get('rows_total')}")
           lines.append(f"  - groups_total: {ds.get('groups_total')}")
           lines.append(f"  - kpi.verdict: {kpi.get('verdict')}")
-          lines.append("  - loocv_test:")
-          lines.append(f"    - mean_spearman_by_group: {mm.get('mean_spearman_by_group')}")
-          lines.append(f"    - median_spearman_by_group: {mm.get('median_spearman_by_group')}")
-          lines.append(f"    - pairwise_order_accuracy_overall: {mm.get('pairwise_order_accuracy_overall')} ({mm.get('pairwise_correct')}/{mm.get('pairwise_total')})")
-          lines.append(f"    - top1_accuracy_mean: {mm.get('top1_accuracy_mean')}")
+          lines.append("  - loocv_test_functional_only:")
+          lines.append(f"    - mean_spearman_by_group: {mm0.get('mean_spearman_by_group')}")
+          lines.append(f"    - median_spearman_by_group: {mm0.get('median_spearman_by_group')}")
+          lines.append(f"    - pairwise_order_accuracy_overall: {mm0.get('pairwise_order_accuracy_overall')} ({mm0.get('pairwise_correct')}/{mm0.get('pairwise_total')})")
+          lines.append(f"    - top1_accuracy_mean: {mm0.get('top1_accuracy_mean')}")
+          lines.append(f"    - num_groups_spearman_negative: {mm0.get('num_groups_spearman_negative')}")
+          lines.append("  - loocv_test_calibrated_linear:")
+          lines.append(f"    - mean_spearman_by_group: {mm1.get('mean_spearman_by_group')}")
+          lines.append(f"    - median_spearman_by_group: {mm1.get('median_spearman_by_group')}")
+          lines.append(f"    - pairwise_order_accuracy_overall: {mm1.get('pairwise_order_accuracy_overall')} ({mm1.get('pairwise_correct')}/{mm1.get('pairwise_total')})")
+          lines.append(f"    - top1_accuracy_mean: {mm1.get('top1_accuracy_mean')}")
+          lines.append(f"    - num_groups_spearman_negative: {mm1.get('num_groups_spearman_negative')}")
           if isinstance(worst, list) and worst:
               lines.append("  - worst_groups:")
               for rec in worst[:3]:
@@ -171,14 +174,14 @@ jobs:
       - name: Write release notes
         run: |
           cat > release_notes.md << 'EOF'
-          ACCURACY-A2 isomers self-consistent functional (LOOCV by group_id)
+          ACCURACY-A2.1 isomers full functional v1 (heat-kernel diag + SCF, LOOCV by group_id)
 
           - Source ref: ${{ inputs.ref }}
           - Truth build:
             python scripts/build_isomer_truth_v1.py
           - Run:
-            python scripts/accuracy_a1_isomers_a2_self_consistent.py --experiment_id ACCURACY-A2 --input_csv data/accuracy/isomer_truth.v1.csv --out_dir out_accuracy_a1_isomers_a2 --seed 0 --gamma 0.28 --potential_variant epsilon_z --edge_weight_mode bond_order_delta_chi --sc_max_iter 5 --eta_a 0.1 --eta_phi 0.0 --update_clip 0.5 --model_type pairwise_rank_ridge --model_ridge_lambda 1e-3 --kpi_mean_spearman_by_group_test_min 0.55 --kpi_median_spearman_by_group_test_min 0.55 --kpi_pairwise_order_accuracy_overall_test_min 0.70 --kpi_top1_accuracy_mean_test_min 0.40
-          - Pack: summary.csv, predictions.csv, fold_metrics.csv, group_metrics.csv, metrics.json, index.md, best_config.json, provenance.json, manifest.json, checksums.sha256, accuracy_a1_isomers_evidence_pack.zip
+            python scripts/accuracy_a1_isomers_a2_self_consistent.py --a2_variant full_functional_v1 --experiment_id ACCURACY-A2.1 --input_csv data/accuracy/isomer_truth.v1.csv --out_dir out_accuracy_a1_isomers_a2 --seed 0 --gamma 0.28 --potential_variant epsilon_z --edge_weight_mode bond_order_delta_chi --calibrator_ridge_lambda 1e-3 --kpi_median_spearman_by_group_test_min 0.55 --kpi_pairwise_order_accuracy_overall_test_min 0.70 --kpi_top1_accuracy_mean_test_min 0.40
+          - Pack: summary.csv, predictions.csv, fold_metrics.csv, group_metrics.csv, diagnostics.csv, search_results.csv, metrics.json, index.md, best_config.json, provenance.json, manifest.json, checksums.sha256, accuracy_a1_isomers_evidence_pack.zip
           - SHA256(accuracy_a1_isomers_evidence_pack.zip): ${{ steps.hash.outputs.sha256 }}
           - Outcome (facts from metrics.json):
           ${{ steps.facts.outputs.facts_md }}
