@@ -1549,6 +1549,7 @@ def run_accuracy_a1_isomers_a2_full_functional_v1(
     edge_aromatic_mult: float,
     edge_delta_chi_alpha: float,
     calibrator_ridge_lambda: float,
+    kpi_mean_spearman_by_group_test_min: float,
     kpi_pairwise_order_accuracy_overall_test_min: float,
     kpi_median_spearman_by_group_test_min: float,
     kpi_top1_accuracy_mean_test_min: float,
@@ -1859,6 +1860,15 @@ def run_accuracy_a1_isomers_a2_full_functional_v1(
     metrics_test_func = _aggregate_metrics_from_group_metrics(group_metrics_func)
     metrics_test_cal = _aggregate_metrics_from_group_metrics(group_metrics_cal)
 
+    negative_spearman_groups_test = sorted(
+        [
+            str(gid)
+            for gid, gm in group_metrics_func.items()
+            if not math.isfinite(float(gm.get("spearman_pred_vs_truth", float("nan"))))
+            or float(gm.get("spearman_pred_vs_truth", float("nan"))) < 0.0
+        ]
+    )
+
     worst_groups = sorted(
         [
             {
@@ -1894,9 +1904,11 @@ def run_accuracy_a1_isomers_a2_full_functional_v1(
     )[:3]
 
     kpi_payload: dict[str, object] = {
+        "mean_spearman_by_group_test_min": float(kpi_mean_spearman_by_group_test_min),
         "pairwise_order_accuracy_overall_test_min": float(kpi_pairwise_order_accuracy_overall_test_min),
         "median_spearman_by_group_test_min": float(kpi_median_spearman_by_group_test_min),
         "top1_accuracy_mean_test_min": float(kpi_top1_accuracy_mean_test_min),
+        "mean_spearman_by_group_test": float(metrics_test_func["mean_spearman_by_group"]),
         "pairwise_order_accuracy_overall_test": float(metrics_test_func["pairwise_order_accuracy_overall"]),
         "median_spearman_by_group_test": float(metrics_test_func["median_spearman_by_group"]),
         "top1_accuracy_mean_test": float(metrics_test_func["top1_accuracy_mean"]),
@@ -1905,16 +1917,19 @@ def run_accuracy_a1_isomers_a2_full_functional_v1(
     }
 
     ok = (
-        math.isfinite(float(kpi_payload["pairwise_order_accuracy_overall_test"]))
-        and float(kpi_payload["pairwise_order_accuracy_overall_test"]) >= float(kpi_payload["pairwise_order_accuracy_overall_test_min"])
+        math.isfinite(float(kpi_payload["mean_spearman_by_group_test"]))
+        and float(kpi_payload["mean_spearman_by_group_test"]) >= float(kpi_payload["mean_spearman_by_group_test_min"])
         and math.isfinite(float(kpi_payload["median_spearman_by_group_test"]))
         and float(kpi_payload["median_spearman_by_group_test"]) >= float(kpi_payload["median_spearman_by_group_test_min"])
+        and math.isfinite(float(kpi_payload["pairwise_order_accuracy_overall_test"]))
+        and float(kpi_payload["pairwise_order_accuracy_overall_test"]) >= float(kpi_payload["pairwise_order_accuracy_overall_test_min"])
         and math.isfinite(float(kpi_payload["top1_accuracy_mean_test"]))
         and float(kpi_payload["top1_accuracy_mean_test"]) >= float(kpi_payload["top1_accuracy_mean_test_min"])
         and int(kpi_payload["num_groups_spearman_negative_test"]) <= int(kpi_payload["num_groups_spearman_negative_test_max"])
     )
     kpi_payload["verdict"] = "PASS" if ok else "FAIL"
     kpi_payload["reason"] = (
+        f"mean_spearman_by_group_test={kpi_payload['mean_spearman_by_group_test']}, "
         f"median_spearman_by_group_test={kpi_payload['median_spearman_by_group_test']}, "
         f"pairwise_order_accuracy_overall_test={kpi_payload['pairwise_order_accuracy_overall_test']}, "
         f"top1_accuracy_mean_test={kpi_payload['top1_accuracy_mean_test']}, "
@@ -2081,6 +2096,7 @@ def run_accuracy_a1_isomers_a2_full_functional_v1(
         "metrics_loocv_test_functional_only": dict(metrics_test_func),
         "metrics_loocv_test_calibrated_linear": dict(metrics_test_cal),
         "kpi": kpi_payload,
+        "negative_spearman_groups_test": list(negative_spearman_groups_test),
         "worst_groups": worst_groups,
         "worst_groups_calibrated_linear": worst_groups_cal,
         "files": {
@@ -2259,6 +2275,7 @@ def main(argv: list[str] | None = None) -> int:
             edge_aromatic_mult=float(args.edge_aromatic_mult),
             edge_delta_chi_alpha=float(args.edge_delta_chi_alpha),
             calibrator_ridge_lambda=float(args.calibrator_ridge_lambda),
+            kpi_mean_spearman_by_group_test_min=float(args.kpi_mean_spearman_by_group_test_min),
             kpi_pairwise_order_accuracy_overall_test_min=float(args.kpi_pairwise_order_accuracy_overall_test_min),
             kpi_median_spearman_by_group_test_min=float(args.kpi_median_spearman_by_group_test_min),
             kpi_top1_accuracy_mean_test_min=float(args.kpi_top1_accuracy_mean_test_min),

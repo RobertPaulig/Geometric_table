@@ -17,7 +17,7 @@ on:
         required: true
         default: "main"
       tag:
-        description: "Release tag to create/update. Must match: accuracy-a1-isomers-YYYY-MM-DD-a2-rN"
+        description: "Release tag to create/update. Must match: accuracy-a1-isomers-YYYY-MM-DD-a2_1-rN"
         required: true
       prerelease:
         description: "Mark GitHub release as pre-release"
@@ -40,7 +40,7 @@ jobs:
 
       - name: Validate tag format
         run: |
-          echo "${{ inputs.tag }}" | grep -E '^accuracy-a1-isomers-[0-9]{4}-[0-9]{2}-[0-9]{2}-a2-r[0-9]+$'
+          echo "${{ inputs.tag }}" | grep -E '^accuracy-a1-isomers-[0-9]{4}-[0-9]{2}-[0-9]{2}-a2_1-r[0-9]+$'
 
       - uses: actions/setup-python@v5
         with:
@@ -85,6 +85,7 @@ jobs:
             --potential_variant epsilon_z \
             --edge_weight_mode bond_order_delta_chi \
             --calibrator_ridge_lambda 1e-3 \
+            --kpi_mean_spearman_by_group_test_min 0.55 \
             --kpi_median_spearman_by_group_test_min 0.55 \
             --kpi_pairwise_order_accuracy_overall_test_min 0.70 \
             --kpi_top1_accuracy_mean_test_min 0.40
@@ -180,7 +181,7 @@ jobs:
           - Truth build:
             python scripts/build_isomer_truth_v1.py
           - Run:
-            python scripts/accuracy_a1_isomers_a2_self_consistent.py --a2_variant full_functional_v1 --experiment_id ACCURACY-A2.1 --input_csv data/accuracy/isomer_truth.v1.csv --out_dir out_accuracy_a1_isomers_a2 --seed 0 --gamma 0.28 --potential_variant epsilon_z --edge_weight_mode bond_order_delta_chi --calibrator_ridge_lambda 1e-3 --kpi_median_spearman_by_group_test_min 0.55 --kpi_pairwise_order_accuracy_overall_test_min 0.70 --kpi_top1_accuracy_mean_test_min 0.40
+            python scripts/accuracy_a1_isomers_a2_self_consistent.py --a2_variant full_functional_v1 --experiment_id ACCURACY-A2.1 --input_csv data/accuracy/isomer_truth.v1.csv --out_dir out_accuracy_a1_isomers_a2 --seed 0 --gamma 0.28 --potential_variant epsilon_z --edge_weight_mode bond_order_delta_chi --calibrator_ridge_lambda 1e-3 --kpi_mean_spearman_by_group_test_min 0.55 --kpi_median_spearman_by_group_test_min 0.55 --kpi_pairwise_order_accuracy_overall_test_min 0.70 --kpi_top1_accuracy_mean_test_min 0.40
           - Pack: summary.csv, predictions.csv, fold_metrics.csv, group_metrics.csv, diagnostics.csv, search_results.csv, metrics.json, index.md, best_config.json, provenance.json, manifest.json, checksums.sha256, accuracy_a1_isomers_evidence_pack.zip
           - SHA256(accuracy_a1_isomers_evidence_pack.zip): ${{ steps.hash.outputs.sha256 }}
           - Outcome (facts from metrics.json):
@@ -269,7 +270,7 @@ jobs:
         with:
           tag_name: ${{ inputs.tag }}
           target_commitish: ${{ needs.build-pack.outputs.source_sha }}
-          name: "ACCURACY-A2 isomers evidence pack"
+          name: "ACCURACY-A2.1 isomers evidence pack"
           body_path: release_notes.md
           prerelease: ${{ inputs.prerelease }}
           files: |
@@ -307,7 +308,7 @@ jobs:
           - SHA256(accuracy_a1_isomers_evidence_pack.zip): ${{ needs.build-pack.outputs.sha256 }}
           - Command:
             python scripts/build_isomer_truth_v1.py
-            python scripts/accuracy_a1_isomers_a2_self_consistent.py --experiment_id ACCURACY-A2 --input_csv data/accuracy/isomer_truth.v1.csv --out_dir out_accuracy_a1_isomers_a2 --seed 0 --gamma 0.28 --potential_variant epsilon_z --edge_weight_mode bond_order_delta_chi --sc_max_iter 5 --eta_a 0.1 --eta_phi 0.0 --update_clip 0.5 --model_type pairwise_rank_ridge --model_ridge_lambda 1e-3 --kpi_mean_spearman_by_group_test_min 0.55 --kpi_median_spearman_by_group_test_min 0.55 --kpi_pairwise_order_accuracy_overall_test_min 0.70 --kpi_top1_accuracy_mean_test_min 0.40
+            python scripts/accuracy_a1_isomers_a2_self_consistent.py --a2_variant full_functional_v1 --experiment_id ACCURACY-A2.1 --input_csv data/accuracy/isomer_truth.v1.csv --out_dir out_accuracy_a1_isomers_a2 --seed 0 --gamma 0.28 --potential_variant epsilon_z --edge_weight_mode bond_order_delta_chi --calibrator_ridge_lambda 1e-3 --kpi_mean_spearman_by_group_test_min 0.55 --kpi_median_spearman_by_group_test_min 0.55 --kpi_pairwise_order_accuracy_overall_test_min 0.70 --kpi_top1_accuracy_mean_test_min 0.40
           - Outcome (facts from metrics.json):
           ${{ needs.build-pack.outputs.facts_md }}
           EOF
@@ -321,7 +322,7 @@ jobs:
           title: "Add artefact registry entry for ${{ inputs.tag }}"
           commit-message: "docs: add artefact registry entry for ${{ inputs.tag }}"
           body: |
-            Automated update: appended artefact entry after publishing ACCURACY-A2 isomers evidence pack.
+            Automated update: appended artefact entry after publishing ACCURACY-A2.1 isomers evidence pack.
           base: "main"
           add-paths: |
             docs/artefacts_registry.md
@@ -387,7 +388,7 @@ jobs:
 
           cat >> "$FILE" << EOF
 
-          ### ${DATE_UTC} - ACCURACY-A2 isomers self-consistent functional (graph-only)
+          ### ${DATE_UTC} - ACCURACY-A2.1 isomers full functional v1 (heat-kernel diag + SCF)
 
           - Source commit: ${{ needs.build-pack.outputs.source_sha }}
           - Publish run: ${RUN_URL}
@@ -408,7 +409,7 @@ jobs:
           title: "Add lineage entry for ${{ inputs.tag }}"
           commit-message: "docs: add lineage entry for ${{ inputs.tag }}"
           body: |
-            Automated update: appended lineage entry after publishing ACCURACY-A2 isomers evidence pack.
+            Automated update: appended lineage entry after publishing ACCURACY-A2.1 isomers evidence pack.
           base: "main"
           add-paths: |
             docs/90_lineage.md

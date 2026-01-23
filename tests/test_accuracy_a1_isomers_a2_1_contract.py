@@ -40,6 +40,8 @@ def test_accuracy_a1_isomers_a2_1_full_functional_contract(tmp_path: Path) -> No
         "bond_order_delta_chi",
         "--calibrator_ridge_lambda",
         "1e-3",
+        "--kpi_mean_spearman_by_group_test_min",
+        "0.55",
         "--kpi_median_spearman_by_group_test_min",
         "0.55",
         "--kpi_pairwise_order_accuracy_overall_test_min",
@@ -120,4 +122,3 @@ def test_accuracy_a1_isomers_a2_1_full_functional_contract(tmp_path: Path) -> No
             "data/atoms_db_v1.json",
         ]:
             assert required in names
-

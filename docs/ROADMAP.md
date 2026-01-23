@@ -718,8 +718,8 @@ DoD (facts):
 - Truth dataset unchanged; canonical truth remains reproducible from raw.
 - CV method is LOOCV by `group_id` (every group is a test fold once; seed fixed for fold order).
 - Evidence pack includes `predictions.csv` (out-of-sample), `fold_metrics.csv`, `group_metrics.csv`, `diagnostics.csv`, `search_results.csv`, `metrics.json`, `best_config.json`, `provenance.json`, `manifest.json`, `checksums.sha256`.
-- KPI gates (LOOCV test folds): `pairwise_order_accuracy_overall_test >= 0.70`, `median_spearman_by_group_test >= 0.55`, `top1_accuracy_mean_test >= 0.40`, `num_groups_spearman_negative_test == 0`.
-- Truth-chain closure: publish-run -> release(zip+.sha256) -> registry -> lineage -> main CI 3/3.
+- KPI gates (LOOCV test folds): `mean_spearman_by_group_test >= 0.55`, `median_spearman_by_group_test >= 0.55`, `pairwise_order_accuracy_overall_test >= 0.70`, `top1_accuracy_mean_test >= 0.40`, `num_groups_spearman_negative_test == 0`.
+- Truth-chain closure: publish-run → release(zip+.sha256) → registry → lineage → main CI 3/3.
 
 Hard rule:
 - Do not modify truth files: `data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv`, `data/accuracy/isomer_truth.v1.csv`, `docs/contracts/isomer_truth.v1.md`.
