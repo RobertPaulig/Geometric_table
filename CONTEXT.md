@@ -15,9 +15,10 @@
 
 1) Прочитать `CONTEXT.md` (этот файл) и `docs/99_index.md` (обязательные REF-ы).  
 2) Прочитать `docs/ROADMAP.md` (VALUE-first приоритеты и DoD).  
-3) Открыть `docs/90_lineage.md` (последние управленческие изменения и релизы).  
-4) Вставить 1 цитату (3–8 строк) из `docs/95_release_checklist.md` из раздела D или F (для контроля “что считаем релизом”).  
-5) Прочитать `docs/pilot_quickstart.md` (demo сценарий + команды).  
+3) Прочитать `docs/30_config_layers.md` и уметь в 3 фразах объяснить слои A/B/C и где они лежат в `experiment.yaml`. Если не можешь — **STOP**.  
+4) Открыть `docs/90_lineage.md` (последние управленческие изменения и релизы).  
+5) Вставить 1 цитату (3–8 строк) из `docs/95_release_checklist.md` из раздела D или F (для контроля “что считаем релизом”).  
+6) Прочитать `docs/pilot_quickstart.md` (demo сценарий + команды).  
 
 ## Порядок загрузки контекста (строгий)
 
@@ -27,11 +28,12 @@
    Производные артефакты (если присутствуют): `docs/name3.tex`, `docs/name3.pdf`.
 4. Том II (devline/R&D, **source of truth**): `docs/name4.tex`  
    Производный артефакт (если присутствует): `docs/name4.pdf`.
-5. `docs/04_backlog.md` и `docs/05_decision_log.md`.
-6. `docs/90_lineage.md` — append-only история.
-7. `docs/99_index.md` — обязательный индекс документов/REF-ов.
-8. `docs/95_release_checklist.md` — checklist релиза.
-9. `VERSION` — baseline версии.
+5. `docs/30_config_layers.md` — слои A/B/C и канонический `experiment.yaml` (единая точка входа).
+6. `docs/04_backlog.md` и `docs/05_decision_log.md`.
+7. `docs/90_lineage.md` — append-only история.
+8. `docs/99_index.md` — обязательный индекс документов/REF-ов.
+9. `docs/95_release_checklist.md` — checklist релиза.
+10. `VERSION` — baseline версии.
 
 ## Репо-структура (коротко)
 

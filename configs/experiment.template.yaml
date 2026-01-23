@@ -1,0 +1,154 @@
+# Template experiment config (A/B/C layers)
+#
+# This file is a canonical scaffold for experiments (ACCURACY-A* / A2).
+# It enforces the separation:
+# - Layer A: physics_kernel (meaning / operator constitution)
+# - Layer B: feature_extractor (measurement lens / hyperparams)
+# - Layer C: learner (trained / fitted parameters)
+#
+# See: docs/30_config_layers.md
+
+schema:
+  name: hetero.experiment
+  version: 1
+
+experiment:
+  id: ACCURACY-A1.5
+  run_id: a1_5-r1
+  description: "Template: pairwise ranking + LOOCV on isomer truth v1"
+  seed: 0
+
+contracts:
+  truth:
+    id: isomer_truth.v1
+    files:
+      isomer_truth_csv: data/accuracy/isomer_truth.v1.csv
+      raw_csv: data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv
+      raw_csv_sha256: data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv.sha256
+      contract_md: docs/contracts/isomer_truth.v1.md
+    invariants:
+      forbid_external_data: true
+      forbid_truth_mutation: true
+      split_policy: group_strict_loocv
+
+# -------------------------
+# Layer A: PhysicsKernel
+# -------------------------
+physics_kernel:
+  major_version: HETERO-2
+  graph:
+    builder: rdkit_2d
+    kekulize: false
+    add_hydrogens: explicit
+    disallow_dot_smiles: true
+    atom_ordering: smiles_index
+    edge_definition: covalent_bonds_only
+  operators:
+    laplacian:
+      type: combinatorial  # combinatorial / normalized / random_walk
+      symmetrize: true
+    hamiltonian:
+      form: L_plus_V       # L_plus_V / A_plus_V / custom
+      ensure_spd: true
+      spd_shift:
+        mode: add_epsI
+        eps: 1.0e-6
+  potentials:
+    node_potential:
+      family: epsilon_z_plus
+      epsilon_table: atoms_db_v1
+      features_allowed:
+        - Z
+        - formal_charge
+        - is_aromatic
+        - in_ring
+        - degree
+        - valence_proxy
+        - electronegativity
+    edge_weights:
+      family: bond_order_plus
+      bond_order_map:
+        single: 1.0
+        double: 2.0
+        triple: 3.0
+        aromatic: 1.5
+      aromatic_multiplier:
+        enabled: true
+        default: 1.0
+      symmetric: true
+
+# -------------------------
+# Layer B: FeatureExtractor
+# -------------------------
+feature_extractor:
+  id: spectral_v2
+  standardize:
+    enabled: true
+    method: zscore     # zscore / robust / none
+    fit_on: train_only
+  spectral:
+    eigen_solver:
+      method: dense    # dense / lanczos
+      max_nodes_dense: 80
+      k_lanczos: 40
+    invariants:
+      trace:
+        enabled: true
+      logdet:
+        enabled: true
+        eps_list: [1.0e-6, 1.0e-4]
+      heat_trace:
+        enabled: true
+        t_list: [0.5, 1.0, 2.0]
+  topology:
+    enabled: true
+    features:
+      - n_heavy_atoms
+      - n_rings
+      - n_aromatic_atoms
+      - n_hetero_atoms
+  hyperparams:
+    gamma: 0.28
+    node_potential_weights:
+      degree: 0.10
+      is_aromatic: 0.30
+      in_ring: 0.20
+      formal_charge: 0.10
+      valence_proxy: 0.10
+      electronegativity: 0.20
+
+# -------------------------
+# Layer C: Learner / Ranker
+# -------------------------
+learner:
+  objective: pairwise_ranking  # pairwise_ranking / regression
+  model:
+    family: rank_ridge         # rank_ridge / logistic / linear_svm
+    fit_intercept: false
+    regularization:
+      type: ridge
+      alpha: 1.0e-2
+  pairwise:
+    pair_generation: all_pairs
+    drop_near_ties:
+      enabled: false
+      deltaE_threshold_kcalmol: 0.2
+    label:
+      type: sign_only          # sign_only / delta_energy
+
+evaluation:
+  protocol: loocv_by_group
+  group_key: group_id
+  metrics:
+    - mean_spearman_by_group
+    - median_spearman_by_group
+    - pairwise_order_accuracy_overall
+    - top1_accuracy_mean
+
+artifacts:
+  out_dir: out/accuracy_a1_isomers/template_run
+
+provenance:
+  capture_git: true
+  capture_env: true
+  capture_versions: true
