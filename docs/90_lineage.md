@@ -1105,3 +1105,25 @@
 - Facts (metrics.json): rows_total=35; groups_total=10; cv_method=LOOCV_GROUP_ID; model_type=pairwise_logistic_l2; kpi_verdict=FAIL; mean_spearman_by_group=0.36999999999999994; median_spearman_by_group=0.5499999999999998; pairwise_order_accuracy_overall=0.6956521739130435; top1_accuracy_mean=0.5; worst_groups=[C11H21B1N2O4, C15H24O1, C21H23N3O3]
 - Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/221 (merge: 6d9a2304c35339b7ccd43437149fc721e1a54c4e)
 - CI run (3/3 ci/* on registry merge SHA): https://github.com/RobertPaulig/Geometric_table/actions/runs/21261555324
+
+### 2026-01-23 - ACCURACY-A2 isomers self-consistent functional (graph-only)
+
+- Source commit: 48e530faffd70a67905be03de0ac6a2d85cc0c55
+- Publish run: https://github.com/RobertPaulig/Geometric_table/actions/runs/21270487891
+- Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/accuracy-a1-isomers-2026-01-23-a2-r1
+- Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/accuracy-a1-isomers-2026-01-23-a2-r1/accuracy_a1_isomers_evidence_pack.zip
+- SHA256(accuracy_a1_isomers_evidence_pack.zip): D407C9FD85DFE87130D092E571B49F42B115836801BB80EF0B0C3843DB6E7A72
+- Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/225
+- Outcome (facts from metrics.json):
+  - rows_total: 35
+  - groups_total: 10
+  - kpi.verdict: FAIL
+  - loocv_test:
+    - mean_spearman_by_group: 0.15999999999999998
+    - median_spearman_by_group: 0.3999999999999999
+    - pairwise_order_accuracy_overall: 0.5869565217391305 (27/46)
+    - top1_accuracy_mean: 0.4
+  - worst_groups:
+    - C13H20O1: spearman=-0.9999999999999998, top1=0.0, pairwise_acc=0.0
+    - C15H24O1: spearman=-0.9999999999999998, top1=0.0, pairwise_acc=0.0
+    - C22H22N4O2: spearman=-0.4999999999999999, top1=0.0, pairwise_acc=0.3333333333333333
