@@ -1244,3 +1244,22 @@
     - C15H24O1: spearman=-0.9999999999999998, top1=0.0, pairwise_acc=0.0
     - C22H22N4O2: spearman=-0.9999999999999998, top1=0.0, pairwise_acc=0.0
     - C21H23N3O3: spearman=-0.4999999999999999, top1=0.0, pairwise_acc=0.3333333333333333
+
+### 2026-01-24 - ACCURACY-A3.3 isomers (phase→rho pivot, nested Phi)
+
+- Source commit: ded14dd9736d1dbe1a5da3e5a74e3163e9dd6379
+- Publish run: https://github.com/RobertPaulig/Geometric_table/actions/runs/21323271605
+- Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/accuracy-a1-isomers-2026-01-24-a3_3-r1
+- Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/accuracy-a1-isomers-2026-01-24-a3_3-r1/accuracy_a1_isomers_evidence_pack.zip
+- SHA256(accuracy_a1_isomers_evidence_pack.zip): 9E335BB369578483E4C9CAA256DADB3D3107C5FDE82AE79352B4116F7B49C7D8
+- Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/247
+- Outcome (facts from metrics.json):
+  - metrics_loocv_test_functional_only:
+    - mean_spearman_by_group: -0.17999999999999997
+    - median_spearman_by_group: -0.14999999999999997
+    - pairwise_order_accuracy_overall: 0.391304347826087 (18/46)
+    - top1_accuracy_mean: 0.1
+  - num_groups_spearman_negative_test: 5
+  - negative_spearman_groups_test: ['C15H24O1', 'C20H22N2O2', 'C20H25N3O2', 'C21H20N6O2S1', 'C22H22N4O2']
+  - rho_imag_max_max: 1.556505024881643e-18
+  - selected_phi_by_outer_fold_distribution: {'1.5707963267948966': 10}
