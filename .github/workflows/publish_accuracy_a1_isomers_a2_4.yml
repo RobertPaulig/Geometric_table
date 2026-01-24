@@ -86,7 +86,7 @@ jobs:
             --edge_weight_mode bond_order_delta_chi \
             --calibrator_ridge_lambda 1e-3 \
             --kpi_mean_spearman_by_group_test_min -1.0 \
-            --kpi_median_spearman_by_group_test_min -1.0 \
+            --kpi_median_spearman_by_group_test_min 0.45 \
             --kpi_pairwise_order_accuracy_overall_test_min 0.60 \
             --kpi_top1_accuracy_mean_test_min 0.30
 
@@ -185,7 +185,7 @@ jobs:
           - Truth build:
             python scripts/build_isomer_truth_v1.py
           - Run:
-            python scripts/accuracy_a1_isomers_a2_self_consistent.py --a2_variant full_functional_v1_a2_4 --experiment_id ACCURACY-A2.4 --input_csv data/accuracy/isomer_truth.v1.csv --out_dir out_accuracy_a1_isomers_a2 --seed 0 --gamma 0.28 --potential_variant epsilon_z --edge_weight_mode bond_order_delta_chi --calibrator_ridge_lambda 1e-3 --kpi_mean_spearman_by_group_test_min -1.0 --kpi_median_spearman_by_group_test_min -1.0 --kpi_pairwise_order_accuracy_overall_test_min 0.60 --kpi_top1_accuracy_mean_test_min 0.30
+            python scripts/accuracy_a1_isomers_a2_self_consistent.py --a2_variant full_functional_v1_a2_4 --experiment_id ACCURACY-A2.4 --input_csv data/accuracy/isomer_truth.v1.csv --out_dir out_accuracy_a1_isomers_a2 --seed 0 --gamma 0.28 --potential_variant epsilon_z --edge_weight_mode bond_order_delta_chi --calibrator_ridge_lambda 1e-3 --kpi_mean_spearman_by_group_test_min -1.0 --kpi_median_spearman_by_group_test_min 0.45 --kpi_pairwise_order_accuracy_overall_test_min 0.60 --kpi_top1_accuracy_mean_test_min 0.30
           - Pack: summary.csv, predictions.csv, fold_metrics.csv, group_metrics.csv, diagnostics.csv, rho_compare.csv, search_results.csv, metrics.json, index.md, best_config.json, provenance.json, manifest.json, checksums.sha256, accuracy_a1_isomers_evidence_pack.zip
           - SHA256(accuracy_a1_isomers_evidence_pack.zip): ${{ steps.hash.outputs.sha256 }}
           - Outcome (facts from metrics.json):
@@ -453,4 +453,3 @@ jobs:
           echo "tested_sha: $TESTED_SHA"
 
           gh run watch "$RUN_ID" --exit-status --repo "$REPO"
-

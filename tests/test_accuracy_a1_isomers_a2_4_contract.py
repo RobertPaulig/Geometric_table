@@ -43,7 +43,7 @@ def test_accuracy_a1_isomers_a2_4_soft_occupancy_ldos_contract(tmp_path: Path) -
         "--kpi_mean_spearman_by_group_test_min",
         "-1.0",
         "--kpi_median_spearman_by_group_test_min",
-        "-1.0",
+        "0.45",
         "--kpi_pairwise_order_accuracy_overall_test_min",
         "0.60",
         "--kpi_top1_accuracy_mean_test_min",
@@ -90,8 +90,16 @@ def test_accuracy_a1_isomers_a2_4_soft_occupancy_ldos_contract(tmp_path: Path) -
         "rho_mode",
         "rho_entropy",
         "rho_trace_norm",
+        "rho_sum",
+        "rho_renorm_applied",
+        "rho_renorm_delta",
+        "rho_ldos_k_eff",
+        "rho_ldos_deg_tol",
+        "rho_ldos_degeneracy_guard_applied",
         "lambda_min",
         "lambda_max",
+        "lambda_min_window",
+        "lambda_gap",
         "trace_weights",
     }.issubset(set(rho_cmp[0].keys()))
 
@@ -101,6 +109,8 @@ def test_accuracy_a1_isomers_a2_4_soft_occupancy_ldos_contract(tmp_path: Path) -
     assert metrics["dataset"]["groups_total"] == 10
     assert "metrics_loocv_test_functional_only" in metrics
     assert "metrics_loocv_test_calibrated_linear" in metrics
+    assert "metrics_loocv_test_functional_only_by_rho_mode" in metrics
+    assert "negative_spearman_groups_test_by_rho_mode" in metrics
     assert "kpi" in metrics
     assert "worst_groups" in metrics
     assert "rho_compare_csv" in metrics["files"]
@@ -129,4 +139,3 @@ def test_accuracy_a1_isomers_a2_4_soft_occupancy_ldos_contract(tmp_path: Path) -
             "data/atoms_db_v1.json",
         ]:
             assert required in names
-
