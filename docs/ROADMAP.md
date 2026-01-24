@@ -758,7 +758,7 @@ Hard rule:
 - Do not modify truth files: `data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv`, `data/accuracy/isomer_truth.v1.csv`, `docs/contracts/isomer_truth.v1.md`.
 
 #### ACCURACY-A3.3 — Phase→Rho Pivot (nested Φ; rho-realness; phase-only-via-ρ)
-Status: [ ] planned  [ ] in-progress  [ ] done
+Status: [ ] planned  [ ] in-progress  [x] done (hypothesis FAIL)
 
 SoT:
 - `REF-ACCURACY-A3.3-CONTRACT` → `docs/specs/accuracy_a3_3_phase_rho_pivot.md`
@@ -771,6 +771,13 @@ DoD:
 - Code PR merged (main CI 3/3).
 - Truth-chain closure: publish-run → release(zip+.sha256) → registry → lineage → main CI 3/3.
 - KPI (functional-only, LOOCV test folds): `num_groups_spearman_negative_test == 0`.
+
+Outcome (truth, release `accuracy-a1-isomers-2026-01-24-a3_3-r1`):
+- Release: https://github.com/RobertPaulig/Geometric_table/releases/tag/accuracy-a1-isomers-2026-01-24-a3_3-r1
+- Verdict: hypothesis FAIL (`num_groups_spearman_negative_test != 0`)
+- `num_groups_spearman_negative_test=5`
+- `negative_groups=['C15H24O1','C20H22N2O2','C20H25N3O2','C21H20N6O2S1','C22H22N4O2']`
+- `selected_phi_by_outer_fold=pi/2` (all folds)
 
 # ROADMAP - HETERO-2 как SaaS (Pfizer-ready evidence pipeline)
 
