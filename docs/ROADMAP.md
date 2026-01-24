@@ -757,6 +757,21 @@ DoD (facts):
 Hard rule:
 - Do not modify truth files: `data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv`, `data/accuracy/isomer_truth.v1.csv`, `docs/contracts/isomer_truth.v1.md`.
 
+#### ACCURACY-A3.3 — Phase→Rho Pivot (nested Φ; rho-realness; phase-only-via-ρ)
+Status: [ ] planned  [ ] in-progress  [ ] done
+
+SoT:
+- `REF-ACCURACY-A3.3-CONTRACT` → `docs/specs/accuracy_a3_3_phase_rho_pivot.md`
+
+Hypothesis:
+- A2 inversions persist because the real-only ρ channel is missing a cyclic/holonomy mode. In A3.3, phase affects only ρ (all else frozen), and must yield `num_groups_spearman_negative_test == 0` on `functional_only` (LOOCV by `group_id`).
+
+DoD:
+- Memory Fix merged to main (contract exists + linked from `docs/99_index.md` + in `ENTRYPOINT.md` read order + in this roadmap).
+- Code PR merged (main CI 3/3).
+- Truth-chain closure: publish-run → release(zip+.sha256) → registry → lineage → main CI 3/3.
+- KPI (functional-only, LOOCV test folds): `num_groups_spearman_negative_test == 0`.
+
 # ROADMAP - HETERO-2 как SaaS (Pfizer-ready evidence pipeline)
 
 Назначение: зафиксировать целевую картину SaaS и вести разработку через обязательные вехи (milestones).
