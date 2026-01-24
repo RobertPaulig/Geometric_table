@@ -83,6 +83,9 @@ def test_accuracy_a1_isomers_a3_3_phase_rho_pivot_contract(tmp_path: Path) -> No
         "rho_floor_rate",
         "rho_renorm_applied",
         "rho_renorm_delta",
+        "parity_rho_max_abs",
+        "parity_phi_max_abs",
+        "parity_pass",
     }.issubset(set(rho_cmp[0].keys()))
 
     metrics = json.loads((out_dir / "metrics.json").read_text(encoding="utf-8"))

@@ -896,13 +896,40 @@ def _phase_laplacian_for_row(*, weights: np.ndarray, cycles_heavy: Sequence[Sequ
     return magnetic_laplacian(weights=weights, A=A)
 
 
-def _predict_one(
+_ROW_STATIC_CACHE: dict[str, dict[str, object]] = {}
+
+
+def _rho_and_phi_from_laplacian(
+    *,
+    laplacian: np.ndarray,
+    v_vec: np.ndarray,
+    heat_tau: float,
+    phi_eps: float,
+    rho_floor: float,
+    gauge_fix_phi_mean: bool,
+) -> tuple[np.ndarray, np.ndarray]:
+    H = np.asarray(laplacian) + np.diag(np.asarray(v_vec, dtype=float))
+    rho_raw_c, _trace_heat, _lambda_min, _lambda_max, _rho_trace_norm, _rho_imag_max = (
+        _heat_kernel_diagonal_shifted_trace_normalized_hermitian(H, tau=float(heat_tau))
+    )
+    rho_real, _rho_sum, _rho_imag_max2, _rho_renorm_applied, _rho_renorm_delta = _rho_realness_and_normalize(
+        np.asarray(rho_raw_c, dtype=np.complex128).reshape(-1), rho_floor=float(rho_floor)
+    )
+    phi = _phi_from_rho(rho=rho_real, phi_eps=float(phi_eps), gauge_fix_phi_mean=bool(gauge_fix_phi_mean))
+    return np.asarray(rho_real, dtype=float), np.asarray(phi, dtype=float)
+
+
+def _get_row_static(
     row: _Row,
     *,
     atoms_db: AtomsDbV1,
     cfg: _A33Config,
-    flux_phi: float,
-) -> tuple[dict[str, object], dict[str, object]]:
+) -> dict[str, object]:
+    key = str(row.mid)
+    cached = _ROW_STATIC_CACHE.get(key)
+    if cached is not None:
+        return cached
+
     w_adj = _weighted_adjacency_from_bonds(
         n=int(row.n_heavy_atoms),
         bonds=row.bonds,
@@ -913,10 +940,66 @@ def _predict_one(
         delta_chi_alpha=float(cfg.edge_delta_chi_alpha),
     )
     lap_base = _laplacian_from_adjacency(w_adj)
-    lap_phase = _phase_laplacian_for_row(weights=w_adj, cycles_heavy=row.cycles_heavy, flux_phi=float(flux_phi))
+    lap_phase_phi0 = _phase_laplacian_for_row(weights=w_adj, cycles_heavy=row.cycles_heavy, flux_phi=0.0)
 
     v0 = _build_base_potential(row, atoms_db=atoms_db, gamma=float(cfg.gamma), potential_variant=str(cfg.potential_variant))
     mvec = _mass_vector(row.types, mode=str(cfg.mass_mode))
+
+    rho_base_phi0, phi_base_phi0 = _rho_and_phi_from_laplacian(
+        laplacian=np.asarray(lap_base, dtype=float),
+        v_vec=np.asarray(v0, dtype=float),
+        heat_tau=float(cfg.heat_tau),
+        phi_eps=float(cfg.phi_eps),
+        rho_floor=float(cfg.rho_floor),
+        gauge_fix_phi_mean=bool(cfg.gauge_fix_phi_mean),
+    )
+    rho_phase_phi0, phi_phase_phi0 = _rho_and_phi_from_laplacian(
+        laplacian=np.asarray(lap_phase_phi0, dtype=np.complex128),
+        v_vec=np.asarray(v0, dtype=float),
+        heat_tau=float(cfg.heat_tau),
+        phi_eps=float(cfg.phi_eps),
+        rho_floor=float(cfg.rho_floor),
+        gauge_fix_phi_mean=bool(cfg.gauge_fix_phi_mean),
+    )
+
+    parity_rho_max_abs = float(np.max(np.abs(rho_phase_phi0 - rho_base_phi0)))
+    parity_phi_max_abs = float(np.max(np.abs(phi_phase_phi0 - phi_base_phi0)))
+    parity_pass = bool(parity_rho_max_abs < 1e-12 and parity_phi_max_abs < 1e-12)
+    if not parity_pass:
+        raise AccuracyA33Error(
+            f"P0 Phi=0 parity FAIL for id={row.mid}: "
+            f"parity_rho_max_abs={parity_rho_max_abs} parity_phi_max_abs={parity_phi_max_abs}"
+        )
+
+    cached = {
+        "w_adj": np.asarray(w_adj, dtype=float),
+        "lap_base": np.asarray(lap_base, dtype=float),
+        "lap_phase_phi0": np.asarray(lap_phase_phi0, dtype=np.complex128),
+        "v0": np.asarray(v0, dtype=float),
+        "mvec": np.asarray(mvec, dtype=float),
+        "rho_phase_phi0": np.asarray(rho_phase_phi0, dtype=float),
+        "parity_rho_max_abs": float(parity_rho_max_abs),
+        "parity_phi_max_abs": float(parity_phi_max_abs),
+        "parity_pass": bool(parity_pass),
+    }
+    _ROW_STATIC_CACHE[key] = cached
+    return cached
+
+
+def _predict_one(
+    row: _Row,
+    *,
+    atoms_db: AtomsDbV1,
+    cfg: _A33Config,
+    flux_phi: float,
+) -> tuple[dict[str, object], dict[str, object]]:
+    st = _get_row_static(row, atoms_db=atoms_db, cfg=cfg)
+    w_adj = np.asarray(st["w_adj"], dtype=float)
+    lap_base = np.asarray(st["lap_base"], dtype=float)
+    lap_phase = _phase_laplacian_for_row(weights=w_adj, cycles_heavy=row.cycles_heavy, flux_phi=float(flux_phi))
+
+    v0 = np.asarray(st["v0"], dtype=float)
+    mvec = np.asarray(st["mvec"], dtype=float)
 
     (
         v_final,
@@ -978,6 +1061,9 @@ def _predict_one(
         "rho_floor_rate": float(rho_floor_rate),
         "rho_renorm_applied": bool(rho_renorm_applied),
         "rho_renorm_delta": float(rho_renorm_delta),
+        "parity_rho_max_abs": float(st["parity_rho_max_abs"]),
+        "parity_phi_max_abs": float(st["parity_phi_max_abs"]),
+        "parity_pass": bool(st["parity_pass"]),
         "pred_raw": float(E),
         "sc_iters": int(cfg.sc_iters),
         "trace": json.dumps(list(trace), ensure_ascii=False),
@@ -1191,6 +1277,9 @@ def run_a3_3(
             "rho_floor_rate",
             "rho_renorm_applied",
             "rho_renorm_delta",
+            "parity_rho_max_abs",
+            "parity_phi_max_abs",
+            "parity_pass",
             "n_heavy_atoms",
             "n_rings",
             "n_ring_edges",
