@@ -1214,3 +1214,33 @@
     - C21H23N3O3: spearman=-0.9999999999999998, top1=0.0, pairwise_acc=0.0
     - C15H24O1: spearman=-0.9999999999999998, top1=0.0, pairwise_acc=0.0
     - C22H22N4O2: spearman=-0.9999999999999998, top1=0.0, pairwise_acc=0.0
+
+### 2026-01-24 - ACCURACY-A2.4 isomers (soft-occupancy LDOS rho-law + variationally-stable SCF)
+
+- Source commit: f76626fd162a75ea656b14e90ccd56ed4cce3bc9
+- Publish run: https://github.com/RobertPaulig/Geometric_table/actions/runs/21314464977
+- Release tag: https://github.com/RobertPaulig/Geometric_table/releases/tag/accuracy-a1-isomers-2026-01-24-a2_4-r1
+- Asset: https://github.com/RobertPaulig/Geometric_table/releases/download/accuracy-a1-isomers-2026-01-24-a2_4-r1/accuracy_a1_isomers_evidence_pack.zip
+- SHA256(accuracy_a1_isomers_evidence_pack.zip): 0AA2A16CAF049822BD4DF887F218641A33C4393C3C663036814F7D27D4F86E2B
+- Registry PR: https://github.com/RobertPaulig/Geometric_table/pull/242
+- Outcome (facts from metrics.json):
+  - rows_total: 35
+  - groups_total: 10
+  - kpi.verdict: FAIL
+  - rho_mode_selected.distribution: {"soft_occupancy_ldos": 10}
+  - loocv_test_functional_only:
+    - mean_spearman_by_group: -0.039999999999999994
+    - median_spearman_by_group: 0.09999999999999998
+    - pairwise_order_accuracy_overall: 0.5217391304347826 (24/46)
+    - top1_accuracy_mean: 0.1
+    - num_groups_spearman_negative: 4
+  - loocv_test_calibrated_linear:
+    - mean_spearman_by_group: -0.11999999999999997
+    - median_spearman_by_group: 0.04999999999999999
+    - pairwise_order_accuracy_overall: 0.4782608695652174 (22/46)
+    - top1_accuracy_mean: 0.3
+    - num_groups_spearman_negative: 4
+  - worst_groups:
+    - C15H24O1: spearman=-0.9999999999999998, top1=0.0, pairwise_acc=0.0
+    - C22H22N4O2: spearman=-0.9999999999999998, top1=0.0, pairwise_acc=0.0
+    - C21H23N3O3: spearman=-0.4999999999999999, top1=0.0, pairwise_acc=0.3333333333333333
