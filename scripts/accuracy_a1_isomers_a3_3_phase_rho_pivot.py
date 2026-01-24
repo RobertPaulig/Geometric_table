@@ -1184,6 +1184,7 @@ def run_a3_3(
     out_dir: Path,
     seed: int,
     experiment_id: str,
+    force_phi: float | None = None,
 ) -> None:
     cfg = _A33Config()
     atoms_db = load_atoms_db_v1()
@@ -1205,20 +1206,27 @@ def run_a3_3(
     search_results: list[dict[str, object]] = []
     phi_sweep_records: list[dict[str, object]] = []
 
+    force_phi_norm: float | None = None
+    if force_phi is not None:
+        force_phi_norm = float(normalize_flux_phi(float(force_phi)))
+
     for fold_id, test_gid in enumerate(fold_order, start=1):
         test_rows = [r for r in rows_sorted if str(r.gid) == str(test_gid)]
         train_rows = [r for r in rows_sorted if str(r.gid) != str(test_gid)]
         if not test_rows:
             raise AccuracyA33Error("empty test group in LOOCV")
 
-        phi_sel, fold_search = _select_phi_nested_train_only(
-            rows=rows_sorted,
-            atoms_db=atoms_db,
-            cfg=cfg,
-            train_rows=train_rows,
-            fold_id=int(fold_id),
-            test_gid=str(test_gid),
-        )
+        if force_phi_norm is None:
+            phi_sel, fold_search = _select_phi_nested_train_only(
+                rows=rows_sorted,
+                atoms_db=atoms_db,
+                cfg=cfg,
+                train_rows=train_rows,
+                fold_id=int(fold_id),
+                test_gid=str(test_gid),
+            )
+        else:
+            phi_sel, fold_search = float(force_phi_norm), []
         selected_phi_by_fold[str(test_gid)] = float(phi_sel)
         search_results.extend(list(fold_search))
 
@@ -1442,7 +1450,8 @@ def run_a3_3(
     best_cfg: dict[str, object] = {
         "schema_version": "accuracy_a3_3_phase_rho_pivot.v1",
         "experiment_id": str(experiment_id),
-        "nested_selection": True,
+        "nested_selection": bool(force_phi_norm is None),
+        "force_phi": None if force_phi_norm is None else float(force_phi_norm),
         "inner_selection_metric_primary": "num_negative_train_inner",
         "inner_selection_metric_secondary": "median_spearman_train_inner",
         "inner_selection_metric_tiebreaker": "mean_delta_rho_L1_train",
@@ -1587,6 +1596,12 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--input_csv", type=Path, default=DEFAULT_INPUT_CSV, help="Canonical isomer truth CSV.")
     p.add_argument("--out_dir", type=Path, default=DEFAULT_OUT_DIR, help="Output directory.")
     p.add_argument("--seed", type=int, default=0, help="Seed for fold order shuffling.")
+    p.add_argument(
+        "--force_phi",
+        type=float,
+        default=None,
+        help="If set: disable nested selection and use this Phi for all outer folds (will be normalized to [-pi, pi]).",
+    )
     return p
 
 
@@ -1596,7 +1611,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     out_dir = Path(args.out_dir)
     seed = int(args.seed)
     experiment_id = str(args.experiment_id)
-    run_a3_3(input_csv=input_csv, out_dir=out_dir, seed=seed, experiment_id=experiment_id)
+    force_phi = None if args.force_phi is None else float(args.force_phi)
+    run_a3_3(input_csv=input_csv, out_dir=out_dir, seed=seed, experiment_id=experiment_id, force_phi=force_phi)
     return 0
 
 
