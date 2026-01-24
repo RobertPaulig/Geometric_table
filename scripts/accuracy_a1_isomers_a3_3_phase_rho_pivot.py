@@ -1602,6 +1602,14 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         default=None,
         help="If set: disable nested selection and use this Phi for all outer folds (will be normalized to [-pi, pi]).",
     )
+    p.add_argument(
+        "--parity_a2_e2e",
+        action="store_true",
+        help=(
+            "End-to-end parity helper: when used with --force_phi=0, run the A2.4 baseline runner into --out_dir. "
+            "This is for local parity proof A2 == A3(Phi=0) without touching A2 code paths."
+        ),
+    )
     return p
 
 
@@ -1612,7 +1620,36 @@ def main(argv: Sequence[str] | None = None) -> int:
     seed = int(args.seed)
     experiment_id = str(args.experiment_id)
     force_phi = None if args.force_phi is None else float(args.force_phi)
-    run_a3_3(input_csv=input_csv, out_dir=out_dir, seed=seed, experiment_id=experiment_id, force_phi=force_phi)
+    if bool(args.parity_a2_e2e):
+        if force_phi is None:
+            raise SystemExit("--parity_a2_e2e requires --force_phi (expected 0.0)")
+        if abs(force_phi) > 0.0:
+            raise SystemExit("--parity_a2_e2e requires --force_phi 0.0 (Phi must be exactly zero for parity)")
+
+        import subprocess
+        import sys
+
+        a2_script = Path(__file__).resolve().parent / "accuracy_a1_isomers_a2_self_consistent.py"
+        if not a2_script.exists():
+            raise SystemExit(f"missing A2 runner script: {a2_script}")
+
+        cmd = [
+            sys.executable,
+            str(a2_script),
+            "--a2_variant",
+            "full_functional_v1_a2_4",
+            "--experiment_id",
+            str(experiment_id),
+            "--input_csv",
+            str(input_csv),
+            "--seed",
+            str(seed),
+            "--out_dir",
+            str(out_dir),
+        ]
+        subprocess.run(cmd, check=True)
+    else:
+        run_a3_3(input_csv=input_csv, out_dir=out_dir, seed=seed, experiment_id=experiment_id, force_phi=force_phi)
     return 0
 
 
