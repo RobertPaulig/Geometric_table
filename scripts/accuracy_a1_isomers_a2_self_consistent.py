@@ -548,6 +548,13 @@ class _A2FullFunctionalConfig:
     sc_damping: float = 1.0
     sc_max_backtracks: int = 3
     gauge_fix_phi_mean: bool = False
+    # ACCURACY-A2.4:
+    # - "heat_diag": trace-normalized shifted heat-kernel diagonal (A2.3 rho-law, baseline)
+    # - "soft_occupancy_ldos": soft-occupancy LDOS from eigenpairs (A2.4 rho-law, new)
+    rho_mode: str = "heat_diag"
+    rho_ldos_k: int = 0
+    rho_ldos_beta: float = 0.0
+    rho_ldos_deg_tol: float = 1e-8
 
 
 def _heat_kernel_diagonal(H: np.ndarray, *, tau: float) -> np.ndarray:
@@ -600,6 +607,95 @@ def _heat_kernel_diagonal_shifted_trace_normalized(
     rho = np.asarray(diag_heat, dtype=float).reshape(-1) / float(trace_heat)
     rho_trace_norm = float(np.sum(rho))
     return rho, float(trace_heat), float(lambda_min), float(lambda_max), float(rho_trace_norm)
+
+
+def _soft_occupancy_ldos_rho(
+    H: np.ndarray, *, beta: float, k: int, deg_tol: float
+) -> tuple[np.ndarray, float, float, float, float, float, int, bool, float, bool, float, float, float]:
+    """
+    ACCURACY-A2.4 rho-law (mode B: soft-occupancy LDOS):
+
+      eig(H) = (lambda_j, u_j)
+      w_j = softmax(-beta * (lambda_j - lambda_min_window)) over the lowest-k eigenpairs
+      rho_i = sum_j w_j * |u_{ij}|^2
+
+    Returns:
+      (rho, trace_weights, lambda_min, lambda_max, rho_trace_norm, rho_entropy,
+       k_eff, degeneracy_guard_applied, rho_sum, rho_renorm_applied, rho_renorm_delta,
+       lambda_min_window, lambda_gap)
+    """
+    beta_val = float(beta)
+    if beta_val <= 0.0 or not math.isfinite(beta_val):
+        raise AccuracyA2SelfConsistentError("rho_ldos_beta must be > 0 and finite")
+    k_val = int(k)
+    if k_val <= 0:
+        raise AccuracyA2SelfConsistentError("rho_ldos_k must be >= 1")
+    deg_tol_val = float(deg_tol)
+    if deg_tol_val < 0.0 or not math.isfinite(deg_tol_val):
+        raise AccuracyA2SelfConsistentError("rho_ldos_deg_tol must be >= 0 and finite")
+
+    H0 = np.asarray(H, dtype=float)
+    if H0.ndim != 2 or H0.shape[0] != H0.shape[1]:
+        raise AccuracyA2SelfConsistentError("H must be square")
+
+    eigvals, eigvecs = np.linalg.eigh(H0)
+    eigvals = np.asarray(eigvals, dtype=float).reshape(-1)
+    eigvecs = np.asarray(eigvecs, dtype=float)
+    n = int(eigvals.size)
+    if n == 0:
+        raise AccuracyA2SelfConsistentError("H must be non-empty")
+    if k_val > n:
+        raise AccuracyA2SelfConsistentError("rho_ldos_k must be <= n")
+
+    lambda_min = float(eigvals[0])
+    lambda_max = float(eigvals[-1])
+
+    cutoff_lambda = float(eigvals[k_val - 1])
+    k_eff = int(k_val)
+    while k_eff < n and abs(float(eigvals[k_eff]) - cutoff_lambda) <= deg_tol_val:
+        k_eff += 1
+    degeneracy_guard_applied = bool(k_eff != k_val)
+
+    eigvals_k = eigvals[:k_eff]
+    eigvecs_k = eigvecs[:, :k_eff]
+    lambda_min_window = float(eigvals_k[0])
+    lambda_gap = float(float(eigvals_k[-1]) - lambda_min_window)
+
+    logits = -beta_val * (eigvals_k - float(lambda_min_window))
+    logits = logits - float(np.max(logits))
+    exp_logits = np.exp(logits)
+    Z = float(np.sum(exp_logits))
+    if not math.isfinite(Z) or Z <= 0.0:
+        raise AccuracyA2SelfConsistentError("invalid trace_weights in rho-law")
+    w = exp_logits / float(Z)
+
+    rho = (np.abs(eigvecs_k) ** 2) @ w
+    rho = np.asarray(rho, dtype=float).reshape(-1)
+    rho_sum = float(np.sum(rho))
+    rho_renorm_delta = float(rho_sum - 1.0)
+    rho_sum_tol = 1e-8
+    if abs(rho_renorm_delta) > rho_sum_tol and math.isfinite(rho_sum) and rho_sum > 0.0:
+        rho = np.asarray(rho / float(rho_sum), dtype=float)
+        rho_renorm_applied = True
+    else:
+        rho_renorm_applied = False
+    rho_trace_norm = float(np.sum(rho))
+    rho_entropy = float(-np.sum(rho * np.log(rho + 1e-300)))
+    return (
+        rho,
+        float(Z),
+        float(lambda_min),
+        float(lambda_max),
+        float(rho_trace_norm),
+        float(rho_entropy),
+        int(k_eff),
+        bool(degeneracy_guard_applied),
+        float(rho_sum),
+        bool(rho_renorm_applied),
+        float(rho_renorm_delta),
+        float(lambda_min_window),
+        float(lambda_gap),
+    )
 
 
 def _solve_scf_full_functional_v1(
@@ -1107,6 +1203,365 @@ def _solve_scf_full_functional_v1_variationally_stable_rho_trace_normalized(
     )
 
 
+def _solve_scf_full_functional_v1_variationally_stable_rho_a2_4(
+    *,
+    laplacian: np.ndarray,
+    v0: np.ndarray,
+    heat_tau: float,
+    phi_eps: float,
+    rho_floor: float,
+    sc_iters: int,
+    sc_eta: float,
+    sc_damping: float,
+    sc_clip: float,
+    sc_max_backtracks: int,
+    coef_alpha: float,
+    coef_beta: float,
+    coef_gamma: float,
+    mvec: np.ndarray,
+    rho_mode: str,
+    rho_ldos_beta: float,
+    rho_ldos_k: int,
+    rho_ldos_deg_tol: float,
+) -> tuple[
+    np.ndarray,
+    np.ndarray,
+    np.ndarray,
+    np.ndarray,
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    bool,
+    float,
+    int,
+    bool,
+    float,
+    float,
+    list[dict[str, object]],
+    bool,
+    int,
+    float,
+    list[float],
+    list[int],
+    list[float],
+]:
+    """
+    ACCURACY-A2.4: keep A2.2 SCF discipline fixed, change ONLY the rho-law via rho_mode:
+
+      - rho_mode="heat_diag": A2.3 rho-law baseline (trace-normalized shifted heat diag)
+      - rho_mode="soft_occupancy_ldos": A2.4 rho-law (soft-occupancy LDOS)
+    """
+    lap = np.asarray(laplacian, dtype=float)
+    if lap.ndim != 2 or lap.shape[0] != lap.shape[1]:
+        raise AccuracyA2SelfConsistentError("laplacian must be square")
+
+    v0_vec = np.asarray(v0, dtype=float).reshape(-1)
+    n = int(lap.shape[0])
+    if v0_vec.size != n:
+        raise AccuracyA2SelfConsistentError("v0 must have shape (n,)")
+
+    eps = float(phi_eps)
+    if eps <= 0.0 or not math.isfinite(eps):
+        raise AccuracyA2SelfConsistentError("phi_eps must be > 0 and finite")
+
+    iters = int(sc_iters)
+    if iters < 0 or iters > 5:
+        raise AccuracyA2SelfConsistentError("sc_iters must be in [0,5]")
+
+    eta0 = float(sc_eta)
+    if not math.isfinite(eta0):
+        raise AccuracyA2SelfConsistentError("sc_eta must be finite")
+
+    damping = float(sc_damping)
+    if damping < 0.0 or damping > 1.0 or not math.isfinite(damping):
+        raise AccuracyA2SelfConsistentError("sc_damping must be in [0,1] and finite")
+
+    clip = float(sc_clip)
+    if clip <= 0.0 or not math.isfinite(clip):
+        raise AccuracyA2SelfConsistentError("sc_clip must be > 0 and finite")
+
+    rho_floor_val = float(rho_floor)
+    if rho_floor_val < 0.0 or not math.isfinite(rho_floor_val):
+        raise AccuracyA2SelfConsistentError("rho_floor must be >= 0 and finite")
+
+    max_bt = int(sc_max_backtracks)
+    if max_bt < 0 or max_bt > 3:
+        raise AccuracyA2SelfConsistentError("sc_max_backtracks must be in [0,3]")
+
+    m0 = np.asarray(mvec, dtype=float).reshape(-1)
+    if m0.size != n:
+        raise AccuracyA2SelfConsistentError("mvec must have shape (n,)")
+
+    alpha = float(coef_alpha)
+    beta = float(coef_beta)
+    gamma = float(coef_gamma)
+    if not (math.isfinite(alpha) and math.isfinite(beta) and math.isfinite(gamma)):
+        raise AccuracyA2SelfConsistentError("coef_alpha/beta/gamma must be finite")
+
+    rho_mode_val = str(rho_mode)
+    if rho_mode_val not in {"heat_diag", "soft_occupancy_ldos"}:
+        raise AccuracyA2SelfConsistentError(f"invalid rho_mode: {rho_mode_val}")
+
+    def _state_for_v(
+        v_vec: np.ndarray,
+    ) -> tuple[
+        np.ndarray,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        np.ndarray,
+        np.ndarray,
+        float,
+        float,
+        bool,
+        float,
+        int,
+        bool,
+        float,
+        float,
+    ]:
+        H = lap + np.diag(v_vec)
+        if rho_mode_val == "heat_diag":
+            rho_norm, trace_heat, lambda_min, lambda_max, rho_trace_norm = _heat_kernel_diagonal_shifted_trace_normalized(
+                H, tau=float(heat_tau)
+            )
+            trace_weights = float(trace_heat)
+            rho_entropy = float(-np.sum(rho_norm * np.log(rho_norm + 1e-300)))
+            rho_sum = float(rho_trace_norm)
+            rho_renorm_applied = False
+            rho_renorm_delta = float(rho_sum - 1.0)
+            k_eff = 0
+            degeneracy_guard_applied = False
+            lambda_min_window = float(lambda_min)
+            lambda_gap = float(float(lambda_max) - float(lambda_min))
+        else:
+            (
+                rho_norm,
+                trace_weights,
+                lambda_min,
+                lambda_max,
+                rho_trace_norm,
+                rho_entropy,
+                k_eff,
+                degeneracy_guard_applied,
+                rho_sum,
+                rho_renorm_applied,
+                rho_renorm_delta,
+                lambda_min_window,
+                lambda_gap,
+            ) = _soft_occupancy_ldos_rho(
+                H,
+                beta=float(rho_ldos_beta),
+                k=int(rho_ldos_k),
+                deg_tol=float(rho_ldos_deg_tol),
+            )
+
+        if rho_norm.size != n:
+            raise AccuracyA2SelfConsistentError("invalid rho shape")
+
+        if rho_floor_val > 0.0:
+            floor_mask = rho_norm < rho_floor_val
+            floor_rate = float(np.mean(floor_mask)) if floor_mask.size else 0.0
+            rho_used = np.maximum(rho_norm, rho_floor_val)
+        else:
+            floor_rate = 0.0
+            rho_used = rho_norm
+
+        phi = -np.log(rho_used + eps)
+        phi = np.asarray(phi - float(np.mean(phi)), dtype=float)  # gauge-fix (fixed)
+        curvature = -np.asarray(lap @ phi, dtype=float)
+
+        grad_energy = float(phi.T @ (lap @ phi))
+        curv_l1 = float(np.sum(np.abs(curvature)))
+        mass_phi = float(np.sum(m0 * phi))
+        E = float(alpha * grad_energy + beta * curv_l1 + gamma * mass_phi)
+        if not math.isfinite(E):
+            raise AccuracyA2SelfConsistentError("non-finite E in SCF")
+
+        return (
+            np.asarray(rho_norm, dtype=float),
+            float(floor_rate),
+            float(trace_weights),
+            float(lambda_min),
+            float(lambda_max),
+            float(rho_trace_norm),
+            float(rho_entropy),
+            np.asarray(phi, dtype=float),
+            np.asarray(curvature, dtype=float),
+            float(E),
+            float(rho_sum),
+            bool(rho_renorm_applied),
+            float(rho_renorm_delta),
+            int(k_eff),
+            bool(degeneracy_guard_applied),
+            float(lambda_min_window),
+            float(lambda_gap),
+        )
+
+    v = v0_vec.copy()
+    (
+        rho,
+        floor_rate,
+        trace_weights,
+        lambda_min,
+        lambda_max,
+        rho_trace_norm,
+        rho_entropy,
+        phi,
+        curvature,
+        E,
+        rho_sum,
+        rho_renorm_applied,
+        rho_renorm_delta,
+        rho_ldos_k_eff,
+        rho_ldos_degeneracy_guard_applied,
+        lambda_min_window,
+        lambda_gap,
+    ) = _state_for_v(v)
+
+    residual_final = 0.0
+    E_trace: list[float] = [float(E)]
+    accepted_backtracks: list[int] = []
+    rho_floor_rate_trace: list[float] = [float(floor_rate)]
+    trace: list[dict[str, object]] = []
+    monotonic_ok = True
+    iters_done = 0
+
+    for t in range(iters):
+        iters_done = int(t + 1)
+        eta_k = float(eta0)
+        accepted = False
+        bt_used = 0
+        E_prev = float(E)
+        v_prev = v.copy()
+        residual_inf = 0.0
+
+        for bt in range(max_bt + 1):
+            bt_used = int(bt)
+            upd = float(eta_k) * np.clip(curvature, -clip, clip)
+            v_star = v0_vec + upd
+            v_cand = (1.0 - damping) * v + damping * v_star
+
+            (
+                rho_c,
+                floor_rate_c,
+                trace_weights_c,
+                lambda_min_c,
+                lambda_max_c,
+                rho_trace_norm_c,
+                rho_entropy_c,
+                phi_c,
+                curvature_c,
+                E_c,
+                rho_sum_c,
+                rho_renorm_applied_c,
+                rho_renorm_delta_c,
+                rho_ldos_k_eff_c,
+                rho_ldos_degeneracy_guard_applied_c,
+                lambda_min_window_c,
+                lambda_gap_c,
+            ) = _state_for_v(v_cand)
+            dv = np.asarray(v_cand - v, dtype=float)
+            residual_inf = float(np.max(np.abs(dv))) if dv.size else 0.0
+
+            if E_c <= E_prev:
+                accepted = True
+                v = np.asarray(v_cand, dtype=float)
+                rho = np.asarray(rho_c, dtype=float)
+                floor_rate = float(floor_rate_c)
+                trace_weights = float(trace_weights_c)
+                lambda_min = float(lambda_min_c)
+                lambda_max = float(lambda_max_c)
+                rho_trace_norm = float(rho_trace_norm_c)
+                rho_entropy = float(rho_entropy_c)
+                rho_sum = float(rho_sum_c)
+                rho_renorm_applied = bool(rho_renorm_applied_c)
+                rho_renorm_delta = float(rho_renorm_delta_c)
+                rho_ldos_k_eff = int(rho_ldos_k_eff_c)
+                rho_ldos_degeneracy_guard_applied = bool(rho_ldos_degeneracy_guard_applied_c)
+                lambda_min_window = float(lambda_min_window_c)
+                lambda_gap = float(lambda_gap_c)
+                phi = np.asarray(phi_c, dtype=float)
+                curvature = np.asarray(curvature_c, dtype=float)
+                E = float(E_c)
+                residual_final = float(residual_inf)
+                break
+
+            eta_k *= 0.5
+
+        trace.append(
+            {
+                "iter": int(t + 1),
+                "accepted": bool(accepted),
+                "accepted_backtracks": int(bt_used),
+                "eta_used": float(eta_k),
+                "E_prev": float(E_prev),
+                "E_next": float(E),
+                "residual_inf": float(residual_inf),
+                "rho_floor_rate": float(floor_rate),
+                "rho_trace_norm": float(rho_trace_norm),
+                "rho_sum": float(rho_sum),
+                "rho_renorm_applied": bool(rho_renorm_applied),
+                "rho_renorm_delta": float(rho_renorm_delta),
+                "rho_entropy": float(rho_entropy),
+                "trace_weights": float(trace_weights),
+                "rho_ldos_k_eff": int(rho_ldos_k_eff),
+                "rho_ldos_deg_tol": float(rho_ldos_deg_tol),
+                "rho_ldos_degeneracy_guard_applied": bool(rho_ldos_degeneracy_guard_applied),
+                "lambda_min": float(lambda_min),
+                "lambda_max": float(lambda_max),
+                "lambda_min_window": float(lambda_min_window),
+                "lambda_gap": float(lambda_gap),
+                "min_V": float(np.min(v)),
+                "max_V": float(np.max(v)),
+                "mean_V": float(np.mean(v)),
+                "rho_min": float(np.min(rho)),
+                "rho_max": float(np.max(rho)),
+            }
+        )
+
+        accepted_backtracks.append(int(bt_used))
+        E_trace.append(float(E))
+        rho_floor_rate_trace.append(float(floor_rate))
+
+        if not accepted:
+            monotonic_ok = False
+            v = v_prev
+            break
+
+    return (
+        np.asarray(v, dtype=float),
+        np.asarray(rho, dtype=float),
+        np.asarray(phi, dtype=float),
+        np.asarray(curvature, dtype=float),
+        float(trace_weights),
+        float(lambda_min),
+        float(lambda_max),
+        float(rho_trace_norm),
+        float(rho_entropy),
+        float(rho_sum),
+        bool(rho_renorm_applied),
+        float(rho_renorm_delta),
+        int(rho_ldos_k_eff),
+        bool(rho_ldos_degeneracy_guard_applied),
+        float(lambda_min_window),
+        float(lambda_gap),
+        list(trace),
+        bool(monotonic_ok),
+        int(iters_done),
+        float(residual_final),
+        list(E_trace),
+        list(accepted_backtracks),
+        list(rho_floor_rate_trace),
+    )
+
+
 def _mass_vector(types: Sequence[int], *, mode: str) -> np.ndarray:
     mz = str(mode)
     z = np.asarray([float(int(t)) for t in types], dtype=float)
@@ -1339,6 +1794,100 @@ def _a2_full_functional_a2_3_default_configs() -> list[_A2FullFunctionalConfig]:
 
     if len(configs) > 20:
         raise AccuracyA2SelfConsistentError("A2.3 search budget exceeded: configs > 20")
+    return configs
+
+
+def _a2_full_functional_a2_4_default_configs() -> list[_A2FullFunctionalConfig]:
+    """
+    ACCURACY-A2.4: keep A2.2 SCF discipline fixed; extend search space with rho_mode=B (soft-occupancy LDOS).
+    Budget <= 20 total (rho_mode=A baseline + rho_mode=B candidates).
+    """
+    configs: list[_A2FullFunctionalConfig] = []
+    phi_eps_default = 1e-6
+    sc_clip_default = 0.5
+
+    # Baseline (rho_mode=A): same rho-law as A2.3 (trace-normalized heat diag)
+    base_tau = [0.5, 1.0, 2.0]
+    base_eta = [0.1, 0.05]
+    for tau in base_tau:
+        for eta in base_eta:
+            cfg_id = f"a2_4_{len(configs) + 1:03d}"
+            configs.append(
+                _A2FullFunctionalConfig(
+                    config_id=cfg_id,
+                    heat_tau=float(tau),
+                    phi_eps=float(phi_eps_default),
+                    rho_floor=0.0,
+                    sc_iters=3,
+                    sc_eta=float(eta),
+                    sc_damping=0.5,
+                    sc_clip=float(sc_clip_default),
+                    sc_max_backtracks=3,
+                    gauge_fix_phi_mean=True,
+                    coef_alpha=1.0,
+                    coef_beta=1.0,
+                    coef_gamma=1.0,
+                    mass_mode="Z",
+                    rho_mode="heat_diag",
+                )
+            )
+
+    # New (rho_mode=B): soft-occupancy LDOS.
+    # NOTE: k must be <= min(heavy_atoms) across isomer_truth.v1 (currently 14).
+    ldos_beta = [0.5, 1.0, 2.0, 4.0]
+    ldos_k = [6, 10, 14]
+    for beta in ldos_beta:
+        for k in ldos_k:
+            cfg_id = f"a2_4_{len(configs) + 1:03d}"
+            configs.append(
+                _A2FullFunctionalConfig(
+                    config_id=cfg_id,
+                    heat_tau=1.0,  # unused by rho_mode=B; fixed for comparability/logging
+                    phi_eps=float(phi_eps_default),
+                    rho_floor=0.0,
+                    sc_iters=3,
+                    sc_eta=0.1,
+                    sc_damping=0.5,
+                    sc_clip=float(sc_clip_default),
+                    sc_max_backtracks=3,
+                    gauge_fix_phi_mean=True,
+                    coef_alpha=1.0,
+                    coef_beta=1.0,
+                    coef_gamma=1.0,
+                    mass_mode="Z",
+                    rho_mode="soft_occupancy_ldos",
+                    rho_ldos_beta=float(beta),
+                    rho_ldos_k=int(k),
+                )
+            )
+
+    # Two extra B candidates with smaller eta (total <= 20).
+    for k in [10, 14]:
+        cfg_id = f"a2_4_{len(configs) + 1:03d}"
+        configs.append(
+            _A2FullFunctionalConfig(
+                config_id=cfg_id,
+                heat_tau=1.0,
+                phi_eps=float(phi_eps_default),
+                rho_floor=0.0,
+                sc_iters=3,
+                sc_eta=0.05,
+                sc_damping=0.5,
+                sc_clip=float(sc_clip_default),
+                sc_max_backtracks=3,
+                gauge_fix_phi_mean=True,
+                coef_alpha=1.0,
+                coef_beta=1.0,
+                coef_gamma=1.0,
+                mass_mode="Z",
+                rho_mode="soft_occupancy_ldos",
+                rho_ldos_beta=2.0,
+                rho_ldos_k=int(k),
+            )
+        )
+
+    if len(configs) > 20:
+        raise AccuracyA2SelfConsistentError("A2.4 search budget exceeded: configs > 20")
     return configs
 
 
@@ -1685,6 +2234,15 @@ def _full_functional_terms_for_row(
         lambda_min = None
         lambda_max = None
         rho_trace_norm = None
+        trace_weights = None
+        rho_entropy = None
+        rho_sum = None
+        rho_renorm_applied = None
+        rho_renorm_delta = None
+        rho_ldos_k_eff = None
+        rho_ldos_degeneracy_guard_applied = None
+        lambda_min_window = None
+        lambda_gap = None
     elif mode == "a2_3":
         (
             v,
@@ -1718,6 +2276,61 @@ def _full_functional_terms_for_row(
             coef_gamma=float(cfg.coef_gamma),
             mvec=mvec,
         )
+        trace_weights = None
+        rho_entropy = None
+        rho_sum = None
+        rho_renorm_applied = None
+        rho_renorm_delta = None
+        rho_ldos_k_eff = None
+        rho_ldos_degeneracy_guard_applied = None
+        lambda_min_window = None
+        lambda_gap = None
+    elif mode == "a2_4":
+        (
+            v,
+            rho,
+            phi,
+            curvature,
+            trace_weights,
+            lambda_min,
+            lambda_max,
+            rho_trace_norm,
+            rho_entropy,
+            rho_sum,
+            rho_renorm_applied,
+            rho_renorm_delta,
+            rho_ldos_k_eff,
+            rho_ldos_degeneracy_guard_applied,
+            lambda_min_window,
+            lambda_gap,
+            _,
+            sc_converged,
+            sc_iters,
+            residual_final,
+            E_trace,
+            accepted_backtracks,
+            rho_floor_rate_trace,
+        ) = _solve_scf_full_functional_v1_variationally_stable_rho_a2_4(
+            laplacian=lap,
+            v0=v0,
+            heat_tau=float(cfg.heat_tau),
+            phi_eps=float(cfg.phi_eps),
+            rho_floor=float(cfg.rho_floor),
+            sc_iters=int(cfg.sc_iters),
+            sc_eta=float(cfg.sc_eta),
+            sc_damping=float(cfg.sc_damping),
+            sc_clip=float(cfg.sc_clip),
+            sc_max_backtracks=int(cfg.sc_max_backtracks),
+            coef_alpha=float(cfg.coef_alpha),
+            coef_beta=float(cfg.coef_beta),
+            coef_gamma=float(cfg.coef_gamma),
+            mvec=mvec,
+            rho_mode=str(cfg.rho_mode),
+            rho_ldos_beta=float(cfg.rho_ldos_beta),
+            rho_ldos_k=int(cfg.rho_ldos_k),
+            rho_ldos_deg_tol=float(cfg.rho_ldos_deg_tol),
+        )
+        trace_heat = None
     else:
         v, rho, phi, curvature, _, sc_converged, sc_iters, residual_final = _solve_scf_full_functional_v1(
             laplacian=lap,
@@ -1735,6 +2348,15 @@ def _full_functional_terms_for_row(
         lambda_min = None
         lambda_max = None
         rho_trace_norm = None
+        trace_weights = None
+        rho_entropy = None
+        rho_sum = None
+        rho_renorm_applied = None
+        rho_renorm_delta = None
+        rho_ldos_k_eff = None
+        rho_ldos_degeneracy_guard_applied = None
+        lambda_min_window = None
+        lambda_gap = None
 
     if rho.size != int(row.n_heavy_atoms) or phi.size != int(row.n_heavy_atoms) or curvature.size != int(row.n_heavy_atoms):
         raise AccuracyA2SelfConsistentError(f"invalid SCF output shapes for id={row.mid}")
@@ -1792,6 +2414,41 @@ def _full_functional_terms_for_row(
                 "trace_heat": float(trace_heat),
                 "lambda_min": float(lambda_min),
                 "lambda_max": float(lambda_max),
+            }
+        )
+    elif mode == "a2_4":
+        if (
+            trace_weights is None
+            or lambda_min is None
+            or lambda_max is None
+            or rho_trace_norm is None
+            or rho_entropy is None
+            or rho_sum is None
+            or rho_renorm_applied is None
+            or rho_renorm_delta is None
+            or rho_ldos_k_eff is None
+            or rho_ldos_degeneracy_guard_applied is None
+            or lambda_min_window is None
+            or lambda_gap is None
+        ):
+            raise AccuracyA2SelfConsistentError("missing A2.4 rho-law diagnostics")
+        payload.update(
+            {
+                "rho_trace_norm": float(rho_trace_norm),
+                "rho_sum": float(rho_sum),
+                "rho_renorm_applied": bool(rho_renorm_applied),
+                "rho_renorm_delta": float(rho_renorm_delta),
+                "trace_weights": float(trace_weights),
+                "lambda_min": float(lambda_min),
+                "lambda_max": float(lambda_max),
+                "lambda_min_window": float(lambda_min_window),
+                "lambda_gap": float(lambda_gap),
+                "rho_entropy": float(rho_entropy),
+                "rho_ldos_beta": float(cfg.rho_ldos_beta),
+                "rho_ldos_k": int(cfg.rho_ldos_k),
+                "rho_ldos_k_eff": int(rho_ldos_k_eff),
+                "rho_ldos_deg_tol": float(cfg.rho_ldos_deg_tol),
+                "rho_ldos_degeneracy_guard_applied": bool(rho_ldos_degeneracy_guard_applied),
             }
         )
     non_numeric_keys = {"sc_iters", "sc_converged", "sc_E_trace"}
@@ -2304,7 +2961,9 @@ def run_accuracy_a1_isomers_a2_full_functional_v1(
     truth_rel_by_id = _group_truth_min_center(rows_sorted)
 
     mode = str(full_functional_mode)
-    if mode == "a2_3":
+    if mode == "a2_4":
+        configs = _a2_full_functional_a2_4_default_configs()
+    elif mode == "a2_3":
         configs = _a2_full_functional_a2_3_default_configs()
     elif mode == "a2_2":
         configs = _a2_full_functional_a2_2_default_configs()
@@ -2364,25 +3023,33 @@ def run_accuracy_a1_isomers_a2_full_functional_v1(
         gm = _compute_group_metrics(records_cfg)
         group_metrics_by_config[str(cfg.config_id)] = gm
         agg = _aggregate_metrics_from_group_metrics(gm)
-        search_rows.append(
-            {
-                "config_id": str(cfg.config_id),
-                "heat_tau": float(cfg.heat_tau),
-                "phi_eps": float(cfg.phi_eps),
-                "rho_floor": float(cfg.rho_floor),
-                "sc_iters": int(cfg.sc_iters),
-                "sc_eta": float(cfg.sc_eta),
-                "sc_damping": float(cfg.sc_damping),
-                "sc_clip": float(cfg.sc_clip),
-                "sc_max_backtracks": int(cfg.sc_max_backtracks),
-                "gauge_fix_phi_mean": bool(cfg.gauge_fix_phi_mean),
-                "coef_alpha": float(cfg.coef_alpha),
-                "coef_beta": float(cfg.coef_beta),
-                "coef_gamma": float(cfg.coef_gamma),
-                "mass_mode": str(cfg.mass_mode),
-                **{k: agg[k] for k in sorted(agg.keys())},
-            }
-        )
+        sr: dict[str, object] = {
+            "config_id": str(cfg.config_id),
+            "heat_tau": float(cfg.heat_tau),
+            "phi_eps": float(cfg.phi_eps),
+            "rho_floor": float(cfg.rho_floor),
+            "sc_iters": int(cfg.sc_iters),
+            "sc_eta": float(cfg.sc_eta),
+            "sc_damping": float(cfg.sc_damping),
+            "sc_clip": float(cfg.sc_clip),
+            "sc_max_backtracks": int(cfg.sc_max_backtracks),
+            "gauge_fix_phi_mean": bool(cfg.gauge_fix_phi_mean),
+            "coef_alpha": float(cfg.coef_alpha),
+            "coef_beta": float(cfg.coef_beta),
+            "coef_gamma": float(cfg.coef_gamma),
+            "mass_mode": str(cfg.mass_mode),
+        }
+        if mode == "a2_4":
+            sr.update(
+                {
+                    "rho_mode": str(cfg.rho_mode),
+                    "rho_ldos_beta": float(cfg.rho_ldos_beta),
+                    "rho_ldos_k": int(cfg.rho_ldos_k),
+                    "rho_ldos_deg_tol": float(cfg.rho_ldos_deg_tol),
+                }
+            )
+        sr.update({k: agg[k] for k in sorted(agg.keys())})
+        search_rows.append(sr)
 
     rng = random.Random(int(seed))
     fold_order = list(group_ids)
@@ -2430,6 +3097,78 @@ def run_accuracy_a1_isomers_a2_full_functional_v1(
     fold_selection_by_id: dict[int, dict[str, object]] = {int(r.get("fold_id", -1)): r for r in fold_selection}
     if len(fold_selection_by_id) != len(fold_selection):
         raise AccuracyA2SelfConsistentError("duplicate fold_id in fold_selection")
+
+    metrics_test_func_by_rho_mode: dict[str, dict[str, object]] | None = None
+    negative_spearman_groups_test_by_rho_mode: dict[str, list[str]] | None = None
+    if mode == "a2_4":
+        configs_a = [c for c in configs if str(c.rho_mode) == "heat_diag"]
+        configs_b = [c for c in configs if str(c.rho_mode) == "soft_occupancy_ldos"]
+
+        def _select_configs(configs_subset: list[_A2FullFunctionalConfig]) -> dict[str, str]:
+            if not configs_subset:
+                raise AccuracyA2SelfConsistentError("empty configs_subset while selecting rho_mode baseline")
+            sel: dict[str, str] = {}
+            for test_gid in fold_order:
+                train_gids = [g for g in group_ids if g != test_gid]
+                best_key: tuple[object, ...] | None = None
+                best_cfg_id: str | None = None
+                for cfg in configs_subset:
+                    gm = group_metrics_by_config[str(cfg.config_id)]
+                    spearmans = [float(gm[str(g)].get("spearman_pred_vs_truth", float("nan"))) for g in train_gids]
+                    num_neg = sum(1 for s in spearmans if not math.isfinite(float(s)) or float(s) < 0.0)
+                    spearmans_for_median = [_finite_or(float(s), -1.0) for s in spearmans]
+                    median = float(statistics.median(spearmans_for_median)) if spearmans_for_median else float("nan")
+                    mean = float(statistics.fmean(spearmans_for_median)) if spearmans_for_median else float("nan")
+                    key = (int(num_neg), -float(median), -float(mean), str(cfg.config_id))
+                    if best_key is None or key < best_key:
+                        best_key = key
+                        best_cfg_id = str(cfg.config_id)
+                if best_cfg_id is None:
+                    raise AccuracyA2SelfConsistentError("failed to select rho_mode baseline config for fold")
+                sel[str(test_gid)] = str(best_cfg_id)
+            return sel
+
+        def _metrics_for_selected_cfgs(selected: dict[str, str]) -> tuple[dict[str, object], list[str]]:
+            records: list[dict[str, object]] = []
+            for fold_id, test_gid in enumerate(fold_order):
+                cfg_id = str(selected[str(test_gid)])
+                terms_by_id = eval_by_config[cfg_id]
+                test_rows = [r for r in rows_sorted if r.gid == test_gid]
+                if not test_rows:
+                    raise AccuracyA2SelfConsistentError("empty test group while building rho_mode metrics")
+                pred_raw: dict[str, float] = {r.mid: float(terms_by_id[r.mid]["E"]) for r in test_rows}
+                min_pred = min(float(pred_raw[r.mid]) for r in test_rows)
+                for r in test_rows:
+                    e = float(pred_raw[r.mid])
+                    records.append(
+                        {
+                            "fold_id": int(fold_id),
+                            "selected_config_id": str(cfg_id),
+                            "rho_mode": str(cfg_by_id[cfg_id].rho_mode),
+                            "id": str(r.mid),
+                            "group_id": str(r.gid),
+                            "smiles": str(r.smiles),
+                            "truth_rel_kcalmol": float(truth_rel_by_id[r.mid]),
+                            "pred_raw": float(e),
+                            "pred_rel": float(e - float(min_pred)),
+                        }
+                    )
+            gm = _compute_group_metrics(records)
+            agg = _aggregate_metrics_from_group_metrics(gm)
+            neg_groups = [
+                str(gid)
+                for gid, rec in gm.items()
+                if math.isfinite(float(rec.get("spearman_pred_vs_truth", float("nan"))))
+                and float(rec.get("spearman_pred_vs_truth", float("nan"))) < 0.0
+            ]
+            return {k: agg[k] for k in sorted(agg.keys())}, sorted(neg_groups)
+
+        selected_a = _select_configs(configs_a)
+        selected_b = _select_configs(configs_b)
+        metrics_a, neg_a = _metrics_for_selected_cfgs(selected_a)
+        metrics_b, neg_b = _metrics_for_selected_cfgs(selected_b)
+        metrics_test_func_by_rho_mode = {"heat_diag": metrics_a, "soft_occupancy_ldos": metrics_b}
+        negative_spearman_groups_test_by_rho_mode = {"heat_diag": neg_a, "soft_occupancy_ldos": neg_b}
 
     feature_names_cal = ["grad_energy", "curv_l1", "mass_phi"]
     calibrator_lambda = float(calibrator_ridge_lambda)
@@ -2513,20 +3252,21 @@ def run_accuracy_a1_isomers_a2_full_functional_v1(
         min_cal = min(float(pred_raw_cal[r.mid]) for r in test_rows)
 
         for r in test_rows:
-            all_records.append(
-                {
-                    "fold_id": int(fold_id),
-                    "selected_config_id": str(cfg_id),
-                    "id": str(r.mid),
-                    "group_id": str(r.gid),
-                    "smiles": str(r.smiles),
-                    "truth_rel_kcalmol": float(truth_rel_by_id[r.mid]),
-                    "pred_raw": float(pred_raw_func[r.mid]),
-                    "pred_rel": float(float(pred_raw_func[r.mid]) - float(min_func)),
-                    "pred_raw_calibrated_linear": float(pred_raw_cal[r.mid]),
-                    "pred_rel_calibrated_linear": float(float(pred_raw_cal[r.mid]) - float(min_cal)),
-                }
-            )
+            rec: dict[str, object] = {
+                "fold_id": int(fold_id),
+                "selected_config_id": str(cfg_id),
+                "id": str(r.mid),
+                "group_id": str(r.gid),
+                "smiles": str(r.smiles),
+                "truth_rel_kcalmol": float(truth_rel_by_id[r.mid]),
+                "pred_raw": float(pred_raw_func[r.mid]),
+                "pred_rel": float(float(pred_raw_func[r.mid]) - float(min_func)),
+                "pred_raw_calibrated_linear": float(pred_raw_cal[r.mid]),
+                "pred_rel_calibrated_linear": float(float(pred_raw_cal[r.mid]) - float(min_cal)),
+            }
+            if mode == "a2_4":
+                rec["rho_mode"] = str(cfg.rho_mode)
+            all_records.append(rec)
 
             t = terms_by_id[r.mid]
             diag_rec: dict[str, object] = {
@@ -2577,6 +3317,28 @@ def run_accuracy_a1_isomers_a2_full_functional_v1(
                         "trace_heat": float(t.get("trace_heat", float("nan"))),
                         "lambda_min": float(t.get("lambda_min", float("nan"))),
                         "lambda_max": float(t.get("lambda_max", float("nan"))),
+                    }
+                )
+            elif mode == "a2_4":
+                diag_rec.update(
+                    {
+                        "rho_mode": str(cfg.rho_mode),
+                        "rho_ldos_beta": float(cfg.rho_ldos_beta),
+                        "rho_ldos_k": int(cfg.rho_ldos_k),
+                        "rho_ldos_deg_tol": float(cfg.rho_ldos_deg_tol),
+                        "rho_max": float(t.get("rho_max", float("nan"))),
+                        "rho_trace_norm": float(t.get("rho_trace_norm", float("nan"))),
+                        "rho_sum": float(t.get("rho_sum", float("nan"))),
+                        "rho_renorm_applied": bool(t.get("rho_renorm_applied", False)),
+                        "rho_renorm_delta": float(t.get("rho_renorm_delta", float("nan"))),
+                        "rho_entropy": float(t.get("rho_entropy", float("nan"))),
+                        "trace_weights": float(t.get("trace_weights", float("nan"))),
+                        "lambda_min": float(t.get("lambda_min", float("nan"))),
+                        "lambda_max": float(t.get("lambda_max", float("nan"))),
+                        "lambda_min_window": float(t.get("lambda_min_window", float("nan"))),
+                        "lambda_gap": float(t.get("lambda_gap", float("nan"))),
+                        "rho_ldos_k_eff": int(t.get("rho_ldos_k_eff", 0) or 0),
+                        "rho_ldos_degeneracy_guard_applied": bool(t.get("rho_ldos_degeneracy_guard_applied", False)),
                     }
                 )
             diagnostics_rows.append(diag_rec)
@@ -2723,6 +3485,8 @@ def run_accuracy_a1_isomers_a2_full_functional_v1(
             "pred_raw_calibrated_linear",
             "pred_rel_calibrated_linear",
         ]
+        if mode == "a2_4":
+            fieldnames.insert(2, "rho_mode")
         w = csv.DictWriter(f, fieldnames=fieldnames, lineterminator="\n")
         w.writeheader()
         for rec in sorted(all_records, key=lambda rr: (int(rr["fold_id"]), str(rr["group_id"]), str(rr["id"]))):
@@ -2794,12 +3558,67 @@ def run_accuracy_a1_isomers_a2_full_functional_v1(
         for rec in sorted(diagnostics_rows, key=lambda rr: (int(rr.get("fold_id") or 0), str(rr.get("group_id") or ""), str(rr.get("id") or ""))):
             w.writerow({k: rec.get(k, "") for k in fieldnames})
 
+    if mode == "a2_4":
+        rho_compare_path = out_dir / "rho_compare.csv"
+        with rho_compare_path.open("w", encoding="utf-8", newline="") as f:
+            fieldnames = [
+                "fold_id",
+                "selected_config_id",
+                "rho_mode",
+                "rho_ldos_beta",
+                "rho_ldos_k",
+                "rho_ldos_deg_tol",
+                "rho_ldos_k_eff",
+                "rho_ldos_degeneracy_guard_applied",
+                "id",
+                "group_id",
+                "smiles",
+                "n_heavy_atoms",
+                "rho_min",
+                "rho_mean",
+                "rho_max",
+                "rho_entropy",
+                "rho_trace_norm",
+                "rho_sum",
+                "rho_renorm_applied",
+                "rho_renorm_delta",
+                "sc_rho_floor_rate_final",
+                "sc_rho_floor_rate_max",
+                "trace_weights",
+                "lambda_min",
+                "lambda_max",
+                "lambda_min_window",
+                "lambda_gap",
+                "heat_tau",
+                "phi_eps",
+                "rho_floor",
+                "sc_iters",
+                "sc_eta",
+                "sc_damping",
+                "sc_clip",
+                "sc_max_backtracks",
+            ]
+            w = csv.DictWriter(f, fieldnames=fieldnames, lineterminator="\n")
+            w.writeheader()
+            for rec in sorted(
+                diagnostics_rows,
+                key=lambda rr: (
+                    int(rr.get("fold_id") or 0),
+                    str(rr.get("group_id") or ""),
+                    str(rr.get("id") or ""),
+                ),
+            ):
+                w.writerow({k: rec.get(k, "") for k in fieldnames})
+
     if mode == "a2_3":
         schema_version = "accuracy_a1_isomers_a2_3.v1"
         a2_variant_label = "full_functional_v1_heat_kernel_a2_3"
     elif mode == "a2_2":
         schema_version = "accuracy_a1_isomers_a2_2.v1"
         a2_variant_label = "full_functional_v1_heat_kernel_a2_2"
+    elif mode == "a2_4":
+        schema_version = "accuracy_a1_isomers_a2_4.v1"
+        a2_variant_label = "full_functional_v1_heat_kernel_a2_4"
     else:
         schema_version = "accuracy_a1_isomers_a2_1.v1"
         a2_variant_label = "full_functional_v1_heat_kernel"
@@ -2842,6 +3661,10 @@ def run_accuracy_a1_isomers_a2_full_functional_v1(
                 "coef_beta": float(c.coef_beta),
                 "coef_gamma": float(c.coef_gamma),
                 "mass_mode": str(c.mass_mode),
+                "rho_mode": str(c.rho_mode),
+                "rho_ldos_beta": float(c.rho_ldos_beta),
+                "rho_ldos_k": int(c.rho_ldos_k),
+                "rho_ldos_deg_tol": float(c.rho_ldos_deg_tol),
             }
             for c in configs
         ],
@@ -2859,6 +3682,43 @@ def run_accuracy_a1_isomers_a2_full_functional_v1(
     }
     (out_dir / "best_config.json").write_text(json.dumps(best_cfg, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
 
+    files_payload: dict[str, str] = {
+        "summary_csv": "summary.csv",
+        "predictions_csv": "predictions.csv",
+        "fold_metrics_csv": "fold_metrics.csv",
+        "group_metrics_csv": "group_metrics.csv",
+        "diagnostics_csv": "diagnostics.csv",
+        "metrics_json": "metrics.json",
+        "best_config_json": "best_config.json",
+        "provenance_json": "provenance.json",
+        "manifest_json": "manifest.json",
+        "checksums_sha256": "checksums.sha256",
+        "index_md": "index.md",
+        "search_results_csv": "search_results.csv",
+    }
+    if mode == "a2_4":
+        files_payload["rho_compare_csv"] = "rho_compare.csv"
+
+    rho_mode_selected: dict[str, object] | None = None
+    if mode == "a2_4":
+        by_fold: list[dict[str, object]] = []
+        dist: dict[str, int] = {}
+        for rec in fold_selection:
+            cfg_id = str(rec.get("selected_config_id") or "")
+            cfg_sel = cfg_by_id.get(cfg_id)
+            rho_mode_val = str(cfg_sel.rho_mode) if cfg_sel is not None else ""
+            by_fold.append(
+                {
+                    "fold_id": int(rec.get("fold_id") or 0),
+                    "test_group_id": str(rec.get("test_group_id") or ""),
+                    "selected_config_id": str(cfg_id),
+                    "rho_mode": str(rho_mode_val),
+                }
+            )
+            if rho_mode_val:
+                dist[rho_mode_val] = int(dist.get(rho_mode_val, 0)) + 1
+        rho_mode_selected = {"by_fold": by_fold, "distribution": dist}
+
     metrics_payload: dict[str, object] = {
         "schema_version": str(schema_version),
         "experiment_id": str(experiment_id),
@@ -2871,27 +3731,24 @@ def run_accuracy_a1_isomers_a2_full_functional_v1(
         "best_config": best_cfg,
         "metrics_loocv_test_functional_only": dict(metrics_test_func),
         "metrics_loocv_test_calibrated_linear": dict(metrics_test_cal),
+        "metrics_loocv_test_functional_only_by_rho_mode": dict(metrics_test_func_by_rho_mode)
+        if metrics_test_func_by_rho_mode is not None
+        else None,
         "kpi": kpi_payload,
         "negative_spearman_groups_test": list(negative_spearman_groups_test),
+        "negative_spearman_groups_test_by_rho_mode": dict(negative_spearman_groups_test_by_rho_mode)
+        if negative_spearman_groups_test_by_rho_mode is not None
+        else None,
         "worst_groups": worst_groups,
         "worst_groups_calibrated_linear": worst_groups_cal,
-        "files": {
-            "summary_csv": "summary.csv",
-            "predictions_csv": "predictions.csv",
-            "fold_metrics_csv": "fold_metrics.csv",
-            "group_metrics_csv": "group_metrics.csv",
-            "diagnostics_csv": "diagnostics.csv",
-            "metrics_json": "metrics.json",
-            "best_config_json": "best_config.json",
-            "provenance_json": "provenance.json",
-            "manifest_json": "manifest.json",
-            "checksums_sha256": "checksums.sha256",
-            "index_md": "index.md",
-        },
+        "rho_mode_selected": dict(rho_mode_selected) if rho_mode_selected is not None else None,
+        "files": dict(files_payload),
     }
     (out_dir / "metrics.json").write_text(json.dumps(metrics_payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
 
-    if mode == "a2_3":
+    if mode == "a2_4":
+        title = "A2.4 full functional (soft-occupancy LDOS rho-law + variational SCF)"
+    elif mode == "a2_3":
         title = "A2.3 full functional (trace-normalized heat diag + variational SCF)"
     elif mode == "a2_2":
         title = "A2.2 variationally-stable SCF"
@@ -2990,12 +3847,19 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--a2_variant",
         type=str,
         default="self_consistent_v1",
-        choices=["self_consistent_v1", "full_functional_v1", "full_functional_v1_a2_2", "full_functional_v1_a2_3"],
+        choices=[
+            "self_consistent_v1",
+            "full_functional_v1",
+            "full_functional_v1_a2_2",
+            "full_functional_v1_a2_3",
+            "full_functional_v1_a2_4",
+        ],
         help=(
             "A2 runner variant: legacy self-consistent functional (v1), "
             "A2.1 full functional (heat-kernel diag + SCF), or "
             "A2.2 full functional with variationally-stable SCF (monotone backtracking), or "
-            "A2.3 same SCF discipline with rho-law trace-normalized heat diag."
+            "A2.3 same SCF discipline with rho-law trace-normalized heat diag, or "
+            "A2.4 same SCF discipline with rho-law soft-occupancy LDOS (baseline+new rho_mode)."
         ),
     )
     p.add_argument("--experiment_id", type=str, default="ACCURACY-A2", help="Experiment/Roadmap label to embed in the pack.")
@@ -3114,6 +3978,30 @@ def main(argv: list[str] | None = None) -> int:
             kpi_median_spearman_by_group_test_min=float(args.kpi_median_spearman_by_group_test_min),
             kpi_top1_accuracy_mean_test_min=float(args.kpi_top1_accuracy_mean_test_min),
             full_functional_mode="a2_3",
+        )
+    elif variant == "full_functional_v1_a2_4":
+        run_accuracy_a1_isomers_a2_full_functional_v1(
+            experiment_id=str(args.experiment_id),
+            input_csv=Path(args.input_csv),
+            out_dir=Path(args.out_dir),
+            seed=int(args.seed),
+            potential_gamma=float(args.gamma),
+            potential_variant=str(args.potential_variant),
+            v_deg_coeff=float(args.v_deg_coeff),
+            v_valence_coeff=float(args.v_valence_coeff),
+            v_arom_coeff=float(args.v_arom_coeff),
+            v_ring_coeff=float(args.v_ring_coeff),
+            v_charge_coeff=float(args.v_charge_coeff),
+            v_chi_coeff=float(args.v_chi_coeff),
+            edge_weight_mode=str(args.edge_weight_mode),
+            edge_aromatic_mult=float(args.edge_aromatic_mult),
+            edge_delta_chi_alpha=float(args.edge_delta_chi_alpha),
+            calibrator_ridge_lambda=float(args.calibrator_ridge_lambda),
+            kpi_mean_spearman_by_group_test_min=float(args.kpi_mean_spearman_by_group_test_min),
+            kpi_pairwise_order_accuracy_overall_test_min=float(args.kpi_pairwise_order_accuracy_overall_test_min),
+            kpi_median_spearman_by_group_test_min=float(args.kpi_median_spearman_by_group_test_min),
+            kpi_top1_accuracy_mean_test_min=float(args.kpi_top1_accuracy_mean_test_min),
+            full_functional_mode="a2_4",
         )
     elif variant == "self_consistent_v1":
         run_accuracy_a1_isomers_a2_self_consistent(
