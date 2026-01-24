@@ -1863,3 +1863,33 @@ separation facts (computed on status==OK rows only):
     - C21H23N3O3: spearman=-0.9999999999999998, top1=0.0, pairwise_acc=0.0
     - C15H24O1: spearman=-0.9999999999999998, top1=0.0, pairwise_acc=0.0
     - C22H22N4O2: spearman=-0.9999999999999998, top1=0.0, pairwise_acc=0.0
+
+## accuracy-a1-isomers-2026-01-24-a2_4-r1
+
+- Source commit: f76626fd162a75ea656b14e90ccd56ed4cce3bc9
+- Release asset: https://github.com/RobertPaulig/Geometric_table/releases/download/accuracy-a1-isomers-2026-01-24-a2_4-r1/accuracy_a1_isomers_evidence_pack.zip
+- SHA256(accuracy_a1_isomers_evidence_pack.zip): 0AA2A16CAF049822BD4DF887F218641A33C4393C3C663036814F7D27D4F86E2B
+- Command:
+  python scripts/build_isomer_truth_v1.py
+  python scripts/accuracy_a1_isomers_a2_self_consistent.py --a2_variant full_functional_v1_a2_4 --experiment_id ACCURACY-A2.4 --input_csv data/accuracy/isomer_truth.v1.csv --out_dir out_accuracy_a1_isomers_a2 --seed 0 --gamma 0.28 --potential_variant epsilon_z --edge_weight_mode bond_order_delta_chi --calibrator_ridge_lambda 1e-3 --kpi_mean_spearman_by_group_test_min -1.0 --kpi_median_spearman_by_group_test_min -1.0 --kpi_pairwise_order_accuracy_overall_test_min 0.60 --kpi_top1_accuracy_mean_test_min 0.30
+- Outcome (facts from metrics.json):
+  - rows_total: 35
+  - groups_total: 10
+  - kpi.verdict: FAIL
+  - rho_mode_selected.distribution: {"soft_occupancy_ldos": 10}
+  - loocv_test_functional_only:
+    - mean_spearman_by_group: -0.039999999999999994
+    - median_spearman_by_group: 0.09999999999999998
+    - pairwise_order_accuracy_overall: 0.5217391304347826 (24/46)
+    - top1_accuracy_mean: 0.1
+    - num_groups_spearman_negative: 4
+  - loocv_test_calibrated_linear:
+    - mean_spearman_by_group: -0.11999999999999997
+    - median_spearman_by_group: 0.04999999999999999
+    - pairwise_order_accuracy_overall: 0.4782608695652174 (22/46)
+    - top1_accuracy_mean: 0.3
+    - num_groups_spearman_negative: 4
+  - worst_groups:
+    - C15H24O1: spearman=-0.9999999999999998, top1=0.0, pairwise_acc=0.0
+    - C22H22N4O2: spearman=-0.9999999999999998, top1=0.0, pairwise_acc=0.0
+    - C21H23N3O3: spearman=-0.4999999999999999, top1=0.0, pairwise_acc=0.3333333333333333
