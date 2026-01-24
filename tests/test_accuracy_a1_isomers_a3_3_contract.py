@@ -46,6 +46,7 @@ def test_accuracy_a1_isomers_a3_3_phase_rho_pivot_contract(tmp_path: Path) -> No
         out_dir / "phase_summary.csv",
         out_dir / "rho_compare.csv",
         out_dir / "search_results.csv",
+        out_dir / "phi_sweep_sensitivity.csv",
         out_dir / "best_config.json",
         out_dir / "metrics.json",
         out_dir / "index.md",
@@ -88,6 +89,19 @@ def test_accuracy_a1_isomers_a3_3_phase_rho_pivot_contract(tmp_path: Path) -> No
         "parity_pass",
     }.issubset(set(rho_cmp[0].keys()))
 
+    phi_sweep = list(csv.DictReader((out_dir / "phi_sweep_sensitivity.csv").read_text(encoding="utf-8").splitlines()))
+    assert len(phi_sweep) == 35 * 4
+    assert {
+        "fold_id",
+        "id",
+        "group_id",
+        "phi_value",
+        "delta_rho_L1",
+        "delta_rho_Linf",
+        "delta_entropy",
+        "n_rings",
+    }.issubset(set(phi_sweep[0].keys()))
+
     metrics = json.loads((out_dir / "metrics.json").read_text(encoding="utf-8"))
     assert metrics["schema_version"] == "accuracy_a1_isomers_a3_3.v1"
     assert metrics["dataset"]["rows_total"] == 35
@@ -97,10 +111,16 @@ def test_accuracy_a1_isomers_a3_3_phase_rho_pivot_contract(tmp_path: Path) -> No
     assert metrics["best_config"]["nested_selection"] is True
     assert metrics["best_config"]["search_space_size"] == 4
     assert "selected_phi_by_outer_fold" in metrics["best_config"]
+    assert metrics["best_config"]["inner_selection_metric_tiebreaker"] == "mean_delta_rho_L1_train"
     assert "rho_imag_max_max" in metrics
     assert "kpi" in metrics
     assert "phase_summary_csv" in metrics["files"]
     assert metrics["files"]["rho_compare_csv"] == "rho_compare.csv"
+    assert metrics["files"]["phi_sweep_sensitivity_csv"] == "phi_sweep_sensitivity.csv"
+
+    search_results = list(csv.DictReader((out_dir / "search_results.csv").read_text(encoding="utf-8").splitlines()))
+    assert len(search_results) == 10 * 4
+    assert "mean_delta_rho_L1_train" in search_results[0]
 
     zip_path = out_dir / "evidence_pack.zip"
     with zipfile.ZipFile(zip_path, "r") as zf:
@@ -112,6 +132,7 @@ def test_accuracy_a1_isomers_a3_3_phase_rho_pivot_contract(tmp_path: Path) -> No
             "phase_summary.csv",
             "rho_compare.csv",
             "search_results.csv",
+            "phi_sweep_sensitivity.csv",
             "metrics.json",
             "index.md",
             "best_config.json",

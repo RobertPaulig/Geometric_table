@@ -108,7 +108,7 @@ jobs:
       - name: Validate zip (no unpack)
         run: |
           python -m zipfile -t out_accuracy_a1_isomers_a3_3/evidence_pack.zip
-          python -m zipfile -l out_accuracy_a1_isomers_a3_3/evidence_pack.zip | grep -E "manifest.json|provenance.json|checksums.sha256|metrics.json|index.md|summary.csv|predictions.csv|fold_metrics.csv|group_metrics.csv|best_config.json|phase_summary.csv|rho_compare.csv|search_results.csv|data/accuracy/isomer_truth.v1.csv|docs/contracts/isomer_truth.v1.md|data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv|data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv.sha256|data/atoms_db_v1.json|docs/specs/accuracy_a3_3_phase_rho_pivot.md"
+          python -m zipfile -l out_accuracy_a1_isomers_a3_3/evidence_pack.zip | grep -E "manifest.json|provenance.json|checksums.sha256|metrics.json|index.md|summary.csv|predictions.csv|fold_metrics.csv|group_metrics.csv|best_config.json|phase_summary.csv|rho_compare.csv|search_results.csv|phi_sweep_sensitivity.csv|data/accuracy/isomer_truth.v1.csv|docs/contracts/isomer_truth.v1.md|data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv|data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv.sha256|data/atoms_db_v1.json|docs/specs/accuracy_a3_3_phase_rho_pivot.md"
 
       - name: Prepare isomers asset
         run: |

@@ -919,6 +919,30 @@ def _rho_and_phi_from_laplacian(
     return np.asarray(rho_real, dtype=float), np.asarray(phi, dtype=float)
 
 
+def _rho_vector_from_laplacian(
+    *,
+    laplacian: np.ndarray,
+    v_vec: np.ndarray,
+    heat_tau: float,
+    rho_floor: float,
+) -> np.ndarray:
+    H = np.asarray(laplacian) + np.diag(np.asarray(v_vec, dtype=float))
+    rho_raw_c, _trace_heat, _lambda_min, _lambda_max, _rho_trace_norm, _rho_imag_max = (
+        _heat_kernel_diagonal_shifted_trace_normalized_hermitian(H, tau=float(heat_tau))
+    )
+    rho_real, _rho_sum, _rho_imag_max2, _rho_renorm_applied, _rho_renorm_delta = _rho_realness_and_normalize(
+        np.asarray(rho_raw_c, dtype=np.complex128).reshape(-1), rho_floor=float(rho_floor)
+    )
+    return np.asarray(rho_real, dtype=float)
+
+
+def _rho_entropy(rho: np.ndarray) -> float:
+    r = np.asarray(rho, dtype=float).reshape(-1)
+    if r.size == 0:
+        return 0.0
+    return float(-np.sum(r * np.log(r + 1e-300)))
+
+
 def _get_row_static(
     row: _Row,
     *,
@@ -1095,12 +1119,14 @@ def _select_phi_nested_train_only(
     test_gid: str,
 ) -> tuple[float, list[dict[str, object]]]:
     results: list[dict[str, object]] = []
-    scored: list[tuple[int, float, float]] = []
+    scored: list[tuple[int, float, float, float]] = []
 
     for phi in PHI_CANDIDATES:
+        phi_norm = float(normalize_flux_phi(float(phi)))
+
         recs: list[dict[str, object]] = []
         for r in train_rows:
-            pred_rec, _diag = _predict_one(r, atoms_db=atoms_db, cfg=cfg, flux_phi=float(phi))
+            pred_rec, _diag = _predict_one(r, atoms_db=atoms_db, cfg=cfg, flux_phi=float(phi_norm))
             recs.append(pred_rec)
         _attach_pred_rel(recs)
         gm = _compute_group_metrics(recs, pred_rel_key="pred_rel")
@@ -1109,24 +1135,46 @@ def _select_phi_nested_train_only(
         num_neg = int(agg["num_groups_spearman_negative"])
         med_s = float(agg["median_spearman_by_group"])
         med_key = -float(med_s) if math.isfinite(float(med_s)) else float("inf")
-        scored.append((num_neg, float(med_key), float(phi)))
+
+        delta_l1_sum = 0.0
+        delta_l1_count = 0
+        if float(phi_norm) != 0.0:
+            for r in train_rows:
+                st = _get_row_static(r, atoms_db=atoms_db, cfg=cfg)
+                w_adj = np.asarray(st["w_adj"], dtype=float)
+                v0 = np.asarray(st["v0"], dtype=float)
+                rho0 = np.asarray(st["rho_phase_phi0"], dtype=float)
+
+                lap_phase = _phase_laplacian_for_row(weights=w_adj, cycles_heavy=r.cycles_heavy, flux_phi=float(phi_norm))
+                rho_phi = _rho_vector_from_laplacian(
+                    laplacian=np.asarray(lap_phase, dtype=np.complex128),
+                    v_vec=v0,
+                    heat_tau=float(cfg.heat_tau),
+                    rho_floor=float(cfg.rho_floor),
+                )
+                delta_l1_sum += float(np.sum(np.abs(np.asarray(rho_phi, dtype=float) - np.asarray(rho0, dtype=float))))
+                delta_l1_count += 1
+        mean_delta_rho_l1 = float(delta_l1_sum / float(delta_l1_count)) if delta_l1_count else 0.0
+
+        scored.append((num_neg, float(med_key), -float(mean_delta_rho_l1), float(phi_norm)))
 
         results.append(
             {
                 "fold_id": int(fold_id),
                 "test_group_id": str(test_gid),
-                "phi_candidate": float(phi),
+                "phi_candidate": float(phi_norm),
                 "num_negative_train_inner": int(num_neg),
                 "median_spearman_train_inner": float(med_s),
                 "mean_spearman_train_inner": float(agg["mean_spearman_by_group"]),
                 "pairwise_train_inner": float(agg["pairwise_order_accuracy_overall"]),
                 "top1_train_inner": float(agg["top1_accuracy_mean"]),
                 "train_groups_total": int(agg["groups_total"]),
+                "mean_delta_rho_L1_train": float(mean_delta_rho_l1),
             }
         )
 
-    scored.sort(key=lambda t: (int(t[0]), float(t[1]), float(t[2])))
-    chosen_phi = float(scored[0][2])
+    scored.sort(key=lambda t: (int(t[0]), float(t[1]), float(t[2]), float(t[3])))
+    chosen_phi = float(scored[0][3])
     return float(chosen_phi), results
 
 
@@ -1155,6 +1203,7 @@ def run_a3_3(
     fold_rows: list[dict[str, object]] = []
     selected_phi_by_fold: dict[str, float] = {}
     search_results: list[dict[str, object]] = []
+    phi_sweep_records: list[dict[str, object]] = []
 
     for fold_id, test_gid in enumerate(fold_order, start=1):
         test_rows = [r for r in rows_sorted if str(r.gid) == str(test_gid)]
@@ -1172,6 +1221,49 @@ def run_a3_3(
         )
         selected_phi_by_fold[str(test_gid)] = float(phi_sel)
         search_results.extend(list(fold_search))
+
+        for r in test_rows:
+            st = _get_row_static(r, atoms_db=atoms_db, cfg=cfg)
+            w_adj = np.asarray(st["w_adj"], dtype=float)
+            v0 = np.asarray(st["v0"], dtype=float)
+            rho0 = np.asarray(st["rho_phase_phi0"], dtype=float)
+            entropy0 = _rho_entropy(rho0)
+
+            for phi in PHI_CANDIDATES:
+                phi_norm = float(normalize_flux_phi(float(phi)))
+                if float(phi_norm) == 0.0:
+                    rho_phi = rho0
+                    entropy_phi = float(entropy0)
+                else:
+                    lap_phase = _phase_laplacian_for_row(weights=w_adj, cycles_heavy=r.cycles_heavy, flux_phi=float(phi_norm))
+                    rho_phi = _rho_vector_from_laplacian(
+                        laplacian=np.asarray(lap_phase, dtype=np.complex128),
+                        v_vec=v0,
+                        heat_tau=float(cfg.heat_tau),
+                        rho_floor=float(cfg.rho_floor),
+                    )
+                    entropy_phi = _rho_entropy(rho_phi)
+
+                delta = np.asarray(rho_phi, dtype=float) - np.asarray(rho0, dtype=float)
+                delta_l1 = float(np.sum(np.abs(delta)))
+                delta_linf = float(np.max(np.abs(delta))) if delta.size else 0.0
+                delta_entropy = float(float(entropy_phi) - float(entropy0))
+
+                phi_sweep_records.append(
+                    {
+                        "fold_id": int(fold_id),
+                        "id": str(r.mid),
+                        "group_id": str(r.gid),
+                        "phi_value": float(phi_norm),
+                        "delta_rho_L1": float(delta_l1),
+                        "delta_rho_Linf": float(delta_linf),
+                        "delta_entropy": float(delta_entropy),
+                        "n_heavy_atoms": int(r.n_heavy_atoms),
+                        "n_rings": int(r.n_rings),
+                        "n_ring_edges": int(r.n_ring_edges),
+                        "n_shared_ring_edges": int(r.n_shared_ring_edges),
+                    }
+                )
 
         test_recs: list[dict[str, object]] = []
         test_diags: list[dict[str, object]] = []
@@ -1308,6 +1400,26 @@ def run_a3_3(
         for rec in sorted(all_diag_records, key=lambda rr: (int(rr.get("fold_id") or 0), str(rr.get("group_id")), str(rr.get("id")))):
             w.writerow({k: rec.get(k, "") for k in fieldnames})
 
+    phi_sweep_sensitivity_path = out_dir / "phi_sweep_sensitivity.csv"
+    with phi_sweep_sensitivity_path.open("w", encoding="utf-8", newline="") as f:
+        fieldnames = [
+            "fold_id",
+            "id",
+            "group_id",
+            "phi_value",
+            "delta_rho_L1",
+            "delta_rho_Linf",
+            "delta_entropy",
+            "n_heavy_atoms",
+            "n_rings",
+            "n_ring_edges",
+            "n_shared_ring_edges",
+        ]
+        w = csv.DictWriter(f, fieldnames=fieldnames, lineterminator="\n")
+        w.writeheader()
+        for rec in sorted(phi_sweep_records, key=lambda rr: (int(rr.get("fold_id") or 0), str(rr.get("group_id")), str(rr.get("id")), float(rr.get("phi_value") or 0.0))):
+            w.writerow({k: rec.get(k, "") for k in fieldnames})
+
     search_results_path = out_dir / "search_results.csv"
     with search_results_path.open("w", encoding="utf-8", newline="") as f:
         fieldnames = [
@@ -1320,6 +1432,7 @@ def run_a3_3(
             "pairwise_train_inner",
             "top1_train_inner",
             "train_groups_total",
+            "mean_delta_rho_L1_train",
         ]
         w = csv.DictWriter(f, fieldnames=fieldnames, lineterminator="\n")
         w.writeheader()
@@ -1330,6 +1443,9 @@ def run_a3_3(
         "schema_version": "accuracy_a3_3_phase_rho_pivot.v1",
         "experiment_id": str(experiment_id),
         "nested_selection": True,
+        "inner_selection_metric_primary": "num_negative_train_inner",
+        "inner_selection_metric_secondary": "median_spearman_train_inner",
+        "inner_selection_metric_tiebreaker": "mean_delta_rho_L1_train",
         "phi_candidates": list(PHI_CANDIDATES),
         "selected_phi_by_outer_fold": dict(selected_phi_by_fold),
         "search_space_size": int(len(PHI_CANDIDATES)),
@@ -1383,6 +1499,7 @@ def run_a3_3(
             "phase_summary_csv": "phase_summary.csv",
             "rho_compare_csv": "rho_compare.csv",
             "search_results_csv": "search_results.csv",
+            "phi_sweep_sensitivity_csv": "phi_sweep_sensitivity.csv",
             "metrics_json": "metrics.json",
             "best_config_json": "best_config.json",
             "provenance_json": "provenance.json",
