@@ -1,0 +1,450 @@
+name: publish-accuracy-a1-isomers-a4-0
+
+# Publish workflow for ACCURACY-A4.0 (signed/orientable edge observable; edge-only; 0 DOF; variant=B).
+# Pattern: build-pack -> (PASS-gated) publish-release -> registry PR (append-only) -> lineage PR (append-only).
+#
+# HARD GATE: If kpi.verdict != PASS, this workflow must not create/modify releases or open registry/lineage PRs.
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+  statuses: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref to run on (branch, tag, or SHA). Example: main or 9c54b043..."
+        required: true
+        default: "main"
+      tag:
+        description: "Release tag to create/update. Must match: accuracy-a1-isomers-YYYY-MM-DD-a4_0-rN"
+        required: true
+      prerelease:
+        description: "Mark GitHub release as pre-release"
+        required: true
+        default: "true"
+
+jobs:
+  build-pack:
+    runs-on: ubuntu-latest
+    outputs:
+      sha256: ${{ steps.hash.outputs.sha256 }}
+      source_sha: ${{ steps.meta.outputs.source_sha }}
+      asset_url: ${{ steps.meta.outputs.asset_url }}
+      facts_md: ${{ steps.facts.outputs.facts_md }}
+      kpi_verdict: ${{ steps.facts.outputs.kpi_verdict }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Validate tag format
+        run: |
+          echo "${{ inputs.tag }}" | grep -E '^accuracy-a1-isomers-[0-9]{4}-[0-9]{2}-[0-9]{2}-a4_0-r[0-9]+$'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install (dev,chem)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,chem]"
+
+      - name: Validate canonical truth is reproducible from raw
+        run: |
+          python scripts/build_isomer_truth_v1.py \
+            --raw_csv data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv \
+            --out_csv out_isomer_truth/isomer_truth.v1.csv
+          python - << 'PY'
+          import hashlib
+          from pathlib import Path
+
+          def sha256(path: Path) -> str:
+              return hashlib.sha256(path.read_bytes()).hexdigest()
+
+          gen = Path("out_isomer_truth/isomer_truth.v1.csv")
+          tracked = Path("data/accuracy/isomer_truth.v1.csv")
+          gen_sha = sha256(gen)
+          tracked_sha = sha256(tracked)
+          print(f"generated_sha256={gen_sha}")
+          print(f"tracked_sha256={tracked_sha}")
+          assert gen_sha == tracked_sha, "canonical truth mismatch: raw -> generated != tracked"
+          PY
+
+      - name: Run opt-in A3/A4 tests (RUN_A3_TESTS=1, RUN_A4_TESTS=1)
+        env:
+          RUN_A3_TESTS: "1"
+          RUN_A4_TESTS: "1"
+        run: |
+          pytest -q \
+            tests/test_accuracy_a3_phase_channel_spec.py \
+            tests/test_accuracy_a3_phase_channel_operator_only.py \
+            tests/test_accuracy_a3_phase_channel_polycycle_correctness.py \
+            tests/test_accuracy_a1_isomers_a4_0_contract.py
+
+      - name: Run ACCURACY-A4.0 isomers (signed edge score, edge-only, 0 DOF, variant=B)
+        run: |
+          python scripts/accuracy_a1_isomers_a4_0_signed_edge.py \
+            --experiment_id "ACCURACY-A4.0" \
+            --input_csv data/accuracy/isomer_truth.v1.csv \
+            --out_dir out_accuracy_a1_isomers_a4_0 \
+            --seed 0
+
+      - name: Gate provenance source SHA matches HEAD
+        run: |
+          python - << 'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+
+          head = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+          prov = json.loads(Path("out_accuracy_a1_isomers_a4_0/provenance.json").read_text(encoding="utf-8"))
+          source_sha = str(prov.get("source_sha_main") or "")
+          assert source_sha == head, f"provenance source_sha_main mismatch: {source_sha} != {head}"
+          print(f"provenance_source_sha_main={source_sha}")
+          PY
+
+      - name: Validate zip (no unpack)
+        run: |
+          python -m zipfile -t out_accuracy_a1_isomers_a4_0/evidence_pack.zip
+          python -m zipfile -l out_accuracy_a1_isomers_a4_0/evidence_pack.zip | grep -E "manifest.json|provenance.json|checksums.sha256|metrics.json|index.md|summary.csv|predictions.csv|fold_metrics.csv|group_metrics.csv|edge_score_by_molecule.csv|edge_contrib_topk.csv|data/accuracy/isomer_truth.v1.csv|docs/contracts/isomer_truth.v1.md|data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv|data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv.sha256|data/atoms_db_v1.json|docs/specs/accuracy_a4_0_signed_edge_observable.md"
+
+      - name: Prepare isomers asset
+        run: |
+          cp out_accuracy_a1_isomers_a4_0/evidence_pack.zip out_accuracy_a1_isomers_a4_0/accuracy_a1_isomers_evidence_pack.zip
+
+      - name: Compute A4.0 facts (metrics.json)
+        id: facts
+        run: |
+          python - << 'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          metrics = json.loads(Path("out_accuracy_a1_isomers_a4_0/metrics.json").read_text(encoding="utf-8"))
+          mt = metrics.get("metrics_loocv_test_functional_only", {}) or {}
+          kpi = metrics.get("kpi", {}) or {}
+          kpi_verdict = str(kpi.get("verdict") or "")
+
+          lines = [
+              "  - metrics_loocv_test_functional_only:",
+              f"    - mean_spearman_by_group: {mt.get('mean_spearman_by_group')}",
+              f"    - median_spearman_by_group: {mt.get('median_spearman_by_group')}",
+              f"    - pairwise_order_accuracy_overall: {mt.get('pairwise_order_accuracy_overall')} ({mt.get('pairwise_correct')}/{mt.get('pairwise_total')})",
+              f"    - top1_accuracy_mean: {mt.get('top1_accuracy_mean')}",
+              f"  - num_groups_spearman_negative_test: {kpi.get('num_groups_spearman_negative_test')}",
+              f"  - negative_spearman_groups_test: {kpi.get('negative_spearman_groups_test')}",
+              f"  - variant: {metrics.get('variant')}",
+              f"  - phi_fixed: {metrics.get('phi_fixed')}",
+              f"  - heat_tau: {metrics.get('heat_tau')}",
+              f"  - kpi.verdict: {kpi_verdict}",
+          ]
+
+          facts_md = "\n".join(lines) + "\n"
+          Path("out_accuracy_a1_isomers_a4_0/accuracy_a1_isomers_facts.md").write_text(facts_md, encoding="utf-8")
+
+          gh_out = os.environ.get("GITHUB_OUTPUT")
+          if gh_out:
+              with open(gh_out, "a", encoding="utf-8") as f:
+                  f.write("facts_md<<EOF\n")
+                  f.write(facts_md)
+                  f.write("EOF\n")
+                  f.write(f"kpi_verdict={kpi_verdict}\n")
+          PY
+
+      - name: Compute SHA256
+        id: hash
+        run: |
+          SHA256=$(sha256sum out_accuracy_a1_isomers_a4_0/accuracy_a1_isomers_evidence_pack.zip | awk '{print toupper($1)}')
+          echo "sha256=$SHA256" >> "$GITHUB_OUTPUT"
+          echo "$SHA256  accuracy_a1_isomers_evidence_pack.zip" > out_accuracy_a1_isomers_a4_0/accuracy_a1_isomers_evidence_pack.zip.sha256
+
+      - name: Write release notes
+        run: |
+          cat > release_notes.md << 'EOF'
+          ACCURACY-A4.0 isomers (signed/orientable edge observable; edge-only; 0 DOF; variant=B; LOOCV by group_id)
+
+          - Source ref: ${{ inputs.ref }}
+          - Truth build:
+            python scripts/build_isomer_truth_v1.py
+          - Run:
+            python scripts/accuracy_a1_isomers_a4_0_signed_edge.py --experiment_id ACCURACY-A4.0 --input_csv data/accuracy/isomer_truth.v1.csv --out_dir out_accuracy_a1_isomers_a4_0 --seed 0
+          - Pack: summary.csv, predictions.csv, fold_metrics.csv, group_metrics.csv, edge_score_by_molecule.csv, edge_contrib_topk.csv, metrics.json, index.md, provenance.json, manifest.json, checksums.sha256, accuracy_a1_isomers_evidence_pack.zip
+          - SHA256(accuracy_a1_isomers_evidence_pack.zip): ${{ steps.hash.outputs.sha256 }}
+          - Outcome (facts from metrics.json):
+          ${{ steps.facts.outputs.facts_md }}
+          EOF
+
+      - name: Prepare meta (asset URL, source SHA)
+        id: meta
+        run: |
+          SOURCE_SHA=$(git rev-parse HEAD)
+          echo "source_sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
+          ASSET_URL="https://github.com/${{ github.repository }}/releases/download/${{ inputs.tag }}/accuracy_a1_isomers_evidence_pack.zip"
+          echo "asset_url=$ASSET_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Upload build artifact (zip)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: accuracy-a1-isomers-a4-0-evidence-pack
+          path: |
+            out_accuracy_a1_isomers_a4_0/accuracy_a1_isomers_evidence_pack.zip
+            out_accuracy_a1_isomers_a4_0/accuracy_a1_isomers_evidence_pack.zip.sha256
+            out_accuracy_a1_isomers_a4_0/accuracy_a1_isomers_facts.md
+            release_notes.md
+
+      - name: "PASS Gate: stop publish-chain unless kpi.verdict == PASS"
+        run: |
+          echo "kpi.verdict=${{ steps.facts.outputs.kpi_verdict }}"
+          test "${{ steps.facts.outputs.kpi_verdict }}" = "PASS"
+
+  publish-release:
+    needs: build-pack
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: accuracy-a1-isomers-a4-0-evidence-pack
+          path: .
+
+      - name: "Gate: required CI contexts must be success"
+        env:
+          SOURCE_SHA: ${{ needs.build-pack.outputs.source_sha }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python - << 'PY'
+          import json
+          import os
+          import sys
+          import urllib.request
+
+          repo = os.environ["GITHUB_REPOSITORY"]
+          sha = os.environ["SOURCE_SHA"]
+          token = os.environ["GITHUB_TOKEN"]
+
+          url = f"https://api.github.com/repos/{repo}/commits/{sha}/status"
+          req = urllib.request.Request(
+              url,
+              headers={
+                  "Authorization": f"token {token}",
+                  "Accept": "application/vnd.github+json",
+              },
+          )
+          with urllib.request.urlopen(req) as resp:
+              data = json.load(resp)
+
+          latest_by_context = {}
+          for st in data.get("statuses", []):
+              ctx = st.get("context", "")
+              if ctx and ctx not in latest_by_context:
+                  latest_by_context[ctx] = st.get("state", "")
+
+          required = ["ci/test", "ci/test-chem", "ci/docker"]
+          missing = [c for c in required if c not in latest_by_context]
+          bad = [c for c in required if latest_by_context.get(c) != "success"]
+
+          if missing or bad:
+              print("Gate-Required-Contexts failed")
+              print(f"source_sha={sha}")
+              print(f"missing={missing}")
+              print("states=" + json.dumps({c: latest_by_context.get(c) for c in required}, indent=2, sort_keys=True))
+              sys.exit(1)
+
+          print("Gate OK: required contexts success")
+          print(f"source_sha={sha}")
+          for c in required:
+              print(f"{c}=success")
+          PY
+
+      - name: Create/Update GitHub Release + upload asset
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag }}
+          target_commitish: ${{ needs.build-pack.outputs.source_sha }}
+          name: "ACCURACY-A4.0 isomers evidence pack"
+          body_path: release_notes.md
+          prerelease: ${{ inputs.prerelease }}
+          files: |
+            out_accuracy_a1_isomers_a4_0/accuracy_a1_isomers_evidence_pack.zip
+            out_accuracy_a1_isomers_a4_0/accuracy_a1_isomers_evidence_pack.zip.sha256
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  registry-pr:
+    needs: [build-pack, publish-release]
+    runs-on: ubuntu-latest
+    outputs:
+      registry_pr_url: ${{ steps.registry_cpr.outputs.pull-request-url }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: "main"
+
+      - name: Update artefacts registry (append)
+        run: |
+          FILE="docs/artefacts_registry.md"
+          if [ ! -f "$FILE" ]; then
+            echo "# Artefacts Registry" > "$FILE"
+            echo "" >> "$FILE"
+          fi
+
+          cat >> "$FILE" << EOF
+
+          ## ${{ inputs.tag }}
+
+          - Source commit: ${{ needs.build-pack.outputs.source_sha }}
+          - Release asset: ${{ needs.build-pack.outputs.asset_url }}
+          - SHA256(accuracy_a1_isomers_evidence_pack.zip): ${{ needs.build-pack.outputs.sha256 }}
+          - Command:
+            python scripts/build_isomer_truth_v1.py
+            python scripts/accuracy_a1_isomers_a4_0_signed_edge.py --experiment_id ACCURACY-A4.0 --input_csv data/accuracy/isomer_truth.v1.csv --out_dir out_accuracy_a1_isomers_a4_0 --seed 0
+          - Outcome (facts from metrics.json):
+          ${{ needs.build-pack.outputs.facts_md }}
+          EOF
+
+      - name: Create PR with registry update
+        id: registry_cpr
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: "automation/artefact-${{ inputs.tag }}"
+          title: "Add artefact registry entry for ${{ inputs.tag }}"
+          commit-message: "docs: add artefact registry entry for ${{ inputs.tag }}"
+          body: |
+            Automated update: appended artefact entry after publishing ACCURACY-A4.0 isomers evidence pack.
+          base: "main"
+          add-paths: |
+            docs/artefacts_registry.md
+
+      - name: Trigger CI (pytest workflow_dispatch) for automation PR branch
+        if: steps.registry_cpr.outputs.pull-request-url != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          BRANCH: "automation/artefact-${{ inputs.tag }}"
+          PR_URL: ${{ steps.registry_cpr.outputs.pull-request-url }}
+        run: |
+          set -euo pipefail
+          echo "Automation PR: $PR_URL"
+          echo "Triggering pytest workflow on branch: $BRANCH"
+
+          gh workflow run pytest.yml --ref "$BRANCH" --repo "$REPO"
+
+          RUN_ID=""
+          for i in $(seq 1 30); do
+            RUN_ID=$(gh run list --workflow pytest.yml --branch "$BRANCH" --event workflow_dispatch --limit 1 --json databaseId --jq '.[0].databaseId' --repo "$REPO" 2>/dev/null || true)
+            if [ -n "$RUN_ID" ] && [ "$RUN_ID" != "null" ]; then
+              break
+            fi
+            sleep 2
+          done
+
+          if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
+            echo "ERROR: failed to locate dispatched pytest run"
+            gh run list --workflow pytest.yml --branch "$BRANCH" --limit 5 --repo "$REPO" || true
+            exit 1
+          fi
+
+          RUN_URL=$(gh run view "$RUN_ID" --json url --jq '.url' --repo "$REPO")
+          TESTED_SHA=$(gh run view "$RUN_ID" --json headSha --jq '.headSha' --repo "$REPO")
+          echo "pytest run url: $RUN_URL"
+          echo "tested_sha: $TESTED_SHA"
+
+          gh run watch "$RUN_ID" --exit-status --repo "$REPO"
+
+  lineage-pr:
+    needs: [build-pack, publish-release, registry-pr]
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: "main"
+
+      - name: Append lineage entry (append-only)
+        env:
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RELEASE_URL: https://github.com/${{ github.repository }}/releases/tag/${{ inputs.tag }}
+          REGISTRY_PR_URL: ${{ needs.registry-pr.outputs.registry_pr_url }}
+        run: |
+          FILE="docs/90_lineage.md"
+          if [ ! -f "$FILE" ]; then
+            echo "# Lineage (append-only)" > "$FILE"
+            echo "" >> "$FILE"
+          fi
+
+          DATE_UTC=$(date -u +%Y-%m-%d)
+
+          cat >> "$FILE" << EOF
+
+          ### ${DATE_UTC} - ACCURACY-A4.0 isomers (signed edge score, edge-only, 0 DOF, variant=B)
+
+          - Source commit: ${{ needs.build-pack.outputs.source_sha }}
+          - Publish run: ${RUN_URL}
+          - Release tag: ${RELEASE_URL}
+          - Asset: ${{ needs.build-pack.outputs.asset_url }}
+          - SHA256(accuracy_a1_isomers_evidence_pack.zip): ${{ needs.build-pack.outputs.sha256 }}
+          - Registry PR: ${REGISTRY_PR_URL}
+          - Outcome (facts from metrics.json):
+          ${{ needs.build-pack.outputs.facts_md }}
+          EOF
+
+      - name: Create PR with lineage update
+        id: lineage_cpr
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: "automation/lineage-${{ inputs.tag }}"
+          title: "Add lineage entry for ${{ inputs.tag }}"
+          commit-message: "docs: add lineage entry for ${{ inputs.tag }}"
+          body: |
+            Automated update: appended lineage entry after publishing ACCURACY-A4.0 isomers evidence pack.
+          base: "main"
+          add-paths: |
+            docs/90_lineage.md
+
+      - name: Trigger CI (pytest workflow_dispatch) for automation PR branch
+        if: steps.lineage_cpr.outputs.pull-request-url != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          BRANCH: "automation/lineage-${{ inputs.tag }}"
+          PR_URL: ${{ steps.lineage_cpr.outputs.pull-request-url }}
+        run: |
+          set -euo pipefail
+          echo "Automation PR: $PR_URL"
+          echo "Triggering pytest workflow on branch: $BRANCH"
+
+          gh workflow run pytest.yml --ref "$BRANCH" --repo "$REPO"
+
+          RUN_ID=""
+          for i in $(seq 1 30); do
+            RUN_ID=$(gh run list --workflow pytest.yml --branch "$BRANCH" --event workflow_dispatch --limit 1 --json databaseId --jq '.[0].databaseId' --repo "$REPO" 2>/dev/null || true)
+            if [ -n "$RUN_ID" ] && [ "$RUN_ID" != "null" ]; then
+              break
+            fi
+            sleep 2
+          done
+
+          if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
+            echo "ERROR: failed to locate dispatched pytest run"
+            gh run list --workflow pytest.yml --branch "$BRANCH" --limit 5 --repo "$REPO" || true
+            exit 1
+          fi
+
+          RUN_URL=$(gh run view "$RUN_ID" --json url --jq '.url' --repo "$REPO")
+          TESTED_SHA=$(gh run view "$RUN_ID" --json headSha --jq '.headSha' --repo "$REPO")
+          echo "pytest run url: $RUN_URL"
+          echo "tested_sha: $TESTED_SHA"
+
+          gh run watch "$RUN_ID" --exit-status --repo "$REPO"
+
