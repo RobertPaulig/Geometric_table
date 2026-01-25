@@ -1,9 +1,18 @@
 # ACCURACY-A3.5 — Edge-Coherence Condensate (ρ + edge coherence), Φ fixed, nested κ
 
 **Roadmap-ID:** `ACCURACY-A3.5 (Edge-Coherence Condensate, Advanced, 1 new DOF)`  
-**Status:** planned (Memory Fix required before any code)  
+**Status:** closed (hypothesis FAIL; PR #255 closed without merge)  
 **Owner:** Executor  
 **Source of Truth:** this document (SoT)
+
+## Evidence (Actions compute-pack; PR not merged)
+
+- PR: https://github.com/RobertPaulig/Geometric_table/pull/255 (closed without merge)
+- compute-pack run (A3.5): https://github.com/RobertPaulig/Geometric_table/actions/runs/21336452397
+- tested merge-ref: `86d0cebda1c5325b1a83a8e664f4de862aabd052` (`ci/test|ci/test-chem|ci/docker=success`, run: https://github.com/RobertPaulig/Geometric_table/actions/runs/21336452395)
+- evidence_pack.zip SHA256: `21B9407F4D06E0A5655510B6DD68BC55D7B1342D04828709C457B9BA0E8AB73A`
+- LOOCV(test) `functional_only` (from `metrics.json` in the evidence pack): `num_negative_test=6`, `median_spearman=-0.55`, `pairwise=0.347826...`, `top1=0.0`
+- κ-sweep on test (from `kappa_sweep_test.csv`): best fixed κ is `0.0` with `num_negative_test=5` (κ=0.25→6, κ=0.5→8, κ=1.0→9)
 
 ## 0) Контекст (fact-only)
 

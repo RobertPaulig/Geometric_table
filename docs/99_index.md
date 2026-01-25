@@ -39,6 +39,10 @@
   Зачем: контракт исполнения ACCURACY-A3.5 (ρ + edge coherence): Φ фиксирован (π/2), добавляется edge-coherence конденсат |K_ij| и единственный новый DOF κ (nested train-only).  
   Где используется: любые PR/запуски ACCURACY-A3.5 (обязателен к чтению до изменений кода).
 
+- **REF-ACCURACY-A4.0-CONTRACT** — `docs/specs/accuracy_a4_0_signed_edge_observable.md`  
+  Зачем: контракт ACCURACY-A4.0 (signed/oriented edge observable): использовать gauge-invariant signed edge канал `Re(e^{-iθ_ij}K_ij)` (вместо |K_ij|) и смешивать в `rho_eff` через один DOF κ (nested train-only).  
+  Где используется: любые PR/запуски ACCURACY-A4.0 (обязателен к чтению до изменений кода).
+
 - **REF-BACKLOG** — `docs/04_backlog.md`  
   Зачем: склад гипотез/задач (сырьё, не “истина”).  
   Где используется: постановка R&D-экспериментов и планирование работ.
