@@ -779,6 +779,21 @@ Outcome (truth, release `accuracy-a1-isomers-2026-01-24-a3_3-r1`):
 - `negative_groups=['C15H24O1','C20H22N2O2','C20H25N3O2','C21H20N6O2S1','C22H22N4O2']`
 - `selected_phi_by_outer_fold=pi/2` (all folds)
 
+#### ACCURACY-A3.4 — Rho+Current (J) (Φ fixed; nested κ; phase-only-via-ρ)
+Status: [ ] planned  [ ] in-progress  [ ] done
+
+SoT:
+- `REF-ACCURACY-A3.4-CONTRACT` → `docs/specs/accuracy_a3_4_rho_plus_current.md`
+
+Hypothesis:
+- A2/A3.3 inversions persist because diagonal ρ (returns) misses cyclic current information. Add a gauge-invariant current condensate `J` and mix into `rho_eff` with one new DOF κ; must yield `num_groups_spearman_negative_test == 0` on `functional_only` (LOOCV by `group_id`).
+
+DoD:
+- Memory Fix merged to main (contract exists + linked from `docs/99_index.md` + in `ENTRYPOINT.md` read order + in this roadmap).
+- Code PR merged (main CI 3/3).
+- Truth-chain closure: publish-run → release(zip+.sha256) → registry → lineage → main CI 3/3.
+- KPI (functional-only, LOOCV test folds): `num_groups_spearman_negative_test == 0`.
+
 # ROADMAP - HETERO-2 как SaaS (Pfizer-ready evidence pipeline)
 
 Назначение: зафиксировать целевую картину SaaS и вести разработку через обязательные вехи (milestones).

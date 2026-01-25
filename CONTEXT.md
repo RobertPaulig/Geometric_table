@@ -16,10 +16,11 @@
 1) Прочитать `CONTEXT.md` (этот файл) и `docs/99_index.md` (обязательные REF-ы).  
 2) Прочитать `docs/ROADMAP.md` (VALUE-first приоритеты и DoD).  
 3) Если работаешь над **ACCURACY-A3.3**: STOP, пока не прочитан `REF-ACCURACY-A3.3-CONTRACT` (см. `docs/99_index.md`).  
-4) Прочитать `docs/30_config_layers.md` и уметь в 3 фразах объяснить слои A/B/C и где они лежат в `experiment.yaml`. Если не можешь — **STOP**.  
-5) Открыть `docs/90_lineage.md` (последние управленческие изменения и релизы).  
-6) Вставить 1 цитату (3–8 строк) из `docs/95_release_checklist.md` из раздела D или F (для контроля “что считаем релизом”).  
-7) Прочитать `docs/pilot_quickstart.md` (demo сценарий + команды).  
+4) Если работаешь над **ACCURACY-A3.4**: STOP, пока не прочитан `REF-ACCURACY-A3.4-CONTRACT` (см. `docs/99_index.md`).  
+5) Прочитать `docs/30_config_layers.md` и уметь в 3 фразах объяснить слои A/B/C и где они лежат в `experiment.yaml`. Если не можешь — **STOP**.  
+6) Открыть `docs/90_lineage.md` (последние управленческие изменения и релизы).  
+7) Вставить 1 цитату (3–8 строк) из `docs/95_release_checklist.md` из раздела D или F (для контроля “что считаем релизом”).  
+8) Прочитать `docs/pilot_quickstart.md` (demo сценарий + команды).  
 
 ## Порядок загрузки контекста (строгий)
 
