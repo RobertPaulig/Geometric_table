@@ -24,11 +24,13 @@ jobs:
         if: github.event_name == 'pull_request'
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
 
       - uses: actions/checkout@v4
         if: github.event_name == 'workflow_dispatch'
         with:
           ref: ${{ inputs.ref }}
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
