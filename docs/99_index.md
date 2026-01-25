@@ -35,6 +35,10 @@
   Зачем: контракт исполнения ACCURACY-A3.4 (ρ+J): Φ фиксирован (π/2), добавляется gauge-invariant current-конденсат J и единственный новый DOF κ (nested train-only).  
   Где используется: любые PR/запуски ACCURACY-A3.4 (обязателен к чтению до изменений кода).
 
+- **REF-ACCURACY-A3.5-CONTRACT** — `docs/specs/accuracy_a3_5_edge_coherence_condensate.md`  
+  Зачем: контракт исполнения ACCURACY-A3.5 (ρ + edge coherence): Φ фиксирован (π/2), добавляется edge-coherence конденсат |K_ij| и единственный новый DOF κ (nested train-only).  
+  Где используется: любые PR/запуски ACCURACY-A3.5 (обязателен к чтению до изменений кода).
+
 - **REF-BACKLOG** — `docs/04_backlog.md`  
   Зачем: склад гипотез/задач (сырьё, не “истина”).  
   Где используется: постановка R&D-экспериментов и планирование работ.
