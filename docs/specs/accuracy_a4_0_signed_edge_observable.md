@@ -1,6 +1,6 @@
-# ACCURACY-A4.0 — Signed Edge Observable (ρ + signed edge condensate), Φ fixed, nested κ
+# ACCURACY-A4.0 — Signed/Orientable Edge Observable (edge-only scoring, no node-mix)
 
-**Roadmap-ID:** `ACCURACY-A4.0 (Signed Edge Observable, Advanced, 1 new DOF)`  
+**Roadmap-ID:** `ACCURACY-A4.0 (Signed/Orientable Edge Observable, Edge-only scoring)`  
 **Status:** planned (Memory Fix required before any code)  
 **Owner:** Executor  
 **Source of Truth:** this document (SoT)
@@ -14,14 +14,14 @@
   compute-pack run https://github.com/RobertPaulig/Geometric_table/actions/runs/21336452397 (zip SHA256 `21B9407F4D06E0A5655510B6DD68BC55D7B1342D04828709C457B9BA0E8AB73A`),
   best fixed κ is `0.0` with `num_negative_test=5` (κ-sweep on test).
 
-**Вывод:** magnitude-канал `|K_ij|` в node-mix схеме недостаточен (и/или теряет критичную знаковую/ориентированную информацию). Следующая минимальная гипотеза — использовать **signed/oriented edge observable** (gauge-invariant) вместо magnitude.
+**Вывод:** `|K_ij|` magnitude → node-агрегация ухудшает/не чинит инверсии. Следующая минимальная гипотеза — **signed/orientable edge observable** и **edge-only scoring** (без node-схлопывания).
 
 ---
 
 ## 1) Цель A4.0 (одна гипотеза)
 
-**Гипотеза A4.0:** инверсии сохраняются потому, что magnitude-кохерентность на рёбрах (`|K_ij|`) теряет знак/ориентацию.  
-Если заменить edge-канал на **gauge-invariant signed edge observable** и смешивать его с ρ через один κ, то на `functional_only` (LOOCV по `group_id`) получим:
+**Гипотеза A4.0:** инверсии сохраняются потому, что node-only наблюдаемые (`diag f(H)`) и magnitude-каналы на рёбрах теряют знаковую/ориентированную структуру.  
+Если перейти к **signed/orientable off-diagonal наблюдаемой на рёбрах** и считать **скалярный score напрямую по рёбрам** (edge-only), то на `functional_only` (LOOCV по `group_id`) получим:
 
 **MVP:** `num_groups_spearman_negative_test == 0`.
 
@@ -50,96 +50,45 @@
 1. Truth неизменен (тот же truth CSV и truth-copies в ZIP).
 2. Split неизменен: **LOOCV строго по `group_id`**.
 3. Graph-only, без 3D.
-4. SCF дисциплина как A2.2: safety floor → `phi -= mean(phi)` → backtracking → монотонность по финальному score.
-5. Zero-leak: A2 outputs **бит-в-бит** неизменны.
-6. Один новый DOF: **κ**. Никаких новых “ручек” (кроме фиксированных констант контракта).
-7. Φ **фиксирован**: `Phi_fixed := π/2` (никакого выбора Φ).
-8. `tau` фиксирован (тот же, что принят в A3.4; по умолчанию `tau=1.0`), не оптимизируется.
+4. Оператор/веса/ядро K: тот же `K=f(H)` как в A3.4/A3.5 пайплайне (без новых фич).
+5. Нет ML (никаких моделей/регрессий/обучаемых весов).
+6. Нет новых DOF: **0 новых ручек** (никакого κ, никаких сеток параметров).
+7. Zero-leak: A2 outputs **бит-в-бит** неизменны.
+8. Publish-chain: запрещено публиковать FAIL (release/registry/lineage) — publish gate `kpi.verdict == PASS` обязателен.
 
 ---
 
-## 4) Определение наблюдаемых (канонические формулы)
+## 4) Каноническое определение A4.0 (формулы, без вариантов “как получится”)
 
-### 4.1 Phase operator и heat kernel
+### 4.1 Kernel (как уже принято)
 
-Используется фазовый/магнитный оператор `L_A(Phi_fixed)` (эрмитов), как в A3.* (SSSR flux, 2π-periodicity, hermiticity, D по real weights).
+Используем тот же `K := f(H)`, что сейчас уже принят в пайплайне A3.4/A3.5 (без новых определений H/L/W/весов).  
+A4.0 не вводит новый kernel и не вводит новые параметры kernel’а.
 
-Определяем тепловое ядро:
+### 4.2 Edge observable (signed/orientable)
 
-* `K := exp(-tau * L_A)`
+Выбираем **ровно один** вариант и фиксируем его в реализации (без “и A, и B”):
 
-Реализация через eigen-decomposition допустима; важно, чтобы `K_ij` на рёбрах был вычислен без построения полного NxN, если не требуется.
+**Вариант B (с фазой/гейдж-фикс; предпочтительный):**
 
-### 4.2 Узловая плотность ρ (как в A3.4)
+* `B_ij := Re(exp(-i * θ_ij) * K_ij)`
 
-* `rho_raw := diag(K)`
-* `rho_imag_max := max(|Im(rho_raw)|)`; требование: `rho_imag_max < 1e-12`
-* `rho := Re(rho_raw)`
-* `rho := rho / sum(rho)` (жёсткая нормировка)
+где `θ_ij` — link phase на ребре из существующего phase-channel (A3.*), а `K_ij` — off-diagonal kernel entry.
 
-### 4.3 Signed edge observable (новое: sign/orientation)
+Запрещено: `|K_ij|`, `|Im|` и любые модули как основной канал A4.0.
 
-Для каждого ребра `(i,j)` (существующие химические связи) считаем gauge-invariant величину:
+### 4.3 Edge-only score (скаляр)
 
-* `q_ij := exp(-i * θ_ij) * K_ij`
-  где `θ_ij` — link phase на ребре из того же phase-channel, что использовался для сборки `L_A`.
+Считаем напрямую по рёбрам:
 
-Определяем signed observable на ребре:
+* `S_edge := Σ_{(i,j)∈E} w_ij * B_ij`
 
-* `b_ij := Re(q_ij)`  (вещественная, может быть отрицательной)
+где `w_ij` — строго существующие веса рёбер из текущего графа/H (без новых фич).
 
-### 4.4 Узловая агрегация signed edge observable
+Запрещено:
 
-Сводим реберный сигнал в узловую величину (node-local интерфейс сохраняем):
-
-* `B_i := Σ_{j~i} w_ij * b_ij`
-
-где `w_ij` — реальные веса рёбер (те же, что используются для `L_base`/оператора; не новый параметр).
-
-### 4.5 Преобразование B → распределение (без новых DOF)
-
-Так как `B_i` может быть отрицательным, приводим к неотрицательной “плотности” детерминированно:
-
-* `B_shift := B - min(B) + eps_shift`, где `eps_shift := 1e-12` (фиксировано)
-* `b_sum := sum(B_shift)`
-* если `b_sum > 0`: `b_norm := B_shift / b_sum`, иначе `b_norm := 0-vector`
-
-Логировать сенсоры: `b_min`, `b_max`, `b_sum`, `eps_shift`.
-
----
-
-## 5) Эффективная плотность (1 DOF κ)
-
-Единственный новый DOF: κ.
-
-* `rho_eff := (1 - kappa)*rho + kappa*b_norm`
-* `rho_eff := rho_eff / sum(rho_eff)` (renorm обязателен; логировать флаг)
-
-Дальше pipeline остаётся прежним:
-
-* `phi := -log(rho_eff + eps)` → safety floor → `phi -= mean(phi)` → SCF/backtracking/energy как в A2.2.
-
----
-
-## 6) Параметры (фиксировано) и nested selection
-
-* `Phi_fixed := π/2` (фиксировано; не DOF)
-* `tau := 1.0` (фиксировано; не DOF; должен совпасть с A3.4)
-* `kappa_candidates := {0.0, 0.25, 0.5, 1.0}` (фиксировано)
-
-Nested selection κ (train-only) внутри каждого outer LOOCV fold:
-
-1. минимизировать `num_negative_train_inner`
-2. затем максимизировать `median_spearman_train_inner`
-3. tie-break: выбрать **больший κ**
-
-Обязательные поля в `best_config.json` и `metrics.json`:
-
-* `nested_selection=true`
-* `phi_fixed=...`
-* `kappa_candidates=[...]`
-* `selected_kappa_by_outer_fold`
-* `search_space_size=4`
+* любые node-агрегации как финальный скор (`Σ→узел→норма→смесь`),
+* `rho_eff`, `κ`, и любые сетки параметров.
 
 ---
 
@@ -151,15 +100,21 @@ Nested selection κ (train-only) внутри каждого outer LOOCV fold:
 
 ---
 
-## 8) Evidence Pack (обязательное расширение)
+## 8) Evidence Pack (обязательный состав)
 
-Как в A3.4 truth-pack + добавить/расширить:
+В `evidence_pack.zip` обязательно:
 
-* `rho_compare.csv`: добавить сенсоры `b_min`, `b_max`, `b_sum`, `kappa_selected`, `rho_eff_entropy`, `rho_imag_max`.
-* `signed_edge_summary.csv`:
-  * агрегаты per-molecule/per-group: `b_sum`, `b_min`, `b_max`, `degree_stats` (чтобы ловить корреляцию с degree).
-* `search_results.csv`: inner результаты по κ для каждого outer fold.
-* `metrics.json`: KPI + nested поля + sensors max.
+1. `metrics.json`:
+   * `schema_version=accuracy_a1_isomers_a4_0.v1`
+   * `kpi.verdict`
+   * `num_groups_spearman_negative_test`, `median_spearman_by_group_test`, `pairwise_order_accuracy_overall_test`, `top1_accuracy_mean_test`
+   * `variant=B` (фиксировано)
+2. `predictions.csv` (group_id, id, truth_rel, pred_score, pred_rank)
+3. `edge_score_by_molecule.csv`:
+   * `S_edge`, `sum_abs_edge_contrib`, `num_edges`
+4. `edge_contrib_topk.csv`:
+   * top-K рёбер по вкладу `w_ij * B_ij` (для bad-групп)
+5. `checksums.sha256` (missing=0, mismatches=0)
 
 ---
 
@@ -178,16 +133,15 @@ SHA256 должны совпасть для `metrics.json` и `predictions.csv`.
 
 ## 10) Реализация (минимально)
 
-1. Новый runner: `scripts/accuracy_a1_isomers_a4_0_signed_edge_observable.py` (opt-in)
-2. Контракт-тест: `tests/test_accuracy_a4_0_contract.py` (opt-in, `RUN_A3_TESTS=1` или аналогичный флаг)
+1. Новый runner: `scripts/accuracy_a1_isomers_a4_0_signed_edge.py` (opt-in)
+2. Контракт-тест: `tests/test_accuracy_a1_isomers_a4_0_contract.py` (opt-in, `RUN_A4_TESTS=1`)
 3. Workflows:
-   * `compute_accuracy_a4_0.yml` (PR artifact, Actions-only truth)
-   * `publish_accuracy_a4_0.yml` (main publish→release→registry→lineage)
+   * `.github/workflows/compute_accuracy_a1_isomers_a4_0.yml` (PR artifact, Actions-only truth)
+   * `.github/workflows/publish_accuracy_a1_isomers_a4_0.yml` (main publish, с гейтом `kpi.verdict==PASS`)
 
 ---
 
 ## 11) Решение-вилка (что доказывает результат)
 
 * PASS (MVP достигнут): подтверждение гипотезы “sign/orientation был недостающим минимальным каналом”.
-* FAIL при соблюдении инвариантов: sign/node-mix всё ещё недостаточно ⇒ следующий Roadmap-ID должен уйти от node-mix к edge/pair scoring или к cycle-level observable.
-
+* FAIL при соблюдении инвариантов: sign edge-only всё ещё недостаточно ⇒ следующий Roadmap-ID должен перейти к cycle-level observable или к pairwise/edge-density скорингу (новый контракт, не A4.0).
