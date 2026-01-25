@@ -794,6 +794,21 @@ DoD:
 - Truth-chain closure: publish-run → release(zip+.sha256) → registry → lineage → main CI 3/3.
 - KPI (functional-only, LOOCV test folds): `num_groups_spearman_negative_test == 0`.
 
+#### ACCURACY-A3.5 — Edge-Coherence Condensate (ρ + edge coherence) (Φ fixed; nested κ)
+Status: [ ] planned  [ ] in-progress  [ ] done
+
+SoT:
+- `REF-ACCURACY-A3.5-CONTRACT` → `docs/specs/accuracy_a3_5_edge_coherence_condensate.md`
+
+Hypothesis:
+- A3.4 shows a gauge-invariant current condensate helps but node aggregation still loses information. Add an edge-coherence condensate from off-diagonal heat kernel (`c_ij = |K_ij|`) and mix into `rho_eff` with one new DOF κ; must yield `num_groups_spearman_negative_test == 0` on `functional_only` (LOOCV by `group_id`).
+
+DoD:
+- Memory Fix merged to main (contract exists + linked from `docs/99_index.md` + in `ENTRYPOINT.md` read order + in this roadmap).
+- Code PR merged (main CI 3/3).
+- Truth-chain closure: publish-run → release(zip+.sha256) → registry → lineage → main CI 3/3.
+- KPI (functional-only, LOOCV test folds): `num_groups_spearman_negative_test == 0`.
+
 # ROADMAP - HETERO-2 как SaaS (Pfizer-ready evidence pipeline)
 
 Назначение: зафиксировать целевую картину SaaS и вести разработку через обязательные вехи (milestones).
