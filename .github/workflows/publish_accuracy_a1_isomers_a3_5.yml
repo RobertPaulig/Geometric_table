@@ -108,7 +108,7 @@ jobs:
       - name: Validate zip (no unpack)
         run: |
           python -m zipfile -t out_accuracy_a1_isomers_a3_5/evidence_pack.zip
-          python -m zipfile -l out_accuracy_a1_isomers_a3_5/evidence_pack.zip | grep -E "manifest.json|provenance.json|checksums.sha256|metrics.json|index.md|summary.csv|predictions.csv|fold_metrics.csv|group_metrics.csv|best_config.json|rho_compare.csv|coherence_summary.csv|search_results.csv|data/accuracy/isomer_truth.v1.csv|docs/contracts/isomer_truth.v1.md|data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv|data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv.sha256|data/atoms_db_v1.json|docs/specs/accuracy_a3_5_edge_coherence_condensate.md"
+          python -m zipfile -l out_accuracy_a1_isomers_a3_5/evidence_pack.zip | grep -E "manifest.json|provenance.json|checksums.sha256|metrics.json|index.md|summary.csv|predictions.csv|fold_metrics.csv|group_metrics.csv|best_config.json|rho_compare.csv|coherence_summary.csv|search_results.csv|kappa_sweep_test.csv|data/accuracy/isomer_truth.v1.csv|docs/contracts/isomer_truth.v1.md|data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv|data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv.sha256|data/atoms_db_v1.json|docs/specs/accuracy_a3_5_edge_coherence_condensate.md"
 
       - name: Prepare isomers asset
         run: |
@@ -190,6 +190,19 @@ jobs:
             out_accuracy_a1_isomers_a3_5/accuracy_a1_isomers_evidence_pack.zip.sha256
             out_accuracy_a1_isomers_a3_5/accuracy_a1_isomers_facts.md
             release_notes.md
+
+      - name: "Gate: publish forbidden unless kpi.verdict == PASS"
+        run: |
+          python - << 'PY'
+          import json
+          from pathlib import Path
+
+          metrics = json.loads(Path("out_accuracy_a1_isomers_a3_5/metrics.json").read_text(encoding="utf-8"))
+          verdict = str(metrics.get("kpi", {}).get("verdict", ""))
+          print(f"kpi.verdict={verdict}")
+          if verdict != "PASS":
+              raise SystemExit("STOP: publish is forbidden because kpi.verdict != PASS")
+          PY
 
   publish-release:
     needs: build-pack
@@ -434,4 +447,3 @@ jobs:
           echo "tested_sha: $TESTED_SHA"
 
           gh run watch "$RUN_ID" --exit-status --repo "$REPO"
-

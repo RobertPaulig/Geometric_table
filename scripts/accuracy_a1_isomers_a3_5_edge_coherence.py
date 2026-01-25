@@ -40,6 +40,7 @@ DEFAULT_OUT_DIR = Path("out_accuracy_a1_isomers_a3_5")
 
 PHI_FIXED = float(normalize_flux_phi(math.pi / 2.0))
 KAPPA_CANDIDATES = [0.0, 0.25, 0.5, 1.0]
+KAPPA_SWEEP_FILE = "kappa_sweep_test.csv"
 
 
 def _sha256_bytes(data: bytes) -> str:
@@ -1038,6 +1039,43 @@ def _select_kappa_nested_train_only(
     return float(chosen_kappa), results
 
 
+def _kappa_sweep_test_metrics(
+    *,
+    atoms_db: AtomsDbV1,
+    cfg: _A35Config,
+    rows_sorted: list[_Row],
+    fold_order: list[str],
+) -> list[dict[str, object]]:
+    out: list[dict[str, object]] = []
+    for kappa in KAPPA_CANDIDATES:
+        pred_records: list[dict[str, object]] = []
+        for fold_id, test_gid in enumerate(fold_order, start=1):
+            test_rows = [r for r in rows_sorted if str(r.gid) == str(test_gid)]
+            for r in test_rows:
+                pred_rec, _diag = _predict_one(r, atoms_db=atoms_db, cfg=cfg, kappa=float(kappa))
+                pred_rec["fold_id"] = int(fold_id)
+                pred_records.append(pred_rec)
+
+        _attach_pred_rel(pred_records)
+        gm_all = _compute_group_metrics(pred_records, pred_rel_key="pred_rel")
+        agg = _aggregate_loocv_metrics(gm_all)
+
+        out.append(
+            {
+                "kappa": float(kappa),
+                "groups_total": int(agg.get("groups_total") or 0),
+                "num_groups_spearman_negative_test": int(agg.get("num_groups_spearman_negative") or 0),
+                "negative_spearman_groups_test": json.dumps(
+                    list(agg.get("negative_spearman_groups") or []), ensure_ascii=False
+                ),
+                "median_spearman_by_group_test": float(agg.get("median_spearman_by_group") or float("nan")),
+                "pairwise_order_accuracy_overall_test": float(agg.get("pairwise_order_accuracy_overall") or float("nan")),
+                "top1_accuracy_mean_test": float(agg.get("top1_accuracy_mean") or float("nan")),
+            }
+        )
+    return out
+
+
 def _compute_file_infos(out_dir: Path, *, skip_names: set[str]) -> list[dict[str, object]]:
     infos: list[dict[str, object]] = []
     for path in sorted(out_dir.rglob("*")):
@@ -1090,7 +1128,9 @@ def _write_zip_pack(out_dir: Path, *, zip_name: str = "evidence_pack.zip") -> No
             zf.write(path, path.relative_to(out_dir).as_posix())
 
 
-def run_a3_5(*, input_csv: Path, out_dir: Path, seed: int, experiment_id: str) -> None:
+def run_a3_5(
+    *, input_csv: Path, out_dir: Path, seed: int, experiment_id: str, force_kappa: float | None = None
+) -> None:
     cfg = _A35Config()
     atoms_db = load_atoms_db_v1()
 
@@ -1110,17 +1150,32 @@ def run_a3_5(*, input_csv: Path, out_dir: Path, seed: int, experiment_id: str) -
     selected_kappa_by_fold: dict[str, float] = {}
     search_results: list[dict[str, object]] = []
 
+    forced_kappa_val: float | None
+    if force_kappa is None:
+        forced_kappa_val = None
+    else:
+        forced_kappa_val = float(force_kappa)
+        if forced_kappa_val < 0.0 or forced_kappa_val > 1.0 or not math.isfinite(forced_kappa_val):
+            raise AccuracyA35Error("--force_kappa must be in [0,1] and finite")
+        if forced_kappa_val not in KAPPA_CANDIDATES:
+            raise AccuracyA35Error(f"--force_kappa must be one of {KAPPA_CANDIDATES}")
+
     for fold_id, test_gid in enumerate(fold_order, start=1):
         test_rows = [r for r in rows_sorted if str(r.gid) == str(test_gid)]
         train_rows = [r for r in rows_sorted if str(r.gid) != str(test_gid)]
         if not test_rows:
             raise AccuracyA35Error("empty test group in LOOCV")
 
-        kappa_sel, fold_search = _select_kappa_nested_train_only(
-            atoms_db=atoms_db, cfg=cfg, train_rows=train_rows, fold_id=int(fold_id), test_gid=str(test_gid)
-        )
+        if forced_kappa_val is None:
+            kappa_sel, fold_search = _select_kappa_nested_train_only(
+                atoms_db=atoms_db, cfg=cfg, train_rows=train_rows, fold_id=int(fold_id), test_gid=str(test_gid)
+            )
+            search_results.extend(list(fold_search))
+        else:
+            kappa_sel = float(forced_kappa_val)
+            fold_search = []
+
         selected_kappa_by_fold[str(test_gid)] = float(kappa_sel)
-        search_results.extend(list(fold_search))
 
         test_recs: list[dict[str, object]] = []
         test_diags: list[dict[str, object]] = []
@@ -1153,6 +1208,8 @@ def run_a3_5(*, input_csv: Path, out_dir: Path, seed: int, experiment_id: str) -
     metrics_test = _aggregate_loocv_metrics(group_metrics_all)
     worst_groups = _worst_groups_by_spearman(group_metrics_all, n=3)
 
+    kappa_sweep_rows = _kappa_sweep_test_metrics(atoms_db=atoms_db, cfg=cfg, rows_sorted=rows_sorted, fold_order=fold_order)
+
     rho_imag_max_max = float(
         max(float(r.get("rho_imag_max") or 0.0) for r in all_diag_records) if all_diag_records else 0.0
     )
@@ -1172,6 +1229,8 @@ def run_a3_5(*, input_csv: Path, out_dir: Path, seed: int, experiment_id: str) -
         worst_groups=worst_groups,
         selected_kappa_by_fold=selected_kappa_by_fold,
         search_results=search_results,
+        kappa_sweep_rows=kappa_sweep_rows,
+        force_kappa=forced_kappa_val,
         rho_imag_max_max=rho_imag_max_max,
         c_sum_max=c_sum_max,
     )
@@ -1192,6 +1251,8 @@ def _write_outputs_a3_5(
     worst_groups: list[dict[str, object]],
     selected_kappa_by_fold: dict[str, float],
     search_results: list[dict[str, object]],
+    kappa_sweep_rows: list[dict[str, object]],
+    force_kappa: float | None,
     rho_imag_max_max: float,
     c_sum_max: float,
 ) -> None:
@@ -1358,8 +1419,24 @@ def _write_outputs_a3_5(
         for rec in sorted(search_results, key=lambda rr: (int(rr.get("fold_id") or 0), float(rr.get("kappa_candidate") or 0.0))):
             w.writerow({k: rec.get(k, "") for k in fieldnames})
 
+    kappa_sweep_path = out_dir / KAPPA_SWEEP_FILE
+    with kappa_sweep_path.open("w", encoding="utf-8", newline="") as f:
+        fieldnames = [
+            "kappa",
+            "groups_total",
+            "num_groups_spearman_negative_test",
+            "negative_spearman_groups_test",
+            "median_spearman_by_group_test",
+            "pairwise_order_accuracy_overall_test",
+            "top1_accuracy_mean_test",
+        ]
+        w = csv.DictWriter(f, fieldnames=fieldnames, lineterminator="\n")
+        w.writeheader()
+        for rec in sorted(kappa_sweep_rows, key=lambda rr: float(rr.get("kappa") or 0.0)):
+            w.writerow({k: rec.get(k, "") for k in fieldnames})
+
     best_cfg: dict[str, object] = {
-        "nested_selection": True,
+        "nested_selection": force_kappa is None,
         "phi_fixed": float(PHI_FIXED),
         "kappa_candidates": list(KAPPA_CANDIDATES),
         "selected_kappa_by_outer_fold": dict(selected_kappa_by_fold),
@@ -1391,6 +1468,8 @@ def _write_outputs_a3_5(
             "mass_mode": str(cfg.mass_mode),
         },
     }
+    if force_kappa is not None:
+        best_cfg["force_kappa"] = float(force_kappa)
     (out_dir / "best_config.json").write_text(
         json.dumps(best_cfg, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8"
     )
@@ -1427,6 +1506,7 @@ def _write_outputs_a3_5(
             "rho_compare_csv": "rho_compare.csv",
             "coherence_summary_csv": "coherence_summary.csv",
             "search_results_csv": "search_results.csv",
+            "kappa_sweep_test_csv": KAPPA_SWEEP_FILE,
             "metrics_json": "metrics.json",
             "best_config_json": "best_config.json",
             "provenance_json": "provenance.json",
@@ -1518,6 +1598,12 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--input_csv", type=Path, default=DEFAULT_INPUT_CSV, help="Canonical isomer truth CSV.")
     p.add_argument("--out_dir", type=Path, default=DEFAULT_OUT_DIR, help="Output directory.")
     p.add_argument("--seed", type=int, default=0, help="Seed for fold order shuffling.")
+    p.add_argument(
+        "--force_kappa",
+        type=float,
+        default=None,
+        help="Force a fixed kappa for all outer folds (disables nested selection). Must be one of {0,0.25,0.5,1.0}.",
+    )
     return p
 
 
@@ -1528,6 +1614,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         out_dir=Path(args.out_dir),
         seed=int(args.seed),
         experiment_id=str(args.experiment_id),
+        force_kappa=None if args.force_kappa is None else float(args.force_kappa),
     )
     return 0
 

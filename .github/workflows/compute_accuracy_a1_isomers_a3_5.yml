@@ -153,7 +153,7 @@ jobs:
       - name: Validate zip (no unpack)
         run: |
           python -m zipfile -t out_accuracy_a1_isomers_a3_5/evidence_pack.zip
-          python -m zipfile -l out_accuracy_a1_isomers_a3_5/evidence_pack.zip | grep -E "manifest.json|provenance.json|checksums.sha256|metrics.json|index.md|summary.csv|predictions.csv|fold_metrics.csv|group_metrics.csv|best_config.json|rho_compare.csv|coherence_summary.csv|search_results.csv|data/accuracy/isomer_truth.v1.csv|docs/contracts/isomer_truth.v1.md|data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv|data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv.sha256|data/atoms_db_v1.json|docs/specs/accuracy_a3_5_edge_coherence_condensate.md"
+          python -m zipfile -l out_accuracy_a1_isomers_a3_5/evidence_pack.zip | grep -E "manifest.json|provenance.json|checksums.sha256|metrics.json|index.md|summary.csv|predictions.csv|fold_metrics.csv|group_metrics.csv|best_config.json|rho_compare.csv|coherence_summary.csv|search_results.csv|kappa_sweep_test.csv|data/accuracy/isomer_truth.v1.csv|docs/contracts/isomer_truth.v1.md|data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv|data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv.sha256|data/atoms_db_v1.json|docs/specs/accuracy_a3_5_edge_coherence_condensate.md"
 
       - name: Validate checksums.sha256 (missing=0, mismatches=0)
         run: |
@@ -208,8 +208,8 @@ jobs:
             out_accuracy_a1_isomers_a3_5/rho_compare.csv
             out_accuracy_a1_isomers_a3_5/coherence_summary.csv
             out_accuracy_a1_isomers_a3_5/search_results.csv
+            out_accuracy_a1_isomers_a3_5/kappa_sweep_test.csv
             out_accuracy_a1_isomers_a3_5/checksums.sha256
             out_accuracy_a1_isomers_a3_5/manifest.json
             out_accuracy_a1_isomers_a3_5/provenance.json
             a2_bit_for_bit_proof.txt
-
