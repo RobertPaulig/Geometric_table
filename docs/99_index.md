@@ -43,6 +43,10 @@
   Зачем: контракт ACCURACY-A4.0 (signed/orientable edge observable, edge-only scoring): считать `B_ij = Re(e^{-iθ_ij}K_ij)` и `S_edge = Σ w_ij * B_ij` без node-сведения/`rho_eff`/κ/сеток параметров (0 новых DOF).  
   Где используется: любые PR/запуски ACCURACY-A4.0 (обязателен к чтению до изменений кода).
 
+- **REF-ACCURACY-A4.1-CONTRACT** — `docs/specs/accuracy_a4_1_cycle_flux_holonomy.md`  
+  Зачем: контракт ACCURACY-A4.1 (cycle-flux/holonomy observable, cycle-level scoring): вычислять gauge-инвариантную holonomy `Φ_C` и скаляр `S_cycle` по фундаментальным циклам (0 новых DOF).  
+  Где используется: любые PR/запуски ACCURACY-A4.1 (обязателен к чтению до изменений кода).
+
 - **REF-BACKLOG** — `docs/04_backlog.md`  
   Зачем: склад гипотез/задач (сырьё, не “истина”).  
   Где используется: постановка R&D-экспериментов и планирование работ.

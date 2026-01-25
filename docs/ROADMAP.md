@@ -813,13 +813,31 @@ Outcome (evidence):
 - Actions compute-pack: https://github.com/RobertPaulig/Geometric_table/actions/runs/21336452397 (zip SHA256 `21B9407F4D06E0A5655510B6DD68BC55D7B1342D04828709C457B9BA0E8AB73A`) → KPI FAIL: `num_negative_test=6`; best fixed κ is `0.0` with `num_negative_test=5` (κ-sweep on test).
 
 #### ACCURACY-A4.0 — Signed/Orientable Edge Observable (edge-only scoring; 0 DOF)
-Status: [ ] planned  [ ] in-progress  [ ] done
+Status: [ ] planned  [ ] in-progress  [x] done (hypothesis FAIL; PR #257 closed w/o merge)
 
 SoT:
 - `REF-ACCURACY-A4.0-CONTRACT` → `docs/specs/accuracy_a4_0_signed_edge_observable.md`
 
 Hypothesis:
 - A3.5 suggests `|K_ij|` magnitude loses sign/orientation information. Use gauge-invariant signed edge observable `B_ij = Re(e^{-iθ_ij}K_ij)` and compute an edge-only score `S_edge = Σ w_ij * B_ij` (no node aggregation, no `rho_eff`, no κ, 0 new DOF); must yield `num_groups_spearman_negative_test == 0` on `functional_only` (LOOCV by `group_id`).
+
+DoD:
+- Memory Fix merged to main (contract exists + linked from `docs/99_index.md` + in `ENTRYPOINT.md` read order + in this roadmap).
+- Code PR merged (main CI 3/3).
+- If `kpi.verdict == PASS`: Truth-chain closure: publish-run → release(zip+.sha256) → registry → lineage → main CI 3/3 (publish must be gated to forbid FAIL).
+- KPI (functional-only, LOOCV test folds): `num_groups_spearman_negative_test == 0` (PASS); if MVP not met, close as hypothesis FAIL without publish-chain.
+
+Outcome (evidence):
+- Actions compute-pack: https://github.com/RobertPaulig/Geometric_table/actions/runs/21338671447 (zip SHA256 `D32533F991155E27EC2166C63781A398E74E1972C1E14BA7F754F6B79F8A6C99`) → KPI FAIL: `num_groups_spearman_negative_test=4`; `negative_groups=['C13H20O1','C20H22N2O2','C21H20N6O2S1','C21H23N3O3']`; `median_spearman_by_group_test=0.45`; `pairwise=0.5652173913`; `top1=0.4`.
+
+#### ACCURACY-A4.1 — Cycle-Flux / Holonomy Observable (cycle-level scoring; 0 DOF)
+Status: [ ] planned  [ ] in-progress  [ ] done
+
+SoT:
+- `REF-ACCURACY-A4.1-CONTRACT` → `docs/specs/accuracy_a4_1_cycle_flux_holonomy.md`
+
+Hypothesis:
+- A4.0 suggests signed edge-only score is insufficient for the remaining negative groups. Add a cycle-level gauge-invariant observable (holonomy/flux) computed from the same `K=f(H)` and link phases, and score molecules via `S_cycle` over fundamental cycles; must yield `num_groups_spearman_negative_test == 0` on `functional_only` (LOOCV by `group_id`).
 
 DoD:
 - Memory Fix merged to main (contract exists + linked from `docs/99_index.md` + in `ENTRYPOINT.md` read order + in this roadmap).
