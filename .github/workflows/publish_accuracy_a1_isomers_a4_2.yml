@@ -111,7 +111,7 @@ jobs:
           python -m zipfile -t out_accuracy_a1_isomers_a4_2/evidence_pack.zip
           python -m zipfile -l out_accuracy_a1_isomers_a4_2/evidence_pack.zip | grep -E "manifest.json|provenance.json|checksums.sha256|metrics.json|index.md|summary.csv|predictions.csv|group_metrics.csv|cycle_list.csv|cycle_phi.csv|isomorphism_ceiling.csv|best_config.json|data/accuracy/isomer_truth.v1.csv|docs/contracts/isomer_truth.v1.md|data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv|data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv.sha256|data/atoms_db_v1.json|docs/specs/accuracy_a4_2_cycle_basis_sssr.md"
 
-      - name: Gate: publish only if kpi.verdict == PASS
+      - name: "Gate: publish only if kpi.verdict == PASS"
         run: |
           python - << 'PY'
           import json
@@ -442,4 +442,3 @@ jobs:
           echo "tested_sha: $TESTED_SHA"
 
           gh run watch "$RUN_ID" --exit-status --repo "$REPO"
-

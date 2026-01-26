@@ -213,7 +213,7 @@ jobs:
             out_accuracy_a1_isomers_a4_2/provenance.json
             a2_bit_for_bit_proof.txt
 
-      - name: Gate: kpi.verdict must be PASS (merge-to-main)
+      - name: "Gate: kpi.verdict must be PASS (merge-to-main)"
         run: |
           python - << 'PY'
           import json
