@@ -1,0 +1,228 @@
+name: compute-accuracy-a1-isomers-a4-2
+
+# Pre-merge compute workflow for ACCURACY-A4.2 (cycle-basis = deterministic SSSR holonomy; 0 DOF).
+# Purpose: produce an evidence_pack.zip artifact on PR branch without release/registry/lineage.
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref to run on (branch, tag, or SHA). Example: main or 9c54b043..."
+        required: true
+        default: "main"
+
+jobs:
+  compute-pack:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        if: github.event_name == 'pull_request'
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - uses: actions/checkout@v4
+        if: github.event_name == 'workflow_dispatch'
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install (dev,chem)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,chem]"
+
+      - name: Validate canonical truth is reproducible from raw
+        run: |
+          python scripts/build_isomer_truth_v1.py \
+            --raw_csv data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv \
+            --out_csv out_isomer_truth/isomer_truth.v1.csv
+          python - << 'PY'
+          import hashlib
+          from pathlib import Path
+
+          def sha256(path: Path) -> str:
+              return hashlib.sha256(path.read_bytes()).hexdigest()
+
+          gen = Path("out_isomer_truth/isomer_truth.v1.csv")
+          tracked = Path("data/accuracy/isomer_truth.v1.csv")
+          gen_sha = sha256(gen)
+          tracked_sha = sha256(tracked)
+          print(f"generated_sha256={gen_sha}")
+          print(f"tracked_sha256={tracked_sha}")
+          assert gen_sha == tracked_sha, "canonical truth mismatch: raw -> generated != tracked"
+          PY
+
+      - name: Bit-for-bit A2 proof (base vs PR head)
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          echo "base_sha=$BASE_SHA"
+          echo "head_sha=$HEAD_SHA"
+
+          run_a2() {
+            local sha=$1
+            local out=$2
+            git checkout --force "$sha"
+            python scripts/accuracy_a1_isomers_a2_self_consistent.py \
+              --a2_variant full_functional_v1_a2_4 \
+              --experiment_id A2_NO_LEAK_PROOF \
+              --input_csv data/accuracy/isomer_truth.v1.csv \
+              --seed 0 \
+              --out_dir "$out"
+          }
+
+          run_a2 "$BASE_SHA" out_a2_pre
+          run_a2 "$HEAD_SHA" out_a2_post
+
+          python - << 'PY'
+          import hashlib
+          import os
+          import sys
+          from pathlib import Path
+
+          pre = Path("out_a2_pre")
+          post = Path("out_a2_post")
+
+          def sha256(path: Path) -> str:
+              return hashlib.sha256(path.read_bytes()).hexdigest()
+
+          metrics_pre = sha256(pre / "metrics.json")
+          metrics_post = sha256(post / "metrics.json")
+          preds_pre = sha256(pre / "predictions.csv")
+          preds_post = sha256(post / "predictions.csv")
+
+          ok = (metrics_pre == metrics_post) and (preds_pre == preds_post)
+
+          proof = Path("a2_bit_for_bit_proof.txt")
+          proof.write_text(
+              "\n".join(
+                  [
+                      f"base_sha={os.environ.get('BASE_SHA')}",
+                      f"head_sha={os.environ.get('HEAD_SHA')}",
+                      f"metrics_sha256_pre={metrics_pre}",
+                      f"metrics_sha256_post={metrics_post}",
+                      f"predictions_sha256_pre={preds_pre}",
+                      f"predictions_sha256_post={preds_post}",
+                      f"match={ok}",
+                      "",
+                  ]
+              ),
+              encoding="utf-8",
+          )
+
+          print(proof.read_text(encoding="utf-8"))
+
+          if not ok:
+              sys.exit("A2 bit-for-bit proof failed")
+          PY
+
+          git checkout --force "$HEAD_SHA"
+
+      - name: Run opt-in A3 + A4.2 tests (RUN_A3_TESTS=1, RUN_A4_TESTS=1)
+        env:
+          RUN_A3_TESTS: "1"
+          RUN_A4_TESTS: "1"
+        run: |
+          pytest -q \
+            tests/test_accuracy_a3_phase_channel_spec.py \
+            tests/test_accuracy_a3_phase_channel_operator_only.py \
+            tests/test_accuracy_a3_phase_channel_polycycle_correctness.py \
+            tests/test_accuracy_a1_isomers_a4_2_contract.py
+
+      - name: Run ACCURACY-A4.2 isomers (cycle-basis = deterministic SSSR holonomy; 0 DOF)
+        run: |
+          python scripts/accuracy_a1_isomers_a4_2_cycle_basis_sssr.py \
+            --experiment_id "ACCURACY-A4.2" \
+            --input_csv data/accuracy/isomer_truth.v1.csv \
+            --out_dir out_accuracy_a1_isomers_a4_2 \
+            --seed 0
+
+      - name: Validate zip (no unpack)
+        run: |
+          python -m zipfile -t out_accuracy_a1_isomers_a4_2/evidence_pack.zip
+          python -m zipfile -l out_accuracy_a1_isomers_a4_2/evidence_pack.zip | grep -E "manifest.json|provenance.json|checksums.sha256|metrics.json|index.md|summary.csv|predictions.csv|group_metrics.csv|cycle_list.csv|cycle_phi.csv|isomorphism_ceiling.csv|best_config.json|data/accuracy/isomer_truth.v1.csv|docs/contracts/isomer_truth.v1.md|data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv|data/accuracy/raw/dft_golden_isomers_v2_spice2_0_1.csv.sha256|data/atoms_db_v1.json|docs/specs/accuracy_a4_2_cycle_basis_sssr.md"
+
+      - name: Validate checksums.sha256 (missing=0, mismatches=0)
+        run: |
+          python - << 'PY'
+          import hashlib
+          from pathlib import Path
+
+          out_dir = Path("out_accuracy_a1_isomers_a4_2")
+          checksums = out_dir / "checksums.sha256"
+          lines = checksums.read_text(encoding="utf-8").splitlines()
+
+          missing = 0
+          mismatch = 0
+          for line in lines:
+              line = line.strip()
+              if not line:
+                  continue
+              sha, rel = line.split("  ", 1)
+              path = out_dir / rel
+              if not path.exists():
+                  missing += 1
+                  continue
+              got = hashlib.sha256(path.read_bytes()).hexdigest()
+              if got.lower() != sha.lower():
+                  mismatch += 1
+
+          print(f"missing={missing}")
+          print(f"mismatches={mismatch}")
+          assert missing == 0, "checksums.sha256 missing files"
+          assert mismatch == 0, "checksums.sha256 mismatches"
+          PY
+
+      - name: Compute SHA256(zip)
+        run: |
+          SHA256=$(sha256sum out_accuracy_a1_isomers_a4_2/evidence_pack.zip | awk '{print toupper($1)}')
+          echo "$SHA256  evidence_pack.zip" > out_accuracy_a1_isomers_a4_2/evidence_pack.zip.sha256
+          echo "zip_sha256=$SHA256" >> $GITHUB_ENV
+          echo "zip_sha256=$SHA256"
+
+      - name: Upload evidence pack (artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: accuracy-a1-isomers-a4-2-pr-evidence-pack
+          path: |
+            out_accuracy_a1_isomers_a4_2/evidence_pack.zip
+            out_accuracy_a1_isomers_a4_2/evidence_pack.zip.sha256
+            out_accuracy_a1_isomers_a4_2/metrics.json
+            out_accuracy_a1_isomers_a4_2/best_config.json
+            out_accuracy_a1_isomers_a4_2/predictions.csv
+            out_accuracy_a1_isomers_a4_2/group_metrics.csv
+            out_accuracy_a1_isomers_a4_2/cycle_list.csv
+            out_accuracy_a1_isomers_a4_2/cycle_phi.csv
+            out_accuracy_a1_isomers_a4_2/isomorphism_ceiling.csv
+            out_accuracy_a1_isomers_a4_2/checksums.sha256
+            out_accuracy_a1_isomers_a4_2/manifest.json
+            out_accuracy_a1_isomers_a4_2/provenance.json
+            a2_bit_for_bit_proof.txt
+
+      - name: "Gate: kpi.verdict must be PASS (merge-to-main)"
+        run: |
+          python - << 'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          metrics = json.loads(Path("out_accuracy_a1_isomers_a4_2/metrics.json").read_text(encoding="utf-8"))
+          verdict = str(metrics.get("kpi", {}).get("verdict") or "")
+          print(f"kpi.verdict={verdict}")
+          if verdict != "PASS":
+              sys.exit("kpi.verdict != PASS (merge forbidden)")
+          PY
