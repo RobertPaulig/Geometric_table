@@ -5,6 +5,9 @@ permissions:
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - diagnostics/a4_1_isomorphism_ceiling
 
 jobs:
   ceiling-test:
@@ -44,4 +47,3 @@ jobs:
           path: |
             out_isomorphism_ceiling/isomorphism_ceiling.csv
             out_isomorphism_ceiling/isomorphism_ceiling.csv.sha256
-
