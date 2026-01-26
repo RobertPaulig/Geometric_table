@@ -1,7 +1,7 @@
 # ACCURACY-A4.1 — Cycle-Flux / Holonomy Observable (cycle-level scoring; graph-only; 0 DOF)
 
 **Roadmap-ID:** `ACCURACY-A4.1 (Cycle-Flux / Holonomy Observable, cycle-level scoring)`  
-**Status:** planned (Memory Fix required before any code)  
+**Status:** closed (hypothesis FAIL; PR #259 closed w/o merge)  
 **Owner:** Executor  
 **Source of Truth:** this document (SoT)
 
@@ -14,6 +14,29 @@
   `num_groups_spearman_negative_test=4`.
 
 **Вывод:** signed edge-only линейный функционал от `K=f(H)` недостаточен ⇒ следующий минимальный класс наблюдаемой должен быть **cycle-level gauge-invariant holonomy/flux**.
+
+---
+
+## Evidence (hypothesis FAIL, append-only)
+
+**Compute-pack (Actions):** https://github.com/RobertPaulig/Geometric_table/actions/runs/21342073697  
+**SHA256(evidence_pack.zip):** `8F7F173A4A3251CF64553516CC62B72C9DE42AA7FD3C07396D3FF5CFFEF159A7`
+
+`metrics.json` (functional_only, LOOCV test):
+
+* `kpi.verdict = FAIL`
+* `num_groups_spearman_negative_test = 3`
+* `negative_groups = ['C11H21B1N2O4','C15H24O1','C20H22N2O2']`
+
+### Posthoc evidence (same evidence pack)
+
+Posthoc rescore using only `cycle_flux_by_cycle.csv` + `predictions.csv` from the same evidence pack:
+
+* `sin2 → 3 neg`
+* `1-cos → 3 neg (same groups)`
+* `cos → 5 neg`
+
+Artifact (SoT evidence, not words): `docs/evidence/accuracy_a4_1_posthoc_rescore.json`
 
 ---
 

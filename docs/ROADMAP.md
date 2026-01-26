@@ -831,7 +831,7 @@ Outcome (evidence):
 - Actions compute-pack: https://github.com/RobertPaulig/Geometric_table/actions/runs/21338671447 (zip SHA256 `D32533F991155E27EC2166C63781A398E74E1972C1E14BA7F754F6B79F8A6C99`) → KPI FAIL: `num_groups_spearman_negative_test=4`; `negative_groups=['C13H20O1','C20H22N2O2','C21H20N6O2S1','C21H23N3O3']`; `median_spearman_by_group_test=0.45`; `pairwise=0.5652173913`; `top1=0.4`.
 
 #### ACCURACY-A4.1 — Cycle-Flux / Holonomy Observable (cycle-level scoring; 0 DOF)
-Status: [ ] planned  [ ] in-progress  [ ] done
+Status: [ ] planned  [ ] in-progress  [x] done (hypothesis FAIL; PR #259 closed w/o merge)
 
 SoT:
 - `REF-ACCURACY-A4.1-CONTRACT` → `docs/specs/accuracy_a4_1_cycle_flux_holonomy.md`
@@ -843,6 +843,25 @@ DoD:
 - Memory Fix merged to main (contract exists + linked from `docs/99_index.md` + in `ENTRYPOINT.md` read order + in this roadmap).
 - Code PR merged (main CI 3/3).
 - If `kpi.verdict == PASS`: Truth-chain closure: publish-run → release(zip+.sha256) → registry → lineage → main CI 3/3 (publish must be gated to forbid FAIL).
+- KPI (functional-only, LOOCV test folds): `num_groups_spearman_negative_test == 0` (PASS); if MVP not met, close as hypothesis FAIL without publish-chain.
+
+Outcome (evidence):
+- Actions compute-pack: https://github.com/RobertPaulig/Geometric_table/actions/runs/21342073697 (zip SHA256 `8F7F173A4A3251CF64553516CC62B72C9DE42AA7FD3C07396D3FF5CFFEF159A7`) → KPI FAIL: `num_groups_spearman_negative_test=3`; `negative_groups=['C11H21B1N2O4','C15H24O1','C20H22N2O2']`; `median_spearman_by_group_test=0.45`.
+- Posthoc rescore (same evidence pack): `sin2→3neg`, `1-cos→3neg (same)`, `cos→5neg` (see `docs/evidence/accuracy_a4_1_posthoc_rescore.json`).
+
+#### ACCURACY-A4.2 — Cycle-Basis / SSSR Holonomy Observable (cycle-level scoring; 0 DOF)
+Status: [ ] planned  [ ] in-progress  [ ] done
+
+SoT:
+- `REF-ACCURACY-A4.2-CONTRACT` → `docs/specs/accuracy_a4_2_cycle_basis_sssr.md`
+
+Hypothesis:
+- A4.1 suggests the failure is not the scoring function (`sin²` vs `1-cos`) but the cycle basis (fundamental BFS cycles). Compute holonomy on deterministic SSSR cycles (as used for phase-channel construction) without adding DOF; must yield `num_groups_spearman_negative_test == 0` on `functional_only` (LOOCV by `group_id`).
+
+DoD:
+- Memory Fix merged to main (contract exists + linked from `docs/99_index.md` + in `ENTRYPOINT.md` read order + in this roadmap).
+- Ceiling-test executed (strict `isomorphic_H`) for A4.1 negative groups; if ceiling holds, A4.2 is forbidden and next Roadmap-ID is A6 (stereo/3D).
+- Code PR merged only if `kpi.verdict == PASS` (publish must be gated to forbid FAIL).
 - KPI (functional-only, LOOCV test folds): `num_groups_spearman_negative_test == 0` (PASS); if MVP not met, close as hypothesis FAIL without publish-chain.
 
 # ROADMAP - HETERO-2 как SaaS (Pfizer-ready evidence pipeline)
