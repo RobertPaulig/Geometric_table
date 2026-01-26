@@ -47,6 +47,10 @@
   Зачем: контракт ACCURACY-A4.1 (cycle-flux/holonomy observable, cycle-level scoring): вычислять gauge-инвариантную holonomy `Φ_C` и скаляр `S_cycle` по фундаментальным циклам (0 новых DOF).  
   Где используется: любые PR/запуски ACCURACY-A4.1 (обязателен к чтению до изменений кода).
 
+- **REF-ACCURACY-A4.2-CONTRACT** — `docs/specs/accuracy_a4_2_cycle_basis_sssr.md`  
+  Зачем: контракт ACCURACY-A4.2 (cycle-basis/SSSR holonomy observable): смена cycle-basis (BFS fundamental → deterministic SSSR) без смены функции и без DOF; включает ceiling-test `isomorphic_H`.  
+  Где используется: любые PR/запуски ACCURACY-A4.2 (обязателен к чтению до изменений кода).
+
 - **REF-BACKLOG** — `docs/04_backlog.md`  
   Зачем: склад гипотез/задач (сырьё, не “истина”).  
   Где используется: постановка R&D-экспериментов и планирование работ.

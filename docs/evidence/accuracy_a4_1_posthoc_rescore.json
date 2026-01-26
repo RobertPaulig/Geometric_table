@@ -1,0 +1,40 @@
+{
+  "source": {
+    "compute_pack_run_url": "https://github.com/RobertPaulig/Geometric_table/actions/runs/21342073697",
+    "evidence_pack_zip_sha256": "8F7F173A4A3251CF64553516CC62B72C9DE42AA7FD3C07396D3FF5CFFEF159A7"
+  },
+  "inputs_from_evidence_pack": {
+    "cycle_flux_by_cycle_csv": "cycle_flux_by_cycle.csv",
+    "predictions_csv": "predictions.csv"
+  },
+  "posthoc_rescore": {
+    "sin2": {
+      "num_negative": 3,
+      "negative_groups": [
+        "C11H21B1N2O4",
+        "C15H24O1",
+        "C20H22N2O2"
+      ]
+    },
+    "one_minus_cos": {
+      "num_negative": 3,
+      "negative_groups": [
+        "C11H21B1N2O4",
+        "C15H24O1",
+        "C20H22N2O2"
+      ]
+    },
+    "cos": {
+      "num_negative": 5,
+      "negative_groups": [
+        "C15H24O1",
+        "C20H22O6",
+        "C20H25N3O2",
+        "C21H20N6O2S1",
+        "C22H22N4O2"
+      ]
+    }
+  },
+  "notes": "Posthoc uses only phi_uv and w_uv already present in cycle_flux_by_cycle.csv; no recomputation of K/theta/H was performed."
+}
+
